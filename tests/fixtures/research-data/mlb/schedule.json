@@ -1,0 +1,40 @@
+{
+  "totalItems": 1,
+  "dates": [
+    {
+      "date": "2026-06-26",
+      "games": [
+        {
+          "gamePk": 100001,
+          "gameDate": "2026-06-26T22:10:00Z",
+          "officialDate": "2026-06-26",
+          "status": {
+            "abstractGameState": "Preview",
+            "codedGameState": "P",
+            "detailedState": "Pre-Game",
+            "startTimeTBD": false
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 100101, "name": "Fixture Team Alpha" },
+              "probablePitcher": { "id": 100201, "fullName": "Fixture Pitcher Alpha" },
+              "leagueRecord": { "wins": 50, "losses": 40, "pct": ".556" }
+            },
+            "home": {
+              "team": { "id": 100102, "name": "Fixture Team Beta" },
+              "probablePitcher": { "id": 100202, "fullName": "Fixture Pitcher Beta" },
+              "leagueRecord": { "wins": 45, "losses": 45, "pct": ".500" }
+            }
+          },
+          "venue": { "id": 1001, "name": "Fixture Stadium" },
+          "dayNight": "day",
+          "scheduledInnings": 9,
+          "doubleHeader": "N",
+          "seriesGameNumber": 1,
+          "gamesInSeries": 3,
+          "seriesDescription": "Regular"
+        }
+      ]
+    }
+  ]
+}

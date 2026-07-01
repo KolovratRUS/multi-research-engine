@@ -1,0 +1,798 @@
+import {
+  buildMLBFixtures,
+  createMLBFixtureProvider,
+  getMLBFixtureDateRange,
+  type MLBHistoricalFixture,
+} from '@/fixtures/backtesting/mlb/fixture-games';
+import { orchestrateHistoricalBacktest, HistoricalBacktestOrchestrationError } from '@/lib/backtesting/orchestrator';
+import { createLiveMLBHistoricalProvider } from '@/lib/backtesting/mlb/live-history/provider-factory';
+import type { LiveMLBHistoricalProviderFactoryOptions } from '@/lib/backtesting/mlb/live-history/provider-factory';
+import os from 'node:os';
+import path from 'node:path';
+import type {
+  BacktestMetrics,
+  BacktestPrediction,
+  HistoricalMLBGame,
+  MLBHistoricalDataProvider,
+} from '@/lib/backtesting/types';
+import type { RunnerContext } from '@/lib/backtesting/runner';
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                             */
+/* ------------------------------------------------------------------ */
+
+export interface MLBBacktestCLIOptions {
+  readonly source: 'fixture' | 'live';
+  readonly startDate?: string;
+  readonly endDate?: string;
+  readonly date?: string;
+  readonly output: 'text' | 'json';
+  readonly help: boolean;
+  readonly cacheRoot?: string;
+  readonly cacheVersion?: string;
+  readonly forceRefresh?: boolean;
+  readonly timeoutMs?: number;
+  readonly maxRetries?: number;
+}
+
+export interface CLIBacktestCLIError {
+  readonly code: string;
+  readonly option?: string;
+  readonly value?: string;
+  readonly message: string;
+}
+
+export interface CLIIO {
+  readonly stdout: (message: string) => void;
+  readonly stderr: (message: string) => void;
+}
+
+export interface LiveProviderFactoryResultForCLI {
+  readonly provider: MLBHistoricalDataProvider;
+}
+
+const KNOWN_OPTIONS = new Set([
+  'source',
+  'start',
+  'end',
+  'date',
+  'output',
+  'help',
+  'h',
+  'cache-root',
+  'cache-version',
+  'force-refresh',
+  'timeout-ms',
+  'max-retries',
+]);
+
+/* ------------------------------------------------------------------ */
+/*  Parser                                                            */
+/* ------------------------------------------------------------------ */
+
+export function parseMLBBacktestCLIArgs(
+  argv: readonly string[],
+): MLBBacktestCLIOptions | CLIBacktestCLIError {
+  const state: Record<string, unknown> = {
+    source: 'fixture',
+    output: 'text',
+    help: false,
+  };
+
+  const seen = new Set<string>();
+  let idx = 0;
+
+  while (idx < argv.length) {
+    const rawArg = argv[idx];
+    idx += 1;
+
+    if (rawArg === '-h') {
+      state.help = true;
+      continue;
+    }
+
+    if (!rawArg.startsWith('--')) {
+      return {
+        code: 'UNKNOWN_ARGUMENT',
+        option: rawArg,
+        message: `Unknown argument: ${rawArg}`,
+      };
+    }
+
+    const argBody = rawArg.slice(2);
+    const equalIndex = argBody.indexOf('=');
+    let key: string;
+    let value: string | undefined;
+
+    if (equalIndex >= 0) {
+      key = argBody.slice(0, equalIndex);
+      value = argBody.slice(equalIndex + 1);
+    } else {
+      key = argBody;
+      value = undefined;
+    }
+
+    if (!KNOWN_OPTIONS.has(key)) {
+      return {
+        code: 'UNKNOWN_OPTION',
+        option: key,
+        message: `Unknown option: --${key}`,
+      };
+    }
+
+    if (seen.has(key)) {
+      return {
+        code: 'DUPLICATE_OPTION',
+        option: key,
+        message: `Duplicate option: --${key}`,
+      };
+    }
+    seen.add(key);
+
+    if (key === 'help') {
+      state.help = true;
+      continue;
+    }
+
+    if (value === undefined && key !== 'force-refresh') {
+      if (idx >= argv.length) {
+        return {
+          code: 'MISSING_VALUE',
+          option: key,
+          message: `--${key} requires a value`,
+        };
+      }
+      value = argv[idx];
+      idx += 1;
+    }
+
+    if (key === 'source') {
+      if (value !== 'fixture' && value !== 'live') {
+        return {
+          code: 'INVALID_SOURCE',
+          option: key,
+          value,
+          message: `Invalid source: ${value}. Only 'fixture' and 'live' are supported.`,
+        };
+      }
+      state.source = value;
+      continue;
+    }
+
+    if (key === 'output') {
+      if (value !== 'text' && value !== 'json') {
+        return {
+          code: 'INVALID_OUTPUT',
+          option: key,
+          value,
+          message: `Invalid output: ${value}. Use 'text' or 'json'.`,
+        };
+      }
+      state.output = value;
+      continue;
+    }
+
+    if (key === 'date') {
+      if (state.startDate || state.endDate) {
+        return {
+          code: 'CONFLICTING_OPTIONS',
+          option: key,
+          message: 'Cannot combine --date with --start or --end',
+        };
+      }
+      state.date = value;
+      continue;
+    }
+
+    if (key === 'start') {
+      state.startDate = value;
+      continue;
+    }
+
+    if (key === 'end') {
+      state.endDate = value;
+      continue;
+    }
+
+    if (key === 'cache-root') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --cache-root. Expected a non-empty path.',
+        };
+      }
+      state.cacheRoot = value.trim();
+      continue;
+    }
+
+    if (key === 'cache-version') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --cache-version. Expected a non-empty string.',
+        };
+      }
+      state.cacheVersion = value.trim();
+      continue;
+    }
+
+    if (key === 'force-refresh') {
+      if (value === undefined) {
+        if (idx < argv.length && argv[idx] !== undefined) {
+          const next = argv[idx];
+          if (next === 'true' || next === 'false') {
+            value = next;
+            idx += 1;
+          } else if (next.startsWith('-')) {
+            state.forceRefresh = true;
+            continue;
+          } else {
+            return {
+              code: 'INVALID_OPTION',
+              option: key,
+              value: next,
+              message: 'Invalid --force-refresh. Expected true or false.',
+            };
+          }
+        } else {
+          state.forceRefresh = true;
+          continue;
+        }
+      }
+      if (value === 'true' || value === 'false') {
+        state.forceRefresh = value === 'true';
+        continue;
+      }
+      return {
+        code: 'INVALID_OPTION',
+        option: key,
+        value,
+        message: 'Invalid --force-refresh. Expected true or false.',
+      };
+    }
+
+    if (key === 'timeout-ms') {
+      const num = Number(value);
+      if (!Number.isInteger(num) || num <= 0) {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --timeout-ms. Expected a positive integer.',
+        };
+      }
+      state.timeoutMs = num;
+      continue;
+    }
+
+    if (key === 'max-retries') {
+      const num = Number(value);
+      if (!Number.isInteger(num) || num < 0) {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --max-retries. Expected a non-negative integer.',
+        };
+      }
+      state.maxRetries = num;
+      continue;
+    }
+  }
+
+  if (state.date !== undefined && (state.startDate || state.endDate)) {
+    return {
+      code: 'CONFLICTING_OPTIONS',
+      option: 'date',
+      message: 'Cannot combine --date with --start or --end',
+    };
+  }
+
+  if (state.startDate && !state.endDate) {
+    return {
+      code: 'MISSING_OPTION',
+      option: 'end',
+      message: '--start requires --end',
+    };
+  }
+
+  if (state.endDate && !state.startDate) {
+    return {
+      code: 'MISSING_OPTION',
+      option: 'start',
+      message: '--end requires --start',
+    };
+  }
+
+  return {
+    source: state.source as 'fixture' | 'live',
+    output: state.output as 'text' | 'json',
+    help: state.help as boolean,
+    ...(state.date !== undefined ? { date: state.date as string } : {}),
+    ...(state.startDate !== undefined ? { startDate: state.startDate as string } : {}),
+    ...(state.endDate !== undefined ? { endDate: state.endDate as string } : {}),
+    ...(state.cacheRoot !== undefined ? { cacheRoot: state.cacheRoot as string } : {}),
+    ...(state.cacheVersion !== undefined ? { cacheVersion: state.cacheVersion as string } : {}),
+    ...(state.forceRefresh !== undefined ? { forceRefresh: state.forceRefresh as boolean } : {}),
+    ...(state.timeoutMs !== undefined ? { timeoutMs: state.timeoutMs as number } : {}),
+    ...(state.maxRetries !== undefined ? { maxRetries: state.maxRetries as number } : {}),
+  } satisfies MLBBacktestCLIOptions;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Help                                                              */
+/* ------------------------------------------------------------------ */
+
+function printHelp(stdout: (message: string) => void): void {
+  const lines: readonly string[] = [
+    'MLB Historical Backtest — CLI',
+    '',
+    'Usage: npm run backtest:mlb [options]',
+    '',
+    'Options:',
+    '  --source fixture          Run using built-in fixture data (default)',
+    '  --source live             Run using live historical MLB Stats API',
+    '  --date YYYY-MM-DD         Run for a single date',
+    '  --start YYYY-MM-DD        Start of date range (requires --end)',
+    '  --end YYYY-MM-DD          End of date range (requires --start)',
+    '  --cache-root <path>       Path for live-mode HTTP cache (default: .cache/mlb-history)',
+    '  --cache-version <string>  Cache version key (default: v1)',
+    '  --force-refresh [true|false] Bypass cache on live requests (default: false)',
+    '  --timeout-ms <ms>         HTTP timeout in milliseconds',
+    '  --max-retries <n>         Maximum HTTP retry attempts',
+    '  --output text             Human-readable output (default)',
+    '  --output json             Machine-readable JSON output',
+    '  --help, -h                Show this help',
+    '',
+    'Live mode requires --date or --start and --end.',
+    '',
+    'Live mode performs historical research only. Output is unvalidated, uncalibrated, and research-only. No betting action is performed.',
+    '',
+    'Examples:',
+    '  npm run backtest:mlb',
+    '  npm run backtest:mlb -- --date 2024-06-01',
+    '  npm run backtest:mlb -- --start 2024-06-01 --end 2024-06-03',
+    '  npm run backtest:mlb -- --date 2024-06-01 --output json',
+    '  npm run backtest:mlb -- --source live --date 2024-06-01 --cache-root /tmp/mlb-cache',
+  ];
+
+  for (const line of lines) {
+    stdout(line);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Serialization                                                     */
+/* ------------------------------------------------------------------ */
+
+interface SerializedGameForJSON {
+  readonly gamePk: number;
+  readonly officialDate: string;
+  readonly gameDate: string;
+  readonly homeTeamId: number;
+  readonly awayTeamId: number;
+  readonly homeTeamName: string;
+  readonly awayTeamName: string;
+  readonly venueId: number;
+  readonly status: string;
+  readonly probablePitchers: { readonly home: unknown; readonly away: unknown } | null;
+  readonly cutoff: { readonly eventId: string; readonly cutoffTime: string };
+}
+
+interface SerializedPredictionForJSON {
+  readonly eventId: string;
+  readonly gamePk: number;
+  readonly eventDate: string;
+  readonly homeTeamId: number;
+  readonly awayTeamId: number;
+  readonly homeTeam: string;
+  readonly awayTeam: string;
+  readonly predictedSide: string | null;
+  readonly researchStrengthScore: number;
+  readonly confidence: number;
+  readonly dataQuality: number;
+  readonly volatility: string;
+  readonly componentScores: Record<string, number>;
+  readonly warnings: readonly string[];
+  readonly modelVersion: string;
+  readonly featureVersion: string;
+  readonly generatedAt: string;
+  readonly historicalCutoffTime: string;
+  readonly actualWinner: string | null;
+  readonly correct: boolean | null;
+  readonly voided: boolean;
+  readonly abstained: boolean;
+  readonly abstentionReason?: string;
+  readonly homePitcherAvailable: boolean;
+  readonly awayPitcherAvailable: boolean;
+}
+
+interface JSONSerializedResult {
+  readonly meta: {
+    readonly source: 'fixture' | 'live';
+    readonly dateRange: { readonly startDate: string; readonly endDate: string };
+    readonly validation: 'unvalidated';
+    readonly calibration: 'uncalibrated';
+  };
+  readonly orchestration: {
+    readonly requestedDates: readonly string[];
+    readonly scheduleRequests: number;
+    readonly discoveredGames: number;
+    readonly uniqueGames: number;
+    readonly duplicateGamesRemoved: number;
+    readonly firstGameStart: string | null;
+    readonly lastGameStart: string | null;
+    readonly games: readonly SerializedGameForJSON[];
+  };
+  readonly runner: {
+    readonly predictionsMade: number;
+    readonly abstentions: number;
+    readonly voids: number;
+    readonly accuracy: number | null;
+    readonly naiveHomeBaseline: number | null;
+    readonly naiveRecentBaseline: number | null;
+    readonly naiveSeasonBaseline: number | null;
+    readonly accuracyWithBothPitchersKnown: number | null;
+    readonly accuracyWithMissingPitcher: number | null;
+    readonly averageDataQuality: number | null;
+    readonly warningCount: number;
+  };
+  readonly predictions: readonly SerializedPredictionForJSON[];
+  readonly abstentions: readonly SerializedPredictionForJSON[];
+}
+
+function serializeGameForJSON(
+  game: {
+    readonly gamePk: number;
+    readonly officialDate: string;
+    readonly gameDate: Date;
+    readonly homeTeamId: number;
+    readonly awayTeamId: number;
+    readonly homeTeamName: string;
+    readonly awayTeamName: string;
+    readonly venueId: number;
+    readonly status: string;
+    readonly probablePitchers: { readonly home: unknown; readonly away: unknown } | null;
+    readonly cutoff: { readonly eventId: string; readonly cutoffTime: Date };
+  },
+): SerializedGameForJSON {
+  return {
+    gamePk: game.gamePk,
+    officialDate: game.officialDate,
+    gameDate: game.gameDate.toISOString(),
+    homeTeamId: game.homeTeamId,
+    awayTeamId: game.awayTeamId,
+    homeTeamName: game.homeTeamName,
+    awayTeamName: game.awayTeamName,
+    venueId: game.venueId,
+    status: game.status,
+    probablePitchers: game.probablePitchers,
+    cutoff: {
+      eventId: game.cutoff.eventId,
+      cutoffTime: game.cutoff.cutoffTime.toISOString(),
+    },
+  };
+}
+
+function serializePredictionForJSON(
+  prediction: {
+    readonly eventId: string;
+    readonly gamePk: number;
+    readonly eventDate: string;
+    readonly homeTeamId: number;
+    readonly awayTeamId: number;
+    readonly homeTeam: string;
+    readonly awayTeam: string;
+    readonly predictedSide: string | null;
+    readonly researchStrengthScore: number;
+    readonly confidence: number;
+    readonly dataQuality: number;
+    readonly volatility: string;
+    readonly componentScores: Record<string, number>;
+    readonly warnings: readonly string[];
+    readonly modelVersion: string;
+    readonly featureVersion: string;
+    readonly generatedAt: Date;
+    readonly historicalCutoffTime: Date;
+    readonly actualWinner: string | null;
+    readonly correct: boolean | null;
+    readonly voided: boolean;
+    readonly abstained: boolean;
+    readonly abstentionReason?: string;
+    readonly homePitcherAvailable: boolean;
+    readonly awayPitcherAvailable: boolean;
+  },
+): SerializedPredictionForJSON {
+  return {
+    eventId: prediction.eventId,
+    gamePk: prediction.gamePk,
+    eventDate: prediction.eventDate,
+    homeTeamId: prediction.homeTeamId,
+    awayTeamId: prediction.awayTeamId,
+    homeTeam: prediction.homeTeam,
+    awayTeam: prediction.awayTeam,
+    predictedSide: prediction.predictedSide,
+    researchStrengthScore: prediction.researchStrengthScore,
+    confidence: prediction.confidence,
+    dataQuality: prediction.dataQuality,
+    volatility: prediction.volatility,
+    componentScores: prediction.componentScores,
+    warnings: prediction.warnings,
+    modelVersion: prediction.modelVersion,
+    featureVersion: prediction.featureVersion,
+    generatedAt: prediction.generatedAt.toISOString(),
+    historicalCutoffTime: prediction.historicalCutoffTime.toISOString(),
+    actualWinner: prediction.actualWinner,
+    correct: prediction.correct,
+    voided: prediction.voided,
+    abstained: prediction.abstained,
+    abstentionReason: prediction.abstentionReason,
+    homePitcherAvailable: prediction.homePitcherAvailable,
+    awayPitcherAvailable: prediction.awayPitcherAvailable,
+  };
+}
+
+interface SerializableResultInput {
+  readonly runnerResult: Readonly<{
+    readonly predictions: readonly BacktestPrediction[];
+    readonly abstentions: readonly BacktestPrediction[];
+    readonly metrics: BacktestMetrics;
+  }>;
+  readonly dateRange: { readonly startDate: string; readonly endDate: string };
+  readonly requestedDates: readonly string[];
+  readonly scheduleRequests: number;
+  readonly discoveredGames: number;
+  readonly uniqueGames: number;
+  readonly duplicateGamesRemoved: number;
+  readonly firstGameStart: Date | null;
+  readonly lastGameStart: Date | null;
+  readonly games: readonly HistoricalMLBGame[];
+}
+
+function serializeJSONResult(
+  result: SerializableResultInput,
+  source: 'fixture' | 'live',
+): JSONSerializedResult {
+  const predictions = result.runnerResult.predictions;
+  const abstentions = result.runnerResult.abstentions;
+  const metrics = result.runnerResult.metrics;
+  const predictionsMade = predictions.filter((p: { readonly voided: boolean; readonly abstained: boolean }) => !p.voided && !p.abstained).length;
+  const avgDataQuality =
+    predictions.length > 0
+      ? predictions.reduce((sum: number, p: { readonly dataQuality: number }) => sum + p.dataQuality, 0) / predictions.length
+      : null;
+  const warningCount = predictions.reduce(
+    (sum: number, p: { readonly warnings: readonly string[] }) => sum + p.warnings.length,
+    0,
+  );
+
+  return {
+    meta: {
+      source,
+      dateRange: { startDate: result.dateRange.startDate, endDate: result.dateRange.endDate },
+      validation: 'unvalidated',
+      calibration: 'uncalibrated',
+    },
+    orchestration: {
+      requestedDates: result.requestedDates,
+      scheduleRequests: result.scheduleRequests,
+      discoveredGames: result.discoveredGames,
+      uniqueGames: result.uniqueGames,
+      duplicateGamesRemoved: result.duplicateGamesRemoved,
+      firstGameStart: result.firstGameStart?.toISOString() ?? null,
+      lastGameStart: result.lastGameStart?.toISOString() ?? null,
+      games: result.games.map(serializeGameForJSON),
+    },
+    runner: {
+      predictionsMade,
+      abstentions: abstentions.length,
+      voids: predictions.filter((p: { readonly voided: boolean }) => p.voided).length,
+      accuracy: metrics.accuracy,
+      naiveHomeBaseline: metrics.naiveHomeBaseline,
+      naiveRecentBaseline: metrics.naiveRecentBaseline,
+      naiveSeasonBaseline: metrics.naiveSeasonBaseline,
+      accuracyWithBothPitchersKnown: metrics.accuracyWithBothPitchersKnown,
+      accuracyWithMissingPitcher: metrics.accuracyWithMissingPitcher,
+      averageDataQuality: avgDataQuality,
+      warningCount,
+    },
+    predictions: predictions.map(serializePredictionForJSON),
+    abstentions: abstentions.map(serializePredictionForJSON),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Text output                                                       */
+/* ------------------------------------------------------------------ */
+
+function printTextResult(
+  result: SerializableResultInput,
+  source: 'fixture' | 'live',
+): string {
+  const predictions = result.runnerResult.predictions;
+  const abstentions = result.runnerResult.abstentions;
+  const metrics = result.runnerResult.metrics;
+  const predictionsMade = predictions.filter((p: { readonly voided: boolean; readonly abstained: boolean }) => !p.voided && !p.abstained).length;
+  const knownIneligible = abstentions.filter((p: { readonly abstentionReason?: string }) => p.abstentionReason === 'GAME_NOT_ELIGIBLE').length;
+  const postPredictionVoids = predictions.filter((p: { readonly voided: boolean }) => p.voided).length;
+  const avgDataQuality =
+    predictions.length > 0
+      ? predictions.reduce((sum: number, p: { readonly dataQuality: number }) => sum + p.dataQuality, 0) / predictions.length
+      : 0;
+  const warningCount = predictions.reduce(
+    (sum: number, p: { readonly warnings: readonly string[] }) => sum + p.warnings.length,
+    0,
+  );
+
+  const header =
+    source === 'live'
+      ? 'MLB Historical Backtest — Live Historical Mode (Phase 1C, exploratory / unvalidated / uncalibrated / research-only)'
+      : 'MLB Historical Backtest — Fixture Mode (Phase 1C, exploratory / unvalidated / uncalibrated / research-only)';
+  const sourceLabel =
+    source === 'live'
+      ? 'Source: live (historical MLB Stats API)'
+      : 'Source: fixture (deterministic, no internet)';
+
+  const lines: readonly string[] = [
+    header,
+    `Date range: ${result.dateRange.startDate} to ${result.dateRange.endDate}`,
+    `Score version: exploratory-unvalidated-v1`,
+    sourceLabel,
+    'Validation: unvalidated, uncalibrated, research-only',
+    '',
+    'Orchestration',
+    `  Schedule requests: ${result.scheduleRequests}`,
+    `  Discovered games: ${result.discoveredGames}`,
+    `  Unique games: ${result.uniqueGames}`,
+    `  Duplicate games removed: ${result.duplicateGamesRemoved}`,
+    `  First game: ${result.firstGameStart?.toISOString() ?? 'n/a'}`,
+    `  Last game: ${result.lastGameStart?.toISOString() ?? 'n/a'}`,
+    '',
+    'Runner',
+    `  Predictions made: ${predictionsMade}`,
+    `  Abstentions: ${abstentions.length}`,
+    `  Known-ineligible games: ${knownIneligible}`,
+    `  Post-prediction voids: ${postPredictionVoids}`,
+    `  Accuracy: ${metrics.accuracy.toFixed(3)}`,
+    `  Always-home baseline: ${metrics.naiveHomeBaseline?.toFixed(3) ?? 'n/a'}`,
+    `  Recent-record baseline: ${metrics.naiveRecentBaseline?.toFixed(3) ?? 'n/a'}`,
+    `  Season-record baseline: ${metrics.naiveSeasonBaseline?.toFixed(3) ?? 'n/a'}`,
+    `  Both-pitchers-known accuracy: ${metrics.accuracyWithBothPitchersKnown?.toFixed(3) ?? 'n/a'}`,
+    `  Missing-pitcher accuracy: ${metrics.accuracyWithMissingPitcher?.toFixed(3) ?? 'n/a'}`,
+    '',
+    'Quality',
+    `  Average data quality: ${avgDataQuality.toFixed(1)}`,
+    `  Warning count: ${warningCount}`,
+  ];
+
+  return lines.join('\n');
+}
+
+/* ------------------------------------------------------------------ */
+/*  Runner                                                            */
+/* ------------------------------------------------------------------ */
+
+export interface MLBBacktestCLIDependencies {
+  readonly orchestrate?: typeof orchestrateHistoricalBacktest;
+  readonly buildFixture?: typeof buildMLBFixtures;
+  readonly now?: () => Date;
+  readonly liveFetchImpl?: typeof fetch;
+  readonly createLiveProvider?: (
+    options: LiveMLBHistoricalProviderFactoryOptions,
+  ) => LiveProviderFactoryResultForCLI;
+}
+
+export async function runMLBBacktestCLI(
+  argv: readonly string[],
+  io?: CLIIO,
+  dependencies: MLBBacktestCLIDependencies = {},
+): Promise<number> {
+  const stdout = io?.stdout ?? ((message: string) => process.stdout.write(`${message}\n`));
+  const stderr = io?.stderr ?? ((message: string) => process.stderr.write(`${message}\n`));
+
+  const orchestrate = dependencies.orchestrate ?? orchestrateHistoricalBacktest;
+  const buildFixture = dependencies.buildFixture ?? buildMLBFixtures;
+  const createLiveProvider = dependencies.createLiveProvider ?? createLiveMLBHistoricalProvider;
+  const injectNow = dependencies.now;
+
+  const parsed = parseMLBBacktestCLIArgs(argv);
+  if ('code' in parsed) {
+    stderr(parsed.message);
+    return 1;
+  }
+
+  if (parsed.help) {
+    printHelp(stdout);
+    return 0;
+  }
+
+  if (parsed.source === 'live' && !parsed.date && !(parsed.startDate && parsed.endDate)) {
+    stderr('Live mode requires --date or --start and --end.');
+    return 1;
+  }
+
+  let provider: MLBHistoricalDataProvider;
+  let fixture: MLBHistoricalFixture | undefined;
+  let startDate = '';
+  let endDate = '';
+
+  if (parsed.source === 'fixture') {
+    fixture = buildFixture();
+    provider = createMLBFixtureProvider(fixture);
+
+    if (parsed.date) {
+      startDate = parsed.date;
+      endDate = parsed.date;
+    } else if (parsed.startDate && parsed.endDate) {
+      startDate = parsed.startDate;
+      endDate = parsed.endDate;
+    } else {
+      const range = getMLBFixtureDateRange(fixture);
+      startDate = range.startDate;
+      endDate = range.endDate;
+    }
+  } else {
+    const cacheRoot = parsed.cacheRoot ?? path.resolve(process.cwd(), '.cache/mlb-history');
+    const cacheVersion = parsed.cacheVersion ?? 'v1';
+
+    const providerFactoryOptions: LiveMLBHistoricalProviderFactoryOptions = {
+      cacheRoot,
+      cacheVersion,
+      ...(parsed.forceRefresh !== undefined ? { forceRefresh: parsed.forceRefresh } : {}),
+      ...(parsed.timeoutMs !== undefined ? { timeoutMs: parsed.timeoutMs } : {}),
+      ...(parsed.maxRetries !== undefined ? { maxRetries: parsed.maxRetries } : {}),
+      ...(injectNow ? { now: injectNow } : {}),
+      ...(dependencies.liveFetchImpl ? { fetchImpl: dependencies.liveFetchImpl } : {}),
+    };
+
+    const liveResult = createLiveProvider(providerFactoryOptions);
+    provider = liveResult.provider;
+
+    if (parsed.date) {
+      startDate = parsed.date;
+      endDate = parsed.date;
+    } else if (parsed.startDate && parsed.endDate) {
+      startDate = parsed.startDate;
+      endDate = parsed.endDate;
+    }
+  }
+
+  const context: RunnerContext = {
+    provider,
+    deterministicTime: injectNow?.() ?? new Date(),
+    featureVersion: 'exploratory-unvalidated-v1',
+    modelVersion: 'exploratory-unvalidated-v1',
+    naiveBaselineContext: {
+      recentWinRates: parsed.source === 'live' ? {} : fixture!.recentWinRates,
+      seasonWinRates: parsed.source === 'live' ? {} : fixture!.seasonWinRates,
+    },
+  };
+
+  try {
+    const result = await orchestrate(
+      { startDate, endDate },
+      context,
+    );
+
+    if (parsed.output === 'json') {
+      stdout(JSON.stringify(serializeJSONResult(result, parsed.source), null, 2));
+    } else {
+      stdout(printTextResult(result, parsed.source));
+    }
+
+    return 0;
+  } catch (error) {
+    if (error instanceof HistoricalBacktestOrchestrationError) {
+      stderr(`Orchestration failed: ${error.message}`);
+    } else if (error instanceof Error) {
+      stderr(`Backtest failed: ${error.message}`);
+    } else {
+      stderr(`Backtest failed: ${String(error)}`);
+    }
+    return 1;
+  }
+}

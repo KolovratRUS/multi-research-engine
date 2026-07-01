@@ -1,0 +1,80 @@
+{
+  "people": [
+    {
+      "id": 100201,
+      "fullName": "Fixture Pitcher Alpha"
+    }
+  ],
+  "stats": [
+    {
+      "type": {
+        "displayName": "gameLog"
+      },
+      "group": {
+        "displayName": "pitching"
+      },
+      "splits": [
+        {
+          "date": "2026-06-24",
+          "stat": {
+            "inningsPitched": 6,
+            "earnedRuns": 2,
+            "strikeOuts": 7,
+            "baseOnBalls": 1,
+            "numberOfPitches": 95,
+            "homeRuns": 1,
+            "hits": 4
+          },
+          "opponent": {
+            "id": 100102,
+            "name": "Fixture Opponent X"
+          },
+          "game": {
+            "gamePk": 900100
+          },
+          "season": "2026"
+        },
+        {
+          "date": "2026-06-17",
+          "stat": {
+            "inningsPitched": 5,
+            "earnedRuns": 1,
+            "strikeOuts": 8,
+            "baseOnBalls": 0,
+            "numberOfPitches": 88,
+            "homeRuns": 0,
+            "hits": 3
+          },
+          "opponent": {
+            "id": 100103,
+            "name": "Fixture Opponent Y"
+          },
+          "game": {
+            "gamePk": 900101
+          },
+          "season": "2026"
+        },
+        {
+          "date": "2026-06-10",
+          "stat": {
+            "inningsPitched": 7,
+            "earnedRuns": 3,
+            "strikeOuts": 6,
+            "baseOnBalls": 2,
+            "numberOfPitches": 102,
+            "homeRuns": 2,
+            "hits": 5
+          },
+          "opponent": {
+            "id": 100104,
+            "name": "Fixture Opponent Z"
+          },
+          "game": {
+            "gamePk": 900102
+          },
+          "season": "2026"
+        }
+      ]
+    }
+  ]
+}

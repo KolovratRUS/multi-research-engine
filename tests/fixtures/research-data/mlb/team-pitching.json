@@ -1,0 +1,36 @@
+{
+  "people": [
+    { "id": 100102, "fullName": "Fixture Team Beta" }
+  ],
+  "stats": [
+    {
+      "type": { "displayName": "Team" },
+      "group": { "displayName": "pitching" },
+      "splits": [
+        {
+          "season": "2026",
+          "stat": {
+            "gamesPlayed": 60,
+            "gamesStarted": 60,
+            "inningsPitched": "540.0",
+            "era": "3.55",
+            "whip": "1.25",
+            "strikeOuts": 480,
+            "baseOnBalls": 190,
+            "homeRuns": 55,
+            "hits": 480,
+            "earnedRuns": 212,
+            "wins": 32,
+            "losses": 28,
+            "saves": 20,
+            "holds": 18,
+            "blownSaves": 4,
+            "avg": ".248",
+            "whip": "1.25"
+          },
+          "team": { "id": 100102, "name": "Fixture Team Beta" }
+        }
+      ]
+    }
+  ]
+}

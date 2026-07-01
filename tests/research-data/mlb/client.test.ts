@@ -1,0 +1,119 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import {
+  ScheduleResponseSchema,
+  FeedLiveResponseSchema,
+  PersonStatsResponseSchema,
+  PersonGameLogResponseSchema,
+  TeamStatsResponseSchema,
+  VenueResponseSchema,
+  resolveMLBConfig,
+} from '@/lib/research-data/mlb/stats-api-client';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const FIXTURE_ROOT = join(__dirname, '../../fixtures/research-data/mlb');
+
+describe('MLB client endpoint-specific Zod validation', () => {
+  it('validates schedule fixture and infers typed response', () => {
+    const raw = JSON.parse(readFileSync(join(FIXTURE_ROOT, 'schedule.json'), 'utf8'));
+    const parsed = ScheduleResponseSchema.parse(raw);
+    expect(parsed.dates).toHaveLength(1);
+    expect(parsed.dates[0].games).toHaveLength(1);
+    expect(parsed.dates[0].games[0].gamePk).toBe(100001);
+    expect(parsed.dates[0].games[0].teams.away.team.name).toBe('Fixture Team Alpha');
+  });
+
+  it('validates game feed fixture and infers typed response', () => {
+    const raw = JSON.parse(readFileSync(join(FIXTURE_ROOT, 'game-feed.json'), 'utf8'));
+    const parsed = FeedLiveResponseSchema.parse(raw);
+    expect(parsed.gamePk).toBe(100001);
+    expect(parsed.gameData.teams.home.name).toBe('Fixture Team Beta');
+    expect(parsed.gameData.probablePitchers!.away!.fullName).toBe('Fixture Pitcher Alpha');
+  });
+
+  it('validates pitcher season stats fixture', () => {
+    const raw = JSON.parse(readFileSync(join(FIXTURE_ROOT, 'pitcher-season.json'), 'utf8'));
+    const parsed = PersonStatsResponseSchema.parse(raw);
+    expect(parsed.stats).toHaveLength(1);
+    expect(parsed.stats[0].splits).toHaveLength(1);
+    expect(parsed.stats[0].splits[0].stat.strikeOuts).toBe(85);
+  });
+
+  it('validates pitcher game log fixture', () => {
+    const raw = JSON.parse(readFileSync(join(FIXTURE_ROOT, 'pitcher-game-log.json'), 'utf8'));
+    const parsed = PersonGameLogResponseSchema.parse(raw);
+    expect(parsed.stats).toHaveLength(1);
+    expect(parsed.stats[0].splits).toHaveLength(3);
+  });
+
+  it('validates team hitting stats fixture', () => {
+    const raw = JSON.parse(readFileSync(join(FIXTURE_ROOT, 'team-hitting.json'), 'utf8'));
+    const parsed = TeamStatsResponseSchema.parse(raw);
+    expect(parsed.stats).toHaveLength(1);
+    expect(parsed.stats[0].splits[0].stat.runs).toBe(180);
+  });
+
+  it('validates team pitching stats fixture', () => {
+    const raw = JSON.parse(readFileSync(join(FIXTURE_ROOT, 'team-pitching.json'), 'utf8'));
+    const parsed = TeamStatsResponseSchema.parse(raw);
+    expect(parsed.stats).toHaveLength(1);
+    expect(parsed.stats[0].splits[0].stat.era).toBe('3.55');
+  });
+
+  it('validates venue fixture', () => {
+    const raw = JSON.parse(readFileSync(join(FIXTURE_ROOT, 'venue.json'), 'utf8'));
+    const parsed = VenueResponseSchema.parse(raw);
+    expect(parsed.venues).toHaveLength(1);
+    expect(parsed.venues[0].name).toBe('Fixture Stadium');
+  });
+});
+
+describe('MLB client environment configuration', () => {
+  const originalBaseUrl = process.env.MLB_STATS_API_BASE_URL;
+  const originalTimeout = process.env.RESEARCH_HTTP_TIMEOUT_MS;
+
+  afterEach(() => {
+    if (originalBaseUrl === undefined) {
+      delete process.env.MLB_STATS_API_BASE_URL;
+    } else {
+      process.env.MLB_STATS_API_BASE_URL = originalBaseUrl;
+    }
+    if (originalTimeout === undefined) {
+      delete process.env.RESEARCH_HTTP_TIMEOUT_MS;
+    } else {
+      process.env.RESEARCH_HTTP_TIMEOUT_MS = originalTimeout;
+    }
+  });
+
+  it('returns default config when env vars are unset', () => {
+    delete process.env.MLB_STATS_API_BASE_URL;
+    delete process.env.RESEARCH_HTTP_TIMEOUT_MS;
+    const config = resolveMLBConfig();
+    expect(config.baseUrl).toBe('https://statsapi.mlb.com/api/v1');
+    expect(config.timeoutMs).toBe(20_000);
+  });
+
+  it('reads custom base URL from env', () => {
+    process.env.MLB_STATS_API_BASE_URL = 'https://example.test/api/v1';
+    const config = resolveMLBConfig();
+    expect(config.baseUrl).toBe('https://example.test/api/v1');
+  });
+
+  it('reads custom timeout from env', () => {
+    process.env.RESEARCH_HTTP_TIMEOUT_MS = '5000';
+    const config = resolveMLBConfig();
+    expect(config.timeoutMs).toBe(5000);
+  });
+
+  it('throws for malformed base URL', () => {
+    process.env.MLB_STATS_API_BASE_URL = 'not a url';
+    expect(() => resolveMLBConfig()).toThrow('Invalid MLB_STATS_API_BASE_URL');
+  });
+
+  it('throws for non-positive timeout', () => {
+    process.env.RESEARCH_HTTP_TIMEOUT_MS = '-1';
+    expect(() => resolveMLBConfig()).toThrow('Invalid RESEARCH_HTTP_TIMEOUT_MS');
+  });
+});

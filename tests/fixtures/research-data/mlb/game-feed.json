@@ -1,0 +1,22 @@
+{
+  "gamePk": 100001,
+  "gameData": {
+    "status": {
+      "abstractGameState": "Preview",
+      "codedGameState": "P",
+      "detailedState": "Pre-Game"
+    },
+    "datetime": {
+      "dateTime": "2026-06-26T22:10:00Z",
+      "dayNight": "day"
+    },
+    "teams": {
+      "away": { "id": 100101, "name": "Fixture Team Alpha" },
+      "home": { "id": 100102, "name": "Fixture Team Beta" }
+    },
+    "probablePitchers": {
+      "away": { "id": 100201, "fullName": "Fixture Pitcher Alpha" },
+      "home": { "id": 100202, "fullName": "Fixture Pitcher Beta" }
+    }
+  }
+}

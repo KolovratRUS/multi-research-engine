@@ -1,0 +1,270 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventStatus {
+  UPCOMING
+  LIVE
+  FINAL
+}
+
+enum Volatility {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CandidateStatus {
+  ACTIVE
+  STALE
+  EXCLUDED
+  RESOLVED
+}
+
+enum MarketType {
+  H2H
+  SPREADS
+  TOTALS
+  TEAM_TOTALS
+  PLAYER_PROP
+  ALTERNATE
+}
+
+enum MultiStatus {
+  DRAFT
+  ACTIVE
+  SETTLED
+  VOID
+}
+
+enum LegResult {
+  WIN
+  LOSS
+  VOID
+}
+
+enum CanonicalBookmaker {
+  SPORTSBET
+  POINTSBET
+  UNIBET
+  LADBROKES
+  BETR
+  PALMERBET
+  BETFAIR
+  OTHER
+}
+
+model Refresh {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  provider      String
+  eventsFetched Int
+  oddsFetched   Int
+  durationMs    Int
+  errors        Json?
+
+  @@map("refreshes")
+}
+
+model Event {
+  id           String      @id @default(cuid())
+  sport        String
+  league       String
+  leagueSlug   String?
+  homeTeam     String
+  awayTeam     String
+  homeTeamSlug String?
+  awayTeamSlug String?
+  startTimeUtc DateTime
+  status       EventStatus
+  homeScore    Int?
+  awayScore    Int?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  providerRefs       EventProviderReference[]
+  oddsSamples        OddsSample[]
+  researchCandidates ResearchCandidate[]
+  legs               Leg[]
+
+  @@index([startTimeUtc])
+  @@index([sport])
+  @@index([status])
+  @@map("events")
+}
+
+model EventProviderReference {
+  id         String @id @default(cuid())
+  eventId    String
+  event      Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  provider   String
+  externalId String
+
+  @@unique([provider, externalId])
+  @@index([eventId])
+  @@map("event_provider_references")
+}
+
+model OddsSample {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  bookmaker   String
+  marketKey   String
+  selectionId String
+  selection   String
+  line        String?
+  decimalOdds Decimal  @db.Decimal(10, 4)
+  timestamp   DateTime
+  raw         Json?
+  fetchedAt   DateTime @default(now())
+
+  pricedCandidates PricedCandidate[]
+
+  @@index([eventId])
+  @@index([timestamp])
+  @@index([bookmaker])
+  @@map("odds_samples")
+}
+
+model ResearchCandidate {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  sport      String
+  league     String
+  marketType MarketType
+  selection  String
+  line       String?
+
+  modelProbability      Decimal?   @db.Decimal(10, 4)
+  researchStrengthScore Int // 0-100
+  confidence            Int // 0-100
+  dataQuality           Int // 0-100
+  volatility            Volatility
+  correlationTags       Json?
+
+  explanation    String
+  supportingData Json?
+  warnings       Json?
+  projection     Json?
+
+  status            CandidateStatus
+  researchVersion   String
+  researchTimestamp DateTime        @default(now())
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  pricedCandidates PricedCandidate[]
+  legs             Leg[]
+
+  @@index([eventId])
+  @@index([status])
+  @@index([confidence])
+  @@index([sport])
+  @@index([researchTimestamp])
+  @@map("research_candidates")
+}
+
+model PricedCandidate {
+  id                  String            @id @default(cuid())
+  researchCandidateId String
+  researchCandidate   ResearchCandidate @relation(fields: [researchCandidateId], references: [id], onDelete: Cascade)
+
+  oddsSampleId String?
+  oddsSample   OddsSample? @relation(fields: [oddsSampleId], references: [id])
+
+  bookmaker          String
+  canonicalMarket    String
+  canonicalSelection String
+  line               String?
+  decimalOdds        Decimal? @db.Decimal(10, 4)
+  oddsTimestamp      DateTime
+  marketAvailable    Boolean
+  matchConfidence    Int // 0-100
+  matchingWarnings   Json?
+  createdAt          DateTime @default(now())
+
+  legs Leg[]
+
+  @@index([researchCandidateId])
+  @@index([bookmaker])
+  @@index([oddsTimestamp])
+  @@map("priced_candidates")
+}
+
+model Leg {
+  id      String @id @default(cuid())
+  multiId String
+  multi   Multi  @relation(fields: [multiId], references: [id], onDelete: Cascade)
+
+  researchCandidateId String
+  researchCandidate   ResearchCandidate @relation(fields: [researchCandidateId], references: [id])
+
+  pricedCandidateId String
+  pricedCandidate   PricedCandidate @relation(fields: [pricedCandidateId], references: [id])
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  sport        String
+  league       String
+  eventName    String
+  startTimeUtc DateTime
+
+  bookmaker String
+  market    String
+  selection String
+  line      String?
+
+  decimalOdds           Decimal @db.Decimal(10, 4)
+  confidence            Int
+  dataQuality           Int
+  researchStrengthScore Int
+  matchConfidence       Int
+
+  explanation String
+  warnings    Json?
+
+  result    LegResult?
+  createdAt DateTime   @default(now())
+
+  @@index([multiId])
+  @@index([eventId])
+  @@index([researchCandidateId])
+  @@map("legs")
+}
+
+model Multi {
+  id String @id @default(cuid())
+
+  targetTier    Int // 10, 30, 100, 500, 1000
+  targetBandMin Decimal @db.Decimal(10, 2)
+  targetBandMax Decimal @db.Decimal(10, 2)
+
+  combinedOdds Decimal @db.Decimal(12, 4)
+  legs         Leg[]
+
+  avgConfidence  Decimal? @db.Decimal(5, 2)
+  avgDataQuality Decimal? @db.Decimal(5, 2)
+  riskClass      String?
+
+  primaryBookmaker String
+  bookmakerTotals  Json? // { sportsbet: 28.4, ladbrokes: 30.1 }
+
+  status      MultiStatus
+  generatedAt DateTime    @default(now())
+  settledAt   DateTime?
+  profitLoss  Decimal?    @db.Decimal(10, 2)
+
+  snapshot Json
+
+  @@map("multis")
+}

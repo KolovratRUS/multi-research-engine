@@ -1,0 +1,39 @@
+{
+  "people": [
+    { "id": 100201, "fullName": "Fixture Pitcher Alpha" }
+  ],
+  "stats": [
+    {
+      "type": { "displayName": "Pitcher" },
+      "group": { "displayName": "pitching" },
+      "splits": [
+        {
+          "season": "2026",
+          "stat": {
+            "age": 28,
+            "gamesPlayed": 20,
+            "gamesStarted": 20,
+            "inningsPitched": "120.0",
+            "era": "3.00",
+            "whip": "1.10",
+            "strikeOuts": 85,
+            "baseOnBalls": 40,
+            "homeRuns": 12,
+            "hits": 100,
+            "wins": 10,
+            "losses": 5,
+            "saves": 0,
+            "holds": 0,
+            "blownSaves": 0,
+            "earnedRuns": 40,
+            "whip": "1.10",
+            "avg": ".200",
+            "whip": "1.10"
+          },
+          "team": { "id": 100101, "name": "Fixture Team Alpha" },
+          "player": { "id": 100201, "fullName": "Fixture Pitcher Alpha" }
+        }
+      ]
+    }
+  ]
+}

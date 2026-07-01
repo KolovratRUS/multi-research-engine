@@ -1,0 +1,9 @@
+{
+  "venues": [
+    {
+      "id": 1001,
+      "name": "Fixture Stadium",
+      "timeZone": { "id": "UTC" }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "people": [
+    { "id": 100101, "fullName": "Fixture Team Alpha" }
+  ],
+  "stats": [
+    {
+      "type": { "displayName": "Team" },
+      "group": { "displayName": "hitting" },
+      "splits": [
+        {
+          "season": "2026",
+          "stat": {
+            "gamesPlayed": 60,
+            "runs": 180,
+            "hits": 480,
+            "homeRuns": 70,
+            "rbi": 220,
+            "avg": ".260",
+            "obp": ".335",
+            "slg": ".440",
+            "ops": ".775",
+            "strikeOuts": 420,
+            "baseOnBalls": 200,
+            "stolenBases": 35,
+            "caughtStealing": 10,
+            "leftOnBase": 380
+          },
+          "team": { "id": 100101, "name": "Fixture Team Alpha" }
+        }
+      ]
+    }
+  ]
+}
