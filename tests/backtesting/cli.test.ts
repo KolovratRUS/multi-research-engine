@@ -7,6 +7,7 @@ import {
   type CLIBacktestCLIError,
   type MLBBacktestCLIDependencies,
 } from '@/lib/backtesting/cli';
+import type { BacktestPrediction } from '@/lib/backtesting/types';
 
 const mockStdout: string[] = [];
 const mockStderr: string[] = [];
@@ -39,6 +40,78 @@ function orchestrateDefaultMockResult() {
       abstentions: [],
       metrics: {
         predictionsMade: 0,
+        gamesSkipped: 0,
+        voids: 0,
+        accuracy: 0,
+        homePickRate: 0,
+        awayPickRate: 0,
+        accuracyByConfidenceBucket: {},
+        accuracyByDataQualityBucket: {},
+        accuracyByVolatilityBucket: {},
+        accuracyWithBothPitchersKnown: null,
+        accuracyWithMissingPitcher: null,
+        accuracyByMonth: {},
+        naiveHomeBaseline: null,
+        naiveRecentBaseline: null,
+        naiveSeasonBaseline: null,
+      },
+    },
+  };
+}
+
+type MockBacktestResult = ReturnType<typeof orchestrateDefaultMockResult>;
+
+function buildMockPrediction(warnings: readonly string[] = []): BacktestPrediction {
+  return {
+    eventId: 'mock-event',
+    gamePk: 1,
+    eventDate: '2024-06-01',
+    homeTeamId: 1,
+    awayTeamId: 2,
+    homeTeam: 'Home',
+    awayTeam: 'Away',
+    predictedSide: null,
+    researchStrengthScore: 0,
+    confidence: 0,
+    dataQuality: 3,
+    volatility: 'LOW',
+    componentScores: {},
+    warnings: [...warnings],
+    modelVersion: 'test',
+    featureVersion: 'test',
+    generatedAt: new Date('2024-06-01T00:00:00Z'),
+    historicalCutoffTime: new Date('2024-06-01T00:00:00Z'),
+    actualWinner: null,
+    correct: null,
+    voided: false,
+    abstained: false,
+    homePitcherAvailable: false,
+    awayPitcherAvailable: false,
+  };
+}
+
+function orchestrateMockResultWithRunnerParts(
+  predictions: { warnings: string[] }[] = [],
+  abstentions: { warnings: string[] }[] = [],
+) {
+  const basePrediction = buildMockPrediction();
+  const baseAbstention: BacktestPrediction = { ...basePrediction, abstained: true, abstentionReason: 'BOTH_PITCHERS_UNAVAILABLE' };
+
+  return {
+    dateRange: { startDate: '2024-06-01', endDate: '2024-06-01' },
+    requestedDates: ['2024-06-01'],
+    scheduleRequests: 1,
+    discoveredGames: Math.max(predictions.length, abstentions.length, 2),
+    uniqueGames: Math.max(predictions.length, abstentions.length, 2),
+    duplicateGamesRemoved: 0,
+    firstGameStart: new Date('2024-06-01T16:20:00Z'),
+    lastGameStart: new Date('2024-06-01T19:05:00Z'),
+    games: [],
+    runnerResult: {
+      predictions: predictions.map((item) => ({ ...basePrediction, warnings: [...item.warnings] })),
+      abstentions: abstentions.map((item) => ({ ...baseAbstention, warnings: [...item.warnings] })),
+      metrics: {
+        predictionsMade: predictions.length,
         gamesSkipped: 0,
         voids: 0,
         accuracy: 0,
@@ -772,5 +845,71 @@ describe('runMLBBacktestCLI', () => {
     expect(code).toBe(0);
     const calledWith = createLiveProvider.mock.calls[0][0];
     expect(calledWith.now).toBeUndefined();
+  });
+
+  it('warningCount counts occurrences from predictions and abstentions in JSON output', async () => {
+    const mockOrchestrate = vi.fn().mockResolvedValue(
+      orchestrateMockResultWithRunnerParts(
+        [{ warnings: ['p-warn-1'] }, { warnings: ['p-warn-1', 'p-warn-2'] }],
+        [{ warnings: ['a-warn'] }],
+      ),
+    );
+
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(['--date', '2024-06-01', '--output', 'json'], io, deps);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(mockStdout[0]);
+    expect(parsed.runner.warningCount).toBe(4);
+  });
+
+  it('warningCount treats duplicate warning strings across abstentions as separate occurrences', async () => {
+    const mockOrchestrate = vi.fn().mockResolvedValue(
+      orchestrateMockResultWithRunnerParts([], [
+        { warnings: ['same-warning'] },
+        { warnings: ['same-warning'] },
+        { warnings: [] },
+      ]),
+    );
+
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(['--date', '2024-06-01', '--output', 'text'], io, deps);
+    expect(code).toBe(0);
+    const output = mockStdout.join('\n');
+    expect(output).toContain('Warning count: 2');
+  });
+
+  it('warningCount is zero when no warnings exist', async () => {
+    const mockOrchestrate = vi.fn().mockResolvedValue(
+      orchestrateMockResultWithRunnerParts(
+        [{ warnings: [] }],
+        [{ warnings: [] }],
+      ),
+    );
+
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(['--date', '2024-06-01', '--output', 'json'], io, deps);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(mockStdout[0]);
+    expect(parsed.runner.warningCount).toBe(0);
+  });
+
+  it('warningCount falls back to abstention-only warnings when predictions are empty', async () => {
+    const mockOrchestrate = vi.fn().mockResolvedValue(
+      orchestrateMockResultWithRunnerParts([], [
+        { warnings: ['abstention-warning'] },
+      ]),
+    );
+
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(['--date', '2024-06-01', '--output', 'json'], io, deps);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(mockStdout[0]);
+    expect(parsed.predictions).toHaveLength(0);
+    expect(parsed.abstentions).toHaveLength(1);
+    expect(parsed.runner.warningCount).toBe(1);
   });
 });

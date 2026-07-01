@@ -307,6 +307,13 @@ describe('Phase 1C: live MLB CLI offline integration', () => {
     // meta.source is live
     expect(parsed.meta.source).toBe('live');
 
+    // warningCount equals total warning occurrences across predictions and abstentions
+    const expectedWarningCount = [
+      ...parsed.predictions,
+      ...parsed.abstentions,
+    ].reduce((sum, item) => sum + item.warnings.length, 0);
+    expect(parsed.runner.warningCount).toBe(expectedWarningCount);
+
     // Correct target game identity
     const targetGame = parsed.orchestration.games.find((g: SerializedGame) => g.gamePk === TARGET_GAME_PK);
     expect(targetGame).toBeDefined();

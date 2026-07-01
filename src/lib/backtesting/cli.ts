@@ -553,6 +553,16 @@ interface SerializableResultInput {
   readonly games: readonly HistoricalMLBGame[];
 }
 
+function countWarnings(
+  predictions: readonly { readonly warnings: readonly string[] }[],
+  abstentions: readonly { readonly warnings: readonly string[] }[],
+): number {
+  return (
+    predictions.reduce((sum, item) => sum + item.warnings.length, 0) +
+    abstentions.reduce((sum, item) => sum + item.warnings.length, 0)
+  );
+}
+
 function serializeJSONResult(
   result: SerializableResultInput,
   source: 'fixture' | 'live',
@@ -565,10 +575,7 @@ function serializeJSONResult(
     predictions.length > 0
       ? predictions.reduce((sum: number, p: { readonly dataQuality: number }) => sum + p.dataQuality, 0) / predictions.length
       : null;
-  const warningCount = predictions.reduce(
-    (sum: number, p: { readonly warnings: readonly string[] }) => sum + p.warnings.length,
-    0,
-  );
+  const warningCount = countWarnings(predictions, abstentions);
 
   return {
     meta: {
@@ -623,10 +630,7 @@ function printTextResult(
     predictions.length > 0
       ? predictions.reduce((sum: number, p: { readonly dataQuality: number }) => sum + p.dataQuality, 0) / predictions.length
       : 0;
-  const warningCount = predictions.reduce(
-    (sum: number, p: { readonly warnings: readonly string[] }) => sum + p.warnings.length,
-    0,
-  );
+  const warningCount = countWarnings(predictions, abstentions);
 
   const header =
     source === 'live'
