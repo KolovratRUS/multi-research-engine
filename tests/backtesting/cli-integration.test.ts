@@ -104,16 +104,37 @@ describe('runMLBBacktestCLI integration', () => {
       ['--source', 'live', '--date', '2024-06-01', '--output', 'json'],
       createIO(),
       {
-        createLiveProvider: (_options) => ({
+        createLiveProvider: () => ({
           provider: mockProvider,
-          deps: {},
-          client: {},
-          cache: {},
-          scheduleLoader: {},
-          outcomeLoader: {},
-          teamGameSource: {},
-          pitcherFeedLoader: {},
-          pitcherAppearanceSource: {},
+          getDiagnostics: () => ({
+            provider: {
+              scheduleRequests: 0,
+              outcomeRequests: 0,
+              teamSourceRequests: 0,
+              pitcherSourceRequests: 0,
+              teamAggregations: 0,
+              pitcherAggregations: 0,
+            },
+            http: {
+              logicalRequests: 0,
+              fetchAttempts: 0,
+              successfulResponses: 0,
+              httpFailures: 0,
+              transportFailures: 0,
+              timeouts: 0,
+              parseFailures: 0,
+              schemaFailures: 0,
+              retries: 0,
+              byEndpoint: {},
+            },
+            cache: {
+              hits: 0,
+              misses: 0,
+              writes: 0,
+              corruptions: 0,
+              versionMismatches: 0,
+            },
+          }),
         }),
       },
     );

@@ -1,4 +1,3 @@
-import type { MLBHistoricalDataProvider } from '../../types';
 import type { LiveHistoricalProviderDependencies } from './provider';
 import type { MLBHistoricalHttpClient, MLBHistoricalHttpClientOptions } from './client';
 import type { MLBHistoricalCache } from './types';
@@ -14,7 +13,7 @@ import { aggregateTeamHistory } from './team-aggregator';
 import { aggregatePitcherHistory } from './pitcher-aggregator';
 
 export interface LiveMLBHistoricalProviderFactoryResult {
-  readonly provider: MLBHistoricalDataProvider;
+  readonly provider: LiveMLBHistoricalProvider;
   readonly deps: LiveHistoricalProviderDependencies;
   readonly client: MLBHistoricalHttpClient;
   readonly cache: MLBHistoricalCache;

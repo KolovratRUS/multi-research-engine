@@ -394,4 +394,107 @@ describe('Phase 1C: live MLB CLI offline integration', () => {
     expect(distinctScheduleUrls).toBe(2);
     expect(duplicateScheduleUrls).toBe(3);
   });
+
+  it('observability: fresh cache reports exact HTTP and cache stats', async () => {
+    const deps: MLBBacktestCLIDependencies = {
+      now: () => new Date('2024-06-15T00:00:00Z'),
+      liveFetchImpl: fetchImpl,
+    };
+
+    const code = await runMLBBacktestCLI(
+      ['--source', 'live', '--date', TARGET_DATE, '--output', 'json', '--cache-root', tempRoot, '--cache-version', 'observability-v1'],
+      createIO(),
+      deps,
+    );
+    expect(code).toBe(0);
+    const parsed = JSON.parse(capturedStdout());
+
+    expect(parsed.provider).toBeDefined();
+    expect(parsed.http).toBeDefined();
+    expect(parsed.cache).toBeDefined();
+
+    expect(parsed.http.logicalRequests).toBeGreaterThan(0);
+    expect(parsed.http.fetchAttempts).toBeGreaterThan(0);
+    expect(parsed.http.successfulResponses).toBeGreaterThan(0);
+    expect(parsed.http.httpFailures).toBe(0);
+    expect(parsed.http.transportFailures).toBe(0);
+    expect(parsed.http.timeouts).toBe(0);
+    expect(parsed.http.parseFailures).toBe(0);
+    expect(parsed.http.schemaFailures).toBe(0);
+
+    expect(parsed.cache.misses).toBeGreaterThan(0);
+    expect(parsed.cache.writes).toBeGreaterThan(0);
+
+    const endpointKeys = Object.keys(parsed.http.byEndpoint);
+    expect(new Set(endpointKeys)).toEqual(
+      new Set([
+        '/api/v1/schedule',
+        '/api/v1.1/game/{gamePk}/feed/live',
+      ]),
+    );
+  });
+
+  it('observability: cached run reports zero HTTP activity and cache hits', async () => {
+    const deps: MLBBacktestCLIDependencies = {
+      now: () => new Date('2024-06-15T00:00:00Z'),
+      liveFetchImpl: fetchImpl,
+    };
+
+    const args = [
+      '--source', 'live', '--date', TARGET_DATE, '--output', 'json', '--cache-root', tempRoot, '--cache-version', 'observability-v2',
+    ];
+
+    // fresh invocation populates cache
+    resetIO();
+    const code1 = await runMLBBacktestCLI(args, createIO(), deps);
+    expect(code1).toBe(0);
+    const parsed1 = JSON.parse(capturedStdout());
+
+    // new invocation with same cache
+    resetIO();
+    const code2 = await runMLBBacktestCLI(args, createIO(), deps);
+    expect(code2).toBe(0);
+    const parsed2 = JSON.parse(capturedStdout());
+
+    expect(parsed2.http.logicalRequests).toBe(0);
+    expect(parsed2.http.fetchAttempts).toBe(0);
+    expect(parsed2.http.successfulResponses).toBe(0);
+    expect(parsed2.http.retries).toBe(0);
+    expect(parsed2.cache.hits).toBeGreaterThan(0);
+    expect(parsed2.cache.misses).toBe(0);
+    expect(parsed2.cache.writes).toBe(0);
+
+    const gamePks1 = parsed1.orchestration.games.map((g: { gamePk: number }) => g.gamePk);
+    const gamePks2 = parsed2.orchestration.games.map((g: { gamePk: number }) => g.gamePk);
+    expect(gamePks2).toEqual(gamePks1);
+    expect(parsed2.predictions.length).toBe(parsed1.predictions.length);
+    expect(parsed2.abstentions.length).toBe(parsed1.abstentions.length);
+    expect(parsed2.predictions.map((p: { predictedSide: string | null }) => p.predictedSide)).toEqual(
+      parsed1.predictions.map((p: { predictedSide: string | null }) => p.predictedSide),
+    );
+    expect(parsed2.abstentions.map((p: { abstentionReason?: string }) => p.abstentionReason)).toEqual(
+      parsed1.abstentions.map((p: { abstentionReason?: string }) => p.abstentionReason),
+    );
+    expect(parsed2.runner.warningCount).toBe(parsed1.runner.warningCount);
+  });
+
+  it('observability: force refresh refetches and rewrites cache', async () => {
+    const deps: MLBBacktestCLIDependencies = {
+      now: () => new Date('2024-06-15T00:00:00Z'),
+      liveFetchImpl: fetchImpl,
+    };
+
+    const args = [
+      '--source', 'live', '--date', TARGET_DATE, '--output', 'json', '--cache-root', tempRoot, '--cache-version', 'observability-v3', '--force-refresh',
+    ];
+
+    const code = await runMLBBacktestCLI(args, createIO(), deps);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(capturedStdout());
+
+    expect(parsed.http.logicalRequests).toBeGreaterThan(0);
+    expect(parsed.http.fetchAttempts).toBeGreaterThan(0);
+    expect(parsed.http.successfulResponses).toBeGreaterThan(0);
+    expect(parsed.cache.writes).toBeGreaterThan(0);
+  });
 });

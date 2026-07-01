@@ -7,7 +7,6 @@ import {
 import { orchestrateHistoricalBacktest, HistoricalBacktestOrchestrationError } from '@/lib/backtesting/orchestrator';
 import { createLiveMLBHistoricalProvider } from '@/lib/backtesting/mlb/live-history/provider-factory';
 import type { LiveMLBHistoricalProviderFactoryOptions } from '@/lib/backtesting/mlb/live-history/provider-factory';
-import os from 'node:os';
 import path from 'node:path';
 import type {
   BacktestMetrics,
@@ -15,6 +14,12 @@ import type {
   HistoricalMLBGame,
   MLBHistoricalDataProvider,
 } from '@/lib/backtesting/types';
+import type {
+  MLBHistoricalHttpClient,
+  MLBHistoricalHttpClientStats,
+  MLBHistoricalCache,
+  CacheStats,
+} from '@/lib/backtesting/mlb/live-history/types';
 import type { RunnerContext } from '@/lib/backtesting/runner';
 
 /* ------------------------------------------------------------------ */
@@ -49,6 +54,20 @@ export interface CLIIO {
 
 export interface LiveProviderFactoryResultForCLI {
   readonly provider: MLBHistoricalDataProvider;
+  readonly getDiagnostics: () => LiveCLIDiagnostics;
+}
+
+export interface LiveCLIDiagnostics {
+  readonly provider: {
+    readonly scheduleRequests: number;
+    readonly outcomeRequests: number;
+    readonly teamSourceRequests: number;
+    readonly pitcherSourceRequests: number;
+    readonly teamAggregations: number;
+    readonly pitcherAggregations: number;
+  };
+  readonly http: MLBHistoricalHttpClientStats;
+  readonly cache: CacheStats;
 }
 
 const KNOWN_OPTIONS = new Set([
@@ -566,6 +585,7 @@ function countWarnings(
 function serializeJSONResult(
   result: SerializableResultInput,
   source: 'fixture' | 'live',
+  diagnostics?: LiveCLIDiagnostics,
 ): JSONSerializedResult {
   const predictions = result.runnerResult.predictions;
   const abstentions = result.runnerResult.abstentions;
@@ -607,6 +627,9 @@ function serializeJSONResult(
       averageDataQuality: avgDataQuality,
       warningCount,
     },
+    ...(source === 'live' && diagnostics ? { provider: diagnostics.provider } : {}),
+    ...(source === 'live' && diagnostics ? { http: diagnostics.http } : {}),
+    ...(source === 'live' && diagnostics ? { cache: diagnostics.cache } : {}),
     predictions: predictions.map(serializePredictionForJSON),
     abstentions: abstentions.map(serializePredictionForJSON),
   };
@@ -619,6 +642,7 @@ function serializeJSONResult(
 function printTextResult(
   result: SerializableResultInput,
   source: 'fixture' | 'live',
+  diagnostics?: LiveCLIDiagnostics,
 ): string {
   const predictions = result.runnerResult.predictions;
   const abstentions = result.runnerResult.abstentions;
@@ -641,7 +665,7 @@ function printTextResult(
       ? 'Source: live (historical MLB Stats API)'
       : 'Source: fixture (deterministic, no internet)';
 
-  const lines: readonly string[] = [
+  const lines: string[] = [
     header,
     `Date range: ${result.dateRange.startDate} to ${result.dateRange.endDate}`,
     `Score version: exploratory-unvalidated-v1`,
@@ -673,12 +697,43 @@ function printTextResult(
     `  Warning count: ${warningCount}`,
   ];
 
+  if (source === 'live' && diagnostics) {
+    lines.push(
+      '',
+      `Provider calls: ${diagnostics.provider.scheduleRequests} schedule, ${diagnostics.provider.teamSourceRequests} team source, ${diagnostics.provider.pitcherSourceRequests} pitcher source, ${diagnostics.provider.outcomeRequests} outcome`,
+    );
+    lines.push(
+      `HTTP: ${diagnostics.http.logicalRequests} logical requests, ${diagnostics.http.fetchAttempts} fetch attempts, ${diagnostics.http.retries} retries`,
+    );
+    lines.push(
+      `HTTP outcomes: ${diagnostics.http.successfulResponses} successful, ${diagnostics.http.httpFailures} HTTP failures, ${diagnostics.http.transportFailures} transport failures, ${diagnostics.http.timeouts} timeouts, ${diagnostics.http.parseFailures} parse failures, ${diagnostics.http.schemaFailures} schema failures`,
+    );
+    lines.push(
+      `Cache: ${diagnostics.cache.hits} hits, ${diagnostics.cache.misses} misses, ${diagnostics.cache.writes} writes, ${diagnostics.cache.corruptions} corruptions, ${diagnostics.cache.versionMismatches} version mismatches`,
+    );
+  }
+
   return lines.join('\n');
 }
 
 /* ------------------------------------------------------------------ */
 /*  Runner                                                            */
 /* ------------------------------------------------------------------ */
+
+export function createLiveProviderForCLI(
+  options: LiveMLBHistoricalProviderFactoryOptions,
+): LiveProviderFactoryResultForCLI {
+  const result = createLiveMLBHistoricalProvider(options);
+
+  return {
+    provider: result.provider,
+    getDiagnostics: () => ({
+      provider: result.provider.stats(),
+      http: result.client.getStats(),
+      cache: result.cache.stats(),
+    }),
+  };
+}
 
 export interface MLBBacktestCLIDependencies {
   readonly orchestrate?: typeof orchestrateHistoricalBacktest;
@@ -700,7 +755,8 @@ export async function runMLBBacktestCLI(
 
   const orchestrate = dependencies.orchestrate ?? orchestrateHistoricalBacktest;
   const buildFixture = dependencies.buildFixture ?? buildMLBFixtures;
-  const createLiveProvider = dependencies.createLiveProvider ?? createLiveMLBHistoricalProvider;
+  const createLiveProvider =
+    dependencies.createLiveProvider ?? createLiveProviderForCLI;
   const injectNow = dependencies.now;
 
   const parsed = parseMLBBacktestCLIArgs(argv);
@@ -723,6 +779,7 @@ export async function runMLBBacktestCLI(
   let fixture: MLBHistoricalFixture | undefined;
   let startDate = '';
   let endDate = '';
+  let liveResult: LiveProviderFactoryResultForCLI | undefined;
 
   if (parsed.source === 'fixture') {
     fixture = buildFixture();
@@ -753,7 +810,7 @@ export async function runMLBBacktestCLI(
       ...(dependencies.liveFetchImpl ? { fetchImpl: dependencies.liveFetchImpl } : {}),
     };
 
-    const liveResult = createLiveProvider(providerFactoryOptions);
+    liveResult = createLiveProvider(providerFactoryOptions);
     provider = liveResult.provider;
 
     if (parsed.date) {
@@ -782,10 +839,15 @@ export async function runMLBBacktestCLI(
       context,
     );
 
+    let diagnostics: LiveCLIDiagnostics | undefined;
+    if (liveResult) {
+      diagnostics = liveResult.getDiagnostics();
+    }
+
     if (parsed.output === 'json') {
-      stdout(JSON.stringify(serializeJSONResult(result, parsed.source), null, 2));
+      stdout(JSON.stringify(serializeJSONResult(result, parsed.source, diagnostics), null, 2));
     } else {
-      stdout(printTextResult(result, parsed.source));
+      stdout(printTextResult(result, parsed.source, diagnostics));
     }
 
     return 0;

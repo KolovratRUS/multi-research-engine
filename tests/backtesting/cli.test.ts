@@ -6,6 +6,8 @@ import {
   type MLBBacktestCLIOptions,
   type CLIBacktestCLIError,
   type MLBBacktestCLIDependencies,
+  type LiveCLIDiagnostics,
+  type LiveProviderFactoryResultForCLI,
 } from '@/lib/backtesting/cli';
 import type { BacktestPrediction } from '@/lib/backtesting/types';
 
@@ -55,6 +57,47 @@ function orchestrateDefaultMockResult() {
         naiveRecentBaseline: null,
         naiveSeasonBaseline: null,
       },
+    },
+  };
+}
+
+function createLiveDiagnostics(
+  overrides?: {
+    provider?: Partial<LiveCLIDiagnostics['provider']>;
+    http?: Partial<LiveCLIDiagnostics['http']>;
+    cache?: Partial<LiveCLIDiagnostics['cache']>;
+  },
+): LiveCLIDiagnostics {
+  return {
+    provider: {
+      scheduleRequests: 0,
+      outcomeRequests: 0,
+      teamSourceRequests: 0,
+      pitcherSourceRequests: 0,
+      teamAggregations: 0,
+      pitcherAggregations: 0,
+      ...overrides?.provider,
+    },
+    http: {
+      logicalRequests: 0,
+      fetchAttempts: 0,
+      successfulResponses: 0,
+      httpFailures: 0,
+      transportFailures: 0,
+      timeouts: 0,
+      parseFailures: 0,
+      schemaFailures: 0,
+      retries: 0,
+      byEndpoint: {},
+      ...overrides?.http,
+    },
+    cache: {
+      hits: 0,
+      misses: 0,
+      writes: 0,
+      corruptions: 0,
+      versionMismatches: 0,
+      ...overrides?.cache,
     },
   };
 }
@@ -509,6 +552,7 @@ describe('runMLBBacktestCLI', () => {
     expect(output).toContain('2024-06-01');
     expect(output).toContain('Schedule requests: 1');
     expect(output).toContain('Discovered games: 2');
+    expect(output).not.toMatch(/Provider calls:|HTTP:|HTTP outcomes:|Cache:/);
   });
 
   it('JSON output is valid and contains no non-JSON prefix or suffix', async () => {
@@ -527,6 +571,9 @@ describe('runMLBBacktestCLI', () => {
         orchestration: expect.objectContaining({ scheduleRequests: 1, discoveredGames: 2 }),
       }),
     );
+    expect(parsed.provider).toBeUndefined();
+    expect(parsed.http).toBeUndefined();
+    expect(parsed.cache).toBeUndefined();
   });
 
   it('success produces no stderr output', async () => {
@@ -552,6 +599,7 @@ describe('runMLBBacktestCLI', () => {
 
     const createLiveProvider = vi.fn().mockReturnValue({
       provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
     });
 
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
@@ -581,6 +629,7 @@ describe('runMLBBacktestCLI', () => {
 
     const createLiveProvider = vi.fn().mockReturnValue({
       provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
     });
 
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
@@ -608,6 +657,7 @@ describe('runMLBBacktestCLI', () => {
 
     const createLiveProvider = vi.fn().mockReturnValue({
       provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
     });
 
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
@@ -621,6 +671,10 @@ describe('runMLBBacktestCLI', () => {
     const output = mockStdout.join('\n');
     expect(output).toContain('Live Historical Mode');
     expect(output).toContain('Source: live (historical MLB Stats API)');
+    expect(output).toContain('Provider calls:');
+    expect(output).toContain('HTTP:');
+    expect(output).toContain('HTTP outcomes:');
+    expect(output).toContain('Cache:');
   });
 
   it('live mode JSON output contains source live', async () => {
@@ -634,6 +688,59 @@ describe('runMLBBacktestCLI', () => {
 
     const createLiveProvider = vi.fn().mockReturnValue({
       provider: mockProvider,
+      getDiagnostics: () =>
+        createLiveDiagnostics({
+          provider: {
+            scheduleRequests: 3,
+            outcomeRequests: 1,
+            teamSourceRequests: 2,
+            pitcherSourceRequests: 2,
+            teamAggregations: 1,
+            pitcherAggregations: 1,
+          },
+          http: {
+            logicalRequests: 4,
+            fetchAttempts: 4,
+            successfulResponses: 4,
+            httpFailures: 0,
+            transportFailures: 0,
+            timeouts: 0,
+            parseFailures: 0,
+            schemaFailures: 0,
+            retries: 0,
+            byEndpoint: {
+              '/api/v1/schedule': {
+                logicalRequests: 1,
+                fetchAttempts: 1,
+                successfulResponses: 1,
+                httpFailures: 0,
+                transportFailures: 0,
+                timeouts: 0,
+                parseFailures: 0,
+                schemaFailures: 0,
+                retries: 0,
+              },
+              '/api/v1.1/game/{gamePk}/feed/live': {
+                logicalRequests: 3,
+                fetchAttempts: 3,
+                successfulResponses: 3,
+                httpFailures: 0,
+                transportFailures: 0,
+                timeouts: 0,
+                parseFailures: 0,
+                schemaFailures: 0,
+                retries: 0,
+              },
+            },
+          },
+          cache: {
+            hits: 0,
+            misses: 4,
+            writes: 4,
+            corruptions: 0,
+            versionMismatches: 0,
+          },
+        }),
     });
 
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
@@ -647,6 +754,56 @@ describe('runMLBBacktestCLI', () => {
     expect(mockStdout.length).toBe(1);
     const parsed = JSON.parse(mockStdout[0]);
     expect(parsed.meta.source).toBe('live');
+    expect(parsed.provider).toEqual({
+      scheduleRequests: 3,
+      outcomeRequests: 1,
+      teamSourceRequests: 2,
+      pitcherSourceRequests: 2,
+      teamAggregations: 1,
+      pitcherAggregations: 1,
+    });
+    expect(parsed.http).toEqual({
+      logicalRequests: 4,
+      fetchAttempts: 4,
+      successfulResponses: 4,
+      httpFailures: 0,
+      transportFailures: 0,
+      timeouts: 0,
+      parseFailures: 0,
+      schemaFailures: 0,
+      retries: 0,
+      byEndpoint: {
+        '/api/v1/schedule': {
+          logicalRequests: 1,
+          fetchAttempts: 1,
+          successfulResponses: 1,
+          httpFailures: 0,
+          transportFailures: 0,
+          timeouts: 0,
+          parseFailures: 0,
+          schemaFailures: 0,
+          retries: 0,
+        },
+        '/api/v1.1/game/{gamePk}/feed/live': {
+          logicalRequests: 3,
+          fetchAttempts: 3,
+          successfulResponses: 3,
+          httpFailures: 0,
+          transportFailures: 0,
+          timeouts: 0,
+          parseFailures: 0,
+          schemaFailures: 0,
+          retries: 0,
+        },
+      },
+    });
+    expect(parsed.cache).toEqual({
+      hits: 0,
+      misses: 4,
+      writes: 4,
+      corruptions: 0,
+      versionMismatches: 0,
+    });
   });
 
   it('fixture mode never calls createLiveProvider', async () => {
@@ -669,7 +826,10 @@ describe('runMLBBacktestCLI', () => {
       recentTeamGames: {},
       intentionallyMissingPitcherProfileIds: [],
     });
-    const createLiveProvider = vi.fn().mockReturnValue({ provider: mockProvider });
+    const createLiveProvider = vi.fn().mockReturnValue({
+      provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
+    });
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
     const deps: MLBBacktestCLIDependencies = {
       buildFixture: mockBuildFixture,
@@ -683,7 +843,10 @@ describe('runMLBBacktestCLI', () => {
   });
 
   it('live without date/range rejects before live provider construction', async () => {
-    const createLiveProvider = vi.fn().mockReturnValue({ provider: mockProvider });
+    const createLiveProvider = vi.fn().mockReturnValue({
+      provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
+    });
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
     const deps: MLBBacktestCLIDependencies = {
       orchestrate: mockOrchestrate,
@@ -698,7 +861,10 @@ describe('runMLBBacktestCLI', () => {
   });
 
   it('invalid inputs construct nothing', async () => {
-    const createLiveProvider = vi.fn().mockReturnValue({ provider: mockProvider });
+    const createLiveProvider = vi.fn().mockReturnValue({
+      provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
+    });
     const deps: MLBBacktestCLIDependencies = {
       createLiveProvider,
     };
@@ -740,6 +906,7 @@ describe('runMLBBacktestCLI', () => {
 
     const createLiveProvider = vi.fn().mockReturnValue({
       provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
     });
 
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
@@ -767,6 +934,7 @@ describe('runMLBBacktestCLI', () => {
 
     const createLiveProvider = vi.fn().mockReturnValue({
       provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
     });
 
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
@@ -805,6 +973,7 @@ describe('runMLBBacktestCLI', () => {
 
     const createLiveProvider = vi.fn().mockReturnValue({
       provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
     });
 
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
@@ -833,6 +1002,7 @@ describe('runMLBBacktestCLI', () => {
 
     const createLiveProvider = vi.fn().mockReturnValue({
       provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
     });
 
     const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());

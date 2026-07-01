@@ -132,6 +132,32 @@ export interface MLBHistoricalHttpClient {
     schema: ZodType<T>,
   ): Promise<T>;
   getRequestCount(): number;
+  getStats(): MLBHistoricalHttpClientStats;
+}
+
+export interface MLBHistoricalHttpClientStatsByEndpoint {
+  readonly logicalRequests: number;
+  readonly fetchAttempts: number;
+  readonly successfulResponses: number;
+  readonly httpFailures: number;
+  readonly transportFailures: number;
+  readonly timeouts: number;
+  readonly parseFailures: number;
+  readonly schemaFailures: number;
+  readonly retries: number;
+}
+
+export interface MLBHistoricalHttpClientStats {
+  readonly logicalRequests: number;
+  readonly fetchAttempts: number;
+  readonly successfulResponses: number;
+  readonly httpFailures: number;
+  readonly transportFailures: number;
+  readonly timeouts: number;
+  readonly parseFailures: number;
+  readonly schemaFailures: number;
+  readonly retries: number;
+  readonly byEndpoint: Readonly<Record<string, MLBHistoricalHttpClientStatsByEndpoint>>;
 }
 
 export class MLBHistoricalHttpError extends Error {
