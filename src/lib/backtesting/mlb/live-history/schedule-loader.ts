@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { MLBHistoricalCacheConfig, CanonicalHistoricalScheduleGame, CanonicalHistoricalGameStatus, HistoricalStarterSource, CacheProvenance, MLBHistoricalCache } from './types';
 import type { MLBHistoricalHttpClient } from './client';
 import { MLBScheduleResponseSchema } from './schemas';
+import { buildHistoricalCacheKey } from './cache';
 
 export interface ScheduleLoaderOptions {
   readonly client: MLBHistoricalHttpClient;
@@ -14,11 +15,18 @@ export function createScheduleLoader(options: ScheduleLoaderOptions) {
   const { client, cache, forceRefresh } = options;
   const getNow = options.now ?? (() => new Date());
   const endpoint = '/api/v1/schedule';
+  const inFlight = new Map<string, Promise<z.infer<typeof MLBScheduleResponseSchema>>>();
+
+  function makeKey(params: Record<string, unknown>): string {
+    return buildHistoricalCacheKey(endpoint, params);
+  }
 
   return {
     async loadForDateRange(from: string, to: string, options?: { forceRefresh?: boolean }): Promise<CanonicalHistoricalScheduleGame[]> {
       const params = { sportId: 1, startDate: from, endDate: to, hydrate: 'probablePitcher,venue' };
       const useForceRefresh = options?.forceRefresh ?? forceRefresh;
+      const key = makeKey(params);
+
       if (!useForceRefresh) {
         const cached = await cache.get(endpoint, params, MLBScheduleResponseSchema);
         if (cached) {
@@ -26,15 +34,29 @@ export function createScheduleLoader(options: ScheduleLoaderOptions) {
         }
       }
 
-      const response = await client.getJson(endpoint, params, MLBScheduleResponseSchema);
-      const now = getNow();
-      await cache.set(endpoint, params, response, {
-        endpoint,
-        fetchedAt: now,
-        sourceTimestamp: null,
-      });
+      let pending = inFlight.get(key);
+      if (!pending) {
+        pending = (async () => {
+          const response = await client.getJson(endpoint, params, MLBScheduleResponseSchema);
+          const now = getNow();
+          await cache.set(endpoint, params, response, {
+            endpoint,
+            fetchedAt: now,
+            sourceTimestamp: null,
+          });
+          return response;
+        })();
+        inFlight.set(key, pending);
+      }
 
-      return parseScheduleResponse(response);
+      try {
+        const response = await pending;
+        return parseScheduleResponse(response);
+      } finally {
+        if (inFlight.get(key) === pending) {
+          inFlight.delete(key);
+        }
+      }
     },
   };
 }
