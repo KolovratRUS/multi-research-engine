@@ -6,6 +6,7 @@ import type {
 } from './types';
 import type { HistoricalPitcherAppearanceSource } from './provider';
 import { isOfficialDateAfterCutoff } from './historical-date';
+import { mapWithConcurrency } from './concurrency';
 
 export interface PitcherAppearanceSourceOptions {
   readonly scheduleLoader: {
@@ -74,22 +75,35 @@ export function createMLBHistoricalPitcherAppearanceSource(
         deduped.set(game.gamePk, game);
       }
 
-      const appearances: HistoricalPitcherAppearance[] = [];
-
+      const scheduled: Array<{ readonly game: CanonicalHistoricalScheduleGame }> = [];
       for (const scheduleGame of deduped.values()) {
-        if (isOfficialDateAfterCutoff(scheduleGame.officialDate, cutoff)) {
-          continue;
-        }
-        let feed: CanonicalHistoricalPitcherFeed;
-        try {
-          feed = await gameFeedLoader.loadGameFeed(scheduleGame.gamePk);
-        } catch (error) {
-          throw new PitcherAppearanceSourceError({
-            operation: 'loadGameFeed',
-            context: { pitcherId: personId, season, gamePk: scheduleGame.gamePk },
-            cause: error,
-          });
-        }
+        if (isOfficialDateAfterCutoff(scheduleGame.officialDate, cutoff)) continue;
+        scheduled.push({ game: scheduleGame });
+      }
+
+      const feedResults = await mapWithConcurrency(
+        scheduled.map((_, idx) => idx),
+        6,
+        async (idx) => {
+          const { game } = scheduled[idx];
+          let feed: CanonicalHistoricalPitcherFeed;
+          try {
+            feed = await gameFeedLoader.loadGameFeed(game.gamePk);
+          } catch (error) {
+            throw new PitcherAppearanceSourceError({
+              operation: 'loadGameFeed',
+              context: { pitcherId: personId, season, gamePk: game.gamePk },
+              cause: error,
+            });
+          }
+          return feed;
+        },
+      );
+
+      const appearances: HistoricalPitcherAppearance[] = [];
+      for (let i = 0; i < scheduled.length; i++) {
+        const scheduleGame = scheduled[i].game;
+        const feed = feedResults[i];
 
         const player =
           feed.homePlayers.find((p) => p.personId === personId) ??

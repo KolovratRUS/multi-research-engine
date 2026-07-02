@@ -9,6 +9,14 @@ import type {
 
 const DATE_CUTOFF = new Date('2024-06-01T20:00:00Z');
 
+function createBarrier() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 function baseScheduleGame(overrides: Partial<CanonicalHistoricalScheduleGame> = {}): CanonicalHistoricalScheduleGame {
   return {
     gamePk: overrides.gamePk ?? 1001,
@@ -467,5 +475,95 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
 
     expect(appearances).toHaveLength(1);
     expect(appearances[0].gamePk).toBe(1);
+  });
+
+  it('limits concurrent game feed loads to 6', async () => {
+    const releaseAll = createBarrier();
+    let active = 0;
+    let maxActive = 0;
+
+    const schedule = Array.from({ length: 15 }, (_, i) =>
+      baseScheduleGame({ gamePk: i + 1, officialDate: '2024-06-01', status: 'FINAL', homeProbablePitcherId: 1 }),
+    );
+
+    const source = createMLBHistoricalPitcherAppearanceSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      gameFeedLoader: {
+        loadGameFeed: vi.fn(async () => {
+          active += 1;
+          maxActive = Math.max(maxActive, active);
+          await releaseAll.promise;
+          active -= 1;
+          return canonicalFeed({ gamePk: 1, homePlayers: [homePlayer(1, 1)] });
+        }),
+      },
+    });
+
+    const promise = source.getPitcherAppearances(1, 2024, new Date('2024-06-01T20:00:00Z'));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(maxActive).toBeLessThanOrEqual(6);
+    expect(maxActive).toBeGreaterThan(1);
+    releaseAll.resolve();
+    const appearances = await promise;
+    expect(appearances).toHaveLength(15);
+  });
+
+  it('skips future officialDate games before loading game feeds', async () => {
+    const release = createBarrier();
+    const schedule = [
+      baseScheduleGame({ gamePk: 1, officialDate: '2024-06-02', status: 'FINAL', homeProbablePitcherId: 1 }),
+      baseScheduleGame({ gamePk: 2, officialDate: '2024-06-01', status: 'FINAL', homeProbablePitcherId: 1 }),
+    ];
+
+    let startedGamePks: number[] = [];
+    const source = createMLBHistoricalPitcherAppearanceSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      gameFeedLoader: {
+        loadGameFeed: vi.fn(async (gamePk) => {
+          startedGamePks.push(gamePk);
+          await release.promise;
+          return canonicalFeed({ gamePk, homePlayers: [homePlayer(1, 1)] });
+        }),
+      },
+    });
+
+    const promise = source.getPitcherAppearances(1, 2024, new Date('2024-06-01T20:00:00Z'));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(startedGamePks).toEqual([2]);
+    release.resolve();
+    const appearances = await promise;
+    expect(appearances).toHaveLength(1);
+    expect(appearances[0].gamePk).toBe(2);
+  });
+
+  it('preserves deterministic order when game feeds arrive out of order', async () => {
+    const barriers = [createBarrier(), createBarrier(), createBarrier()];
+    const schedule = [
+      baseScheduleGame({ gamePk: 1, officialDate: '2024-06-01', status: 'FINAL', homeProbablePitcherId: 1, scheduledStart: new Date('2024-06-01T18:30:00Z') }),
+      baseScheduleGame({ gamePk: 2, officialDate: '2024-06-01', status: 'FINAL', homeProbablePitcherId: 1, scheduledStart: new Date('2024-06-01T19:30:00Z') }),
+      baseScheduleGame({ gamePk: 3, officialDate: '2024-06-01', status: 'FINAL', homeProbablePitcherId: 1, scheduledStart: new Date('2024-06-01T17:30:00Z') }),
+    ];
+
+    const source = createMLBHistoricalPitcherAppearanceSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      gameFeedLoader: {
+        loadGameFeed: vi.fn(async (gamePk) => {
+          await barriers[gamePk - 1].promise;
+          return canonicalFeed({ gamePk, homePlayers: [homePlayer(1, 1)] });
+        }),
+      },
+    });
+
+    const promise = source.getPitcherAppearances(1, 2024, new Date('2024-06-01T20:00:00Z'));
+    await new Promise((r) => setTimeout(r, 20));
+
+    barriers[2].resolve();
+    barriers[0].resolve();
+    barriers[1].resolve();
+
+    const appearances = await promise;
+    expect(appearances.map((a) => a.gamePk)).toEqual([3, 1, 2]);
   });
 });

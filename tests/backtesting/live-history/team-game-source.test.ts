@@ -13,6 +13,14 @@ const HOME = 101;
 const AWAY = 102;
 const DATE_CUTOFF = new Date('2024-06-01T20:00:00Z');
 
+function createBarrier() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 const canonicalScheduleGame = (overrides: Partial<CanonicalHistoricalScheduleGame> = {}): CanonicalHistoricalScheduleGame => ({
   gamePk: overrides.gamePk ?? 1001,
   officialDate: overrides.officialDate ?? '2024-06-01',
@@ -592,5 +600,99 @@ describe('createMLBHistoricalTeamGameSource', () => {
 
     expect(games).toHaveLength(1);
     expect(games[0].gamePk).toBe(1);
+  });
+
+  it('limits concurrent outcome loads to 6', async () => {
+    const releaseAll = createBarrier();
+    let active = 0;
+    let maxActive = 0;
+
+    const schedule = Array.from({ length: 15 }, (_, i) =>
+      canonicalScheduleGame({ gamePk: i + 1, officialDate: '2024-06-01', status: 'FINAL' }),
+    );
+
+    const source = createMLBHistoricalTeamGameSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      outcomeLoader: {
+        loadOutcome: vi.fn(async () => {
+          active += 1;
+          maxActive = Math.max(maxActive, active);
+          await releaseAll.promise;
+          active -= 1;
+          return canonicalOutcome();
+        }),
+      },
+    });
+
+    const promise = source.getTeamGames(HOME, 2024, new Date('2024-06-01T20:00:00Z'));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(maxActive).toBeLessThanOrEqual(6);
+    expect(maxActive).toBeGreaterThan(1);
+    releaseAll.resolve();
+    const games = await promise;
+    expect(games).toHaveLength(15);
+  });
+
+  it('skips future officialDate games before loading outcomes', async () => {
+    const release = createBarrier();
+    const schedule = [
+      canonicalScheduleGame({ gamePk: 1, officialDate: '2024-06-02', status: 'FINAL' }),
+      canonicalScheduleGame({ gamePk: 2, officialDate: '2024-06-01', status: 'FINAL' }),
+    ];
+
+    let startedGamePks: number[] = [];
+    const source = createMLBHistoricalTeamGameSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      outcomeLoader: {
+        loadOutcome: vi.fn(async (gamePk) => {
+          startedGamePks.push(gamePk);
+          await release.promise;
+          return canonicalOutcome();
+        }),
+      },
+    });
+
+    const promise = source.getTeamGames(HOME, 2024, new Date('2024-06-01T20:00:00Z'));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(startedGamePks).toEqual([2]);
+    release.resolve();
+    const games = await promise;
+    expect(games).toHaveLength(1);
+    expect(games[0].gamePk).toBe(2);
+  });
+
+  it('preserves deterministic order when outcomes arrive out of order', async () => {
+    const barriers = [
+      createBarrier(),
+      createBarrier(),
+      createBarrier(),
+    ];
+    const schedule = [
+      canonicalScheduleGame({ gamePk: 1, officialDate: '2024-06-01', status: 'FINAL', scheduledStart: new Date('2024-06-01T18:30:00Z') }),
+      canonicalScheduleGame({ gamePk: 2, officialDate: '2024-06-01', status: 'FINAL', scheduledStart: new Date('2024-06-01T19:30:00Z') }),
+      canonicalScheduleGame({ gamePk: 3, officialDate: '2024-06-01', status: 'FINAL', scheduledStart: new Date('2024-06-01T17:30:00Z') }),
+    ];
+
+    const source = createMLBHistoricalTeamGameSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      outcomeLoader: {
+        loadOutcome: vi.fn(async (gamePk) => {
+          await barriers[gamePk - 1].promise;
+          return canonicalOutcome({ gamePk });
+        }),
+      },
+    });
+
+    const promise = source.getTeamGames(HOME, 2024, new Date('2024-06-01T20:00:00Z'));
+    await new Promise((r) => setTimeout(r, 20));
+
+    barriers[2].resolve();
+    barriers[0].resolve();
+    barriers[1].resolve();
+
+    const games = await promise;
+    expect(games.map((g) => g.gamePk)).toEqual([3, 1, 2]);
   });
 });

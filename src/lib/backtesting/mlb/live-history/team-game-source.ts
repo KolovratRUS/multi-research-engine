@@ -8,6 +8,7 @@ import type {
 import type { HistoricalTeamGameSource } from './provider';
 import { aggregateTeamHistory } from './team-aggregator';
 import { isOfficialDateAfterCutoff } from './historical-date';
+import { mapWithConcurrency } from './concurrency';
 
 export interface TeamGameSourceOptions {
   readonly scheduleLoader: {
@@ -76,14 +77,58 @@ export function createMLBHistoricalTeamGameSource(
         deduped.set(game.gamePk, game);
       }
 
-      const normalized: CompletedHistoricalTeamGame[] = [];
+      const scheduled: Array<{
+        readonly game: CanonicalHistoricalScheduleGame;
+        readonly isHome: boolean;
+        readonly opponentTeamId: number;
+      }> = [];
       for (const game of deduped.values()) {
-        if (isOfficialDateAfterCutoff(game.officialDate, cutoff)) {
-          continue;
-        }
-
+        if (isOfficialDateAfterCutoff(game.officialDate, cutoff)) continue;
         const isHome = game.homeTeamId === teamId;
-        const opponentTeamId = isHome ? game.awayTeamId : game.homeTeamId;
+        scheduled.push({
+          game,
+          isHome,
+          opponentTeamId: isHome ? game.awayTeamId : game.homeTeamId,
+        });
+      }
+
+      const finalIndices: number[] = [];
+      for (let i = 0; i < scheduled.length; i++) {
+        if (scheduled[i].game.status === 'FINAL') {
+          finalIndices.push(i);
+        }
+      }
+
+      const outcomeResults: CanonicalHistoricalOutcome[] =
+        finalIndices.length > 0
+          ? await mapWithConcurrency(
+              finalIndices,
+              6,
+              async (idx) => {
+                const { game } = scheduled[idx];
+                let outcome: CanonicalHistoricalOutcome;
+                try {
+                  outcome = await outcomeLoader.loadOutcome(game.gamePk);
+                } catch (error) {
+                  throw new TeamGameSourceError({
+                    operation: 'getTeamGames',
+                    context: { teamId, season, gamePk: game.gamePk },
+                    cause: error,
+                  });
+                }
+                return outcome;
+              },
+            )
+          : [];
+
+      const outcomeByScheduledIndex = new Map<number, CanonicalHistoricalOutcome>();
+      for (let i = 0; i < finalIndices.length; i++) {
+        outcomeByScheduledIndex.set(finalIndices[i], outcomeResults[i]);
+      }
+
+      const normalized: CompletedHistoricalTeamGame[] = [];
+      for (let i = 0; i < scheduled.length; i++) {
+        const { game, isHome, opponentTeamId } = scheduled[i];
         let runsScored: number | null = null;
         let runsAllowed: number | null = null;
         let innings: number | null = null;
@@ -91,15 +136,11 @@ export function createMLBHistoricalTeamGameSource(
         let completedAtSource: HistoricalCompletionTimeSource | null = null;
 
         if (game.status === 'FINAL') {
-          let outcome: CanonicalHistoricalOutcome;
-          try {
-            outcome = await outcomeLoader.loadOutcome(game.gamePk);
-          } catch (error) {
-            throw new TeamGameSourceError({
-              operation: 'getTeamGames',
-              context: { teamId, season, gamePk: game.gamePk },
-              cause: error,
-            });
+          const outcome = outcomeByScheduledIndex.get(i);
+          if (outcome === undefined) {
+            throw new Error(
+              `Team game source: missing outcome result for scheduled index ${i}`,
+            );
           }
 
           innings = outcome.innings;
@@ -107,7 +148,6 @@ export function createMLBHistoricalTeamGameSource(
           completedAtSource = outcome.completedAtSource;
           const homeScore = outcome.homeScore;
           const awayScore = outcome.awayScore;
-
           if (homeScore !== null && awayScore !== null) {
             if (isHome) {
               runsScored = homeScore;
