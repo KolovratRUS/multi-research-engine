@@ -364,8 +364,16 @@ describe('Phase 1C: live MLB CLI offline integration', () => {
     const run1FeedCount = fetchedUrls.filter((u) => u.includes('/feed/live')).length;
     const run1Total = fetchedUrls.length;
     expect(run1ScheduleCount).toBe(2);
-    expect(run1FeedCount).toBe(5);
-    expect(run1Total).toBe(7);
+    expect(run1FeedCount).toBe(4);
+    expect(run1Total).toBe(6);
+
+    // future gamePk 7004 (officialDate 2024-06-03, cutoff 2024-06-01) is skipped
+    const run1Feed7004 = fetchedUrls.filter((u) => u.includes('/feed/live') && u.includes('7004'));
+    expect(run1Feed7004).toHaveLength(0);
+    const run1ExpectedFeedPks = [7001, 7002, 7003, 7005];
+    for (const gamePk of run1ExpectedFeedPks) {
+      expect(fetchedUrls.some((u) => u.includes(`/feed/live`) && u.includes(String(gamePk)))).toBe(true);
+    }
 
     // Run 2: same cache, forceRefresh=false default
     fetchedUrls.length = 0;
@@ -385,8 +393,16 @@ describe('Phase 1C: live MLB CLI offline integration', () => {
     const run3ScheduleCount = run3ScheduleUrls.length;
     const run3Total = fetchedUrls.length;
     expect(run3ScheduleCount).toBe(5);
-    expect(run3FeedCount).toBe(14);
-    expect(run3Total).toBe(19);
+    expect(run3FeedCount).toBe(12);
+    expect(run3Total).toBe(17);
+
+    // future gamePk 7004 (officialDate 2024-06-03, cutoff 2024-06-01) is skipped in force-refresh
+    const run3Feed7004 = fetchedUrls.filter((u) => u.includes('/feed/live') && u.includes('7004'));
+    expect(run3Feed7004).toHaveLength(0);
+    const run3ExpectedFeedPks = [7001, 7002, 7003, 7005];
+    for (const gamePk of run3ExpectedFeedPks) {
+      expect(fetchedUrls.some((u) => u.includes(`/feed/live`) && u.includes(String(gamePk)))).toBe(true);
+    }
 
     // Force-refresh makes 5 in-flight schedule requests: 1 target-date + 4 seasonal (3 identical duplicates of the first)
     const distinctScheduleUrls = new Set(run3ScheduleUrls).size;

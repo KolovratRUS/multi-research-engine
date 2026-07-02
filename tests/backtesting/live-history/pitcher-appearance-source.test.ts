@@ -7,6 +7,8 @@ import type {
   HistoricalPitcherAppearance,
 } from '@/lib/backtesting/mlb/live-history/types';
 
+const DATE_CUTOFF = new Date('2024-06-01T20:00:00Z');
+
 function baseScheduleGame(overrides: Partial<CanonicalHistoricalScheduleGame> = {}): CanonicalHistoricalScheduleGame {
   return {
     gamePk: overrides.gamePk ?? 1001,
@@ -86,7 +88,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn() } as any,
     });
 
-    await expect(source.getPitcherAppearances(0, 2024)).rejects.toThrow('Invalid pitcherId: 0');
+    await expect(source.getPitcherAppearances(0, 2024, DATE_CUTOFF)).rejects.toThrow('Invalid pitcherId: 0');
   });
 
   it('throws on invalid season before calling loaders', async () => {
@@ -95,7 +97,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn() } as any,
     });
 
-    await expect(source.getPitcherAppearances(1, 0)).rejects.toThrow('Invalid season: 0');
+    await expect(source.getPitcherAppearances(1, 0, DATE_CUTOFF)).rejects.toThrow('Invalid season: 0');
   });
 
   it('filters non-final games and does not load feed for them', async () => {
@@ -108,7 +110,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ gamePk: 2, homePlayers: [homePlayer(1, 1)] })) },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances).toHaveLength(1);
     expect(appearances[0].gamePk).toBe(2);
@@ -124,7 +126,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ gamePk: 1, homePlayers: [homePlayer(1, 1)] })) },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances).toHaveLength(1);
     expect(appearances[0].teamId).toBe(99);
@@ -141,7 +143,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances).toHaveLength(2);
     expect(loadGameFeed).toHaveBeenCalledTimes(2);
@@ -158,7 +160,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ gamePk: 1001 })) },
     });
 
-    await source.getPitcherAppearances(1, 2024);
+    await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(schedule).toEqual(original);
   });
@@ -169,7 +171,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ homePlayers: [homePlayer(1, 1)] })) },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances).toHaveLength(1);
     expect(appearances[0].started).toBe(true);
@@ -182,7 +184,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ homePlayers: [homePlayer(1, 0, { ...defaultPitchingStats, outs: 3 })] })) },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances).toHaveLength(1);
     expect(appearances[0].started).toBe(false);
@@ -195,7 +197,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ homePlayers: [] })) },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances).toHaveLength(0);
   });
@@ -206,7 +208,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ homePlayers: [homePlayer(1, null)] })) },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances).toHaveLength(0);
   });
@@ -233,7 +235,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances).toHaveLength(0);
   });
@@ -244,7 +246,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ gamePk: 1001 })) },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances[0].teamId).toBe(1);
   });
@@ -264,7 +266,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances[0].teamId).toBe(2);
   });
@@ -281,7 +283,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances[0].completedAt).toEqual(new Date('2024-06-01T21:30:00Z'));
     expect(appearances[0].completedAtSource).toBe('LAST_COMPLETED_PLAY_END');
@@ -301,7 +303,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances[0].completedAt).toBeNull();
     expect(appearances[0].completedAtSource).toBeNull();
@@ -333,7 +335,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed },
     });
 
-    const appearances = await source.getPitcherAppearances(1, 2024);
+    const appearances = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF);
 
     expect(appearances.map((a) => a.gamePk)).toEqual([1, 2, 3]);
     expect(callCount.count).toBe(3);
@@ -347,7 +349,7 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       gameFeedLoader: { loadGameFeed: vi.fn() },
     });
 
-    const error = await source.getPitcherAppearances(1, 2024).catch((e) => e);
+    const error = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF).catch((e) => e);
     expect(error.operation).toBe('loadSchedule');
     expect(error.context).toEqual({ pitcherId: 1, season: 2024 });
     expect(error.cause).toBeInstanceOf(Error);
@@ -361,8 +363,109 @@ describe('createMLBHistoricalPitcherAppearanceSource', () => {
       },
     });
 
-    const error = await source.getPitcherAppearances(1, 2024).catch((e) => e);
+    const error = await source.getPitcherAppearances(1, 2024, DATE_CUTOFF).catch((e) => e);
     expect(error.operation).toBe('loadGameFeed');
     expect(error.context).toEqual({ pitcherId: 1, season: 2024, gamePk: 1001 });
+  });
+
+  it('skips feed loading for officialDate strictly after cutoff calendar date', async () => {
+    const schedule = [
+      baseScheduleGame({ gamePk: 1, officialDate: '2024-06-02', status: 'FINAL' }),
+      baseScheduleGame({ gamePk: 2, officialDate: '2024-06-01', status: 'FINAL' }),
+    ];
+    const source = createMLBHistoricalPitcherAppearanceSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      gameFeedLoader: { loadGameFeed: vi.fn().mockImplementation((gamePk) => canonicalFeed({ gamePk, homePlayers: [homePlayer(1, 1)] })) },
+    });
+
+    const appearances = await source.getPitcherAppearances(1, 2024, new Date('2024-06-01T20:00:00Z'));
+
+    expect(appearances).toHaveLength(1);
+    expect(appearances[0].gamePk).toBe(2);
+  });
+
+  it('allows feed loading for earlier officialDate and preserves completedAt filtering', async () => {
+    const schedule = [
+      baseScheduleGame({ gamePk: 1, officialDate: '2024-05-30', status: 'FINAL' }),
+    ];
+    const source = createMLBHistoricalPitcherAppearanceSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      gameFeedLoader: {
+        loadGameFeed: vi.fn().mockResolvedValue(
+          canonicalFeed({
+            gamePk: 1,
+            completedAt: new Date('2024-06-02T22:00:00Z'),
+            completedAtSource: 'LAST_COMPLETED_PLAY_END',
+            homePlayers: [homePlayer(1, 1)],
+          }),
+        ),
+      },
+    });
+
+    const appearances = await source.getPitcherAppearances(1, 2024, new Date('2024-06-01T20:00:00Z'));
+
+    expect(appearances).toHaveLength(1);
+    expect(appearances[0].completedAt).toEqual(new Date('2024-06-02T22:00:00Z'));
+  });
+
+  it('allows feed loading for same calendar date as cutoff', async () => {
+    const schedule = [
+      baseScheduleGame({ gamePk: 1, officialDate: '2024-06-01', status: 'FINAL' }),
+    ];
+    const source = createMLBHistoricalPitcherAppearanceSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ gamePk: 1, homePlayers: [homePlayer(1, 1)] })) },
+    });
+
+    const appearances = await source.getPitcherAppearances(1, 2024, new Date('2024-06-01T20:00:00Z'));
+
+    expect(appearances).toHaveLength(1);
+    expect(appearances[0].gamePk).toBe(1);
+  });
+
+  it('conservatively loads feed when officialDate is missing', async () => {
+    const schedule = [
+      { ...baseScheduleGame(), officialDate: null },
+    ];
+    const source = createMLBHistoricalPitcherAppearanceSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      gameFeedLoader: { loadGameFeed: vi.fn().mockResolvedValue(canonicalFeed({ gamePk: 1001, homePlayers: [homePlayer(1, 1)] })) },
+    });
+
+    const appearances = await source.getPitcherAppearances(1, 2024, new Date('2024-06-01T20:00:00Z'));
+
+    expect(appearances).toHaveLength(1);
+  });
+
+  it('preserves duplicate gamePk dedup after date filtering', async () => {
+    const schedule = [
+      baseScheduleGame({ gamePk: 1, officialDate: '2024-06-02', status: 'FINAL' }),
+      baseScheduleGame({ gamePk: 1, officialDate: '2024-06-01', status: 'FINAL' }),
+    ];
+    const source = createMLBHistoricalPitcherAppearanceSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      gameFeedLoader: { loadGameFeed: vi.fn().mockImplementation((gamePk) => canonicalFeed({ gamePk, homePlayers: [homePlayer(1, 1)] })) },
+    });
+
+    const appearances = await source.getPitcherAppearances(1, 2024, new Date('2024-06-01T20:00:00Z'));
+
+    expect(appearances).toHaveLength(1);
+    expect(appearances[0].gamePk).toBe(1);
+  });
+
+  it('operates independently without prior team source calls', async () => {
+    const schedule = [
+      baseScheduleGame({ gamePk: 1, officialDate: '2024-06-01', status: 'FINAL' }),
+      baseScheduleGame({ gamePk: 2, officialDate: '2024-06-02', status: 'FINAL' }),
+    ];
+    const source = createMLBHistoricalPitcherAppearanceSource({
+      scheduleLoader: { loadForDateRange: vi.fn().mockResolvedValue(schedule) },
+      gameFeedLoader: { loadGameFeed: vi.fn().mockImplementation((gamePk) => canonicalFeed({ gamePk, homePlayers: [homePlayer(1, 1)] })) },
+    });
+
+    const appearances = await source.getPitcherAppearances(1, 2024, new Date('2024-06-01T20:00:00Z'));
+
+    expect(appearances).toHaveLength(1);
+    expect(appearances[0].gamePk).toBe(1);
   });
 });

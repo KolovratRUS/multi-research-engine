@@ -11,12 +11,13 @@ import { aggregateTeamHistory } from '@/lib/backtesting/mlb/live-history/team-ag
 
 const HOME = 101;
 const AWAY = 102;
+const DATE_CUTOFF = new Date('2024-06-01T20:00:00Z');
 
 const canonicalScheduleGame = (overrides: Partial<CanonicalHistoricalScheduleGame> = {}): CanonicalHistoricalScheduleGame => ({
   gamePk: overrides.gamePk ?? 1001,
-  officialDate: overrides.officialDate ?? '2024-06-25',
-  scheduledStart: new Date('2024-06-25T18:30:00Z'),
-  cutoffTime: new Date('2024-06-25T18:00:00Z'),
+  officialDate: overrides.officialDate ?? '2024-06-01',
+  scheduledStart: new Date('2024-06-01T18:30:00Z'),
+  cutoffTime: new Date('2024-06-01T22:00:00Z'),
   status: overrides.status ?? 'FINAL',
   homeTeamId: overrides.homeTeamId ?? HOME,
   homeTeamName: overrides.homeTeamName ?? 'Home',
@@ -78,7 +79,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
   it('satisfies HistoricalTeamGameSource interface', async () => {
     const source = createMLBHistoricalTeamGameSource(buildDeps());
     const asInterface: HistoricalTeamGameSource = source;
-    const games = await asInterface.getTeamGames(HOME, 2024);
+    const games = await asInterface.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games).toEqual([]);
   });
 
@@ -89,10 +90,10 @@ describe('createMLBHistoricalTeamGameSource', () => {
       buildDeps({ scheduleLoader, outcomeLoader }),
     );
 
-    await expect(source.getTeamGames(0, 2024)).rejects.toThrow(TeamGameSourceError);
-    await expect(source.getTeamGames(-1, 2024)).rejects.toThrow(TeamGameSourceError);
-    await expect(source.getTeamGames(NaN, 2024)).rejects.toThrow(TeamGameSourceError);
-    await expect(source.getTeamGames(Infinity, 2024)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(0, 2024, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(-1, 2024, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(NaN, 2024, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(Infinity, 2024, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
 
     expect(scheduleLoader.loadForDateRange).not.toHaveBeenCalled();
     expect(outcomeLoader.loadOutcome).not.toHaveBeenCalled();
@@ -104,10 +105,10 @@ describe('createMLBHistoricalTeamGameSource', () => {
       buildDeps({ scheduleLoader }),
     );
 
-    await expect(source.getTeamGames(HOME, 0)).rejects.toThrow(TeamGameSourceError);
-    await expect(source.getTeamGames(HOME, -1)).rejects.toThrow(TeamGameSourceError);
-    await expect(source.getTeamGames(HOME, NaN)).rejects.toThrow(TeamGameSourceError);
-    await expect(source.getTeamGames(HOME, Infinity)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(HOME, 0, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(HOME, -1, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(HOME, NaN, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(HOME, Infinity, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
 
     expect(scheduleLoader.loadForDateRange).not.toHaveBeenCalled();
   });
@@ -118,7 +119,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       buildDeps({ scheduleLoader: { loadForDateRange: loader } }),
     );
 
-    await source.getTeamGames(HOME, 2024);
+    await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(loader).toHaveBeenCalledWith('2024-01-01', '2024-12-31');
   });
 
@@ -132,7 +133,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       buildDeps({ scheduleLoader: { loadForDateRange: loader } }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games.map((g: CompletedHistoricalTeamGame) => g.gamePk)).toEqual([1, 2]);
   });
 
@@ -146,13 +147,13 @@ describe('createMLBHistoricalTeamGameSource', () => {
       buildDeps({ scheduleLoader: { loadForDateRange: loader } }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games.map((g: CompletedHistoricalTeamGame) => g.gamePk)).toEqual([1, 2, 3]);
   });
 
   it('returns empty array for empty schedule', async () => {
     const source = createMLBHistoricalTeamGameSource(buildDeps());
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games).toEqual([]);
   });
 
@@ -169,7 +170,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games).toHaveLength(1);
     expect(games[0].runsScored).toBe(4);
     expect(games[0].runsAllowed).toBe(1);
@@ -189,7 +190,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    const games = await source.getTeamGames(AWAY, 2024);
+    const games = await source.getTeamGames(AWAY, 2024, DATE_CUTOFF);
     expect(games).toHaveLength(1);
     expect(games[0].runsScored).toBe(1);
     expect(games[0].runsAllowed).toBe(4);
@@ -207,11 +208,11 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    const homeGames = await source.getTeamGames(HOME, 2024);
+    const homeGames = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(homeGames[0].runsScored).toBe(0);
     expect(homeGames[0].runsAllowed).toBe(1);
 
-    const awayGames = await source.getTeamGames(AWAY, 2024);
+    const awayGames = await source.getTeamGames(AWAY, 2024, DATE_CUTOFF);
     expect(awayGames[0].runsScored).toBe(1);
     expect(awayGames[0].runsAllowed).toBe(0);
   });
@@ -229,7 +230,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games[0].runsScored).toBe(0);
     expect(games[0].runsAllowed).toBe(0);
   });
@@ -257,7 +258,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games).toHaveLength(1);
     expect(games[0].runsScored).toBeNull();
     expect(games[0].runsAllowed).toBeNull();
@@ -281,7 +282,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games).toHaveLength(3);
     expect(games.map((g: CompletedHistoricalTeamGame) => g.status)).toEqual(['POSTPONED', 'CANCELLED', 'SUSPENDED']);
     for (const game of games) {
@@ -307,7 +308,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games).toHaveLength(0);
     expect(outcomeLoader).not.toHaveBeenCalled();
   });
@@ -321,7 +322,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       buildDeps({ scheduleLoader: { loadForDateRange: loader } }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games).toHaveLength(1);
     expect(games[0].gameStart).toEqual(new Date('2024-06-02T18:30:00Z'));
   });
@@ -336,7 +337,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       buildDeps({ scheduleLoader: { loadForDateRange: loader } }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games.map((g: CompletedHistoricalTeamGame) => g.gamePk)).toEqual([1, 2, 3]);
   });
 
@@ -351,7 +352,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
     );
 
     const before = [...input];
-    await source.getTeamGames(HOME, 2024);
+    await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(loader).toHaveBeenCalled();
     expect(input).toEqual(before);
   });
@@ -366,9 +367,9 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    await expect(source.getTeamGames(HOME, 2024)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(HOME, 2024, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
     try {
-      await source.getTeamGames(HOME, 2024);
+      await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     } catch (thrown) {
       expect(thrown).toBeInstanceOf(TeamGameSourceError);
       expect((thrown as TeamGameSourceError).operation).toBe('getTeamGames');
@@ -391,9 +392,9 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    await expect(source.getTeamGames(HOME, 2024)).rejects.toThrow(TeamGameSourceError);
+    await expect(source.getTeamGames(HOME, 2024, DATE_CUTOFF)).rejects.toThrow(TeamGameSourceError);
     try {
-      await source.getTeamGames(HOME, 2024);
+      await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     } catch (thrown) {
       expect(thrown).toBeInstanceOf(TeamGameSourceError);
       expect((thrown as TeamGameSourceError).context).toEqual({
@@ -414,7 +415,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       buildDeps({ scheduleLoader: { loadForDateRange: loader } }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     for (const game of games) {
       expect(game.completedAt).toBeNull();
     }
@@ -436,7 +437,7 @@ describe('createMLBHistoricalTeamGameSource', () => {
       }),
     );
 
-    const games = await source.getTeamGames(HOME, 2024);
+    const games = await source.getTeamGames(HOME, 2024, DATE_CUTOFF);
     expect(games).toHaveLength(2);
     expect(games.every((g) => g.completedAt === null)).toBe(true);
 
@@ -445,5 +446,151 @@ describe('createMLBHistoricalTeamGameSource', () => {
     expect(aggregate.gamesPlayed).toBe(0);
     expect(aggregate.warnings.length).toBeGreaterThanOrEqual(1);
     expect(aggregate.warnings.some((w) => w.startsWith('missing_completed_at_'))).toBe(true);
+  });
+
+  it('skips outcome loading for officialDate strictly after cutoff calendar date', async () => {
+    const loader = vi.fn(async () => [
+      canonicalScheduleGame({ gamePk: 1, officialDate: '2024-06-02', status: 'FINAL' }),
+      canonicalScheduleGame({ gamePk: 2, officialDate: '2024-06-01', status: 'FINAL' }),
+    ]);
+    const outcomeLoader = vi.fn(async () => canonicalOutcome());
+
+    const source = createMLBHistoricalTeamGameSource(
+      buildDeps({
+        scheduleLoader: { loadForDateRange: loader },
+        outcomeLoader: { loadOutcome: outcomeLoader },
+      }),
+    );
+
+    const cutoff = new Date('2024-06-01T20:00:00Z');
+    const games = await source.getTeamGames(HOME, 2024, cutoff);
+
+    expect(outcomeLoader).toHaveBeenCalledTimes(1);
+    expect(outcomeLoader).toHaveBeenCalledWith(2);
+    expect(games.map((g) => g.gamePk)).toEqual([2]);
+  });
+
+  it('allows outcome loading for earlier officialDate even when completion after cutoff', async () => {
+    const loader = vi.fn(async () => [
+      canonicalScheduleGame({ gamePk: 1, officialDate: '2024-05-30', status: 'FINAL' }),
+    ]);
+    const outcomeLoader = vi.fn(async () =>
+      canonicalOutcome({ gamePk: 1, completedAt: new Date('2024-06-02T22:00:00Z') }),
+    );
+
+    const source = createMLBHistoricalTeamGameSource(
+      buildDeps({
+        scheduleLoader: { loadForDateRange: loader },
+        outcomeLoader: { loadOutcome: outcomeLoader },
+      }),
+    );
+
+    const cutoff = new Date('2024-06-01T20:00:00Z');
+    const games = await source.getTeamGames(HOME, 2024, cutoff);
+
+    expect(outcomeLoader).toHaveBeenCalledTimes(1);
+    expect(games).toHaveLength(1);
+    expect(games[0].completedAt).toEqual(new Date('2024-06-02T22:00:00Z'));
+  });
+
+  it('allows outcome loading for same calendar date as cutoff', async () => {
+    const loader = vi.fn(async () => [
+      canonicalScheduleGame({ gamePk: 1, officialDate: '2024-06-01', status: 'FINAL' }),
+    ]);
+    const outcomeLoader = vi.fn(async () => canonicalOutcome());
+
+    const source = createMLBHistoricalTeamGameSource(
+      buildDeps({
+        scheduleLoader: { loadForDateRange: loader },
+        outcomeLoader: { loadOutcome: outcomeLoader },
+      }),
+    );
+
+    const cutoff = new Date('2024-06-01T20:00:00Z');
+    const games = await source.getTeamGames(HOME, 2024, cutoff);
+
+    expect(outcomeLoader).toHaveBeenCalledTimes(1);
+    expect(games).toHaveLength(1);
+  });
+
+  it('excludes same-date game when authoritative completedAt is after cutoff', async () => {
+    const loader = vi.fn(async () => [
+      canonicalScheduleGame({ gamePk: 1, officialDate: '2024-06-01', status: 'FINAL' }),
+    ]);
+    const outcomeLoader = vi.fn(async () =>
+      canonicalOutcome({ gamePk: 1, completedAt: new Date('2024-06-01T22:00:00Z') }),
+    );
+
+    const source = createMLBHistoricalTeamGameSource(
+      buildDeps({
+        scheduleLoader: { loadForDateRange: loader },
+        outcomeLoader: { loadOutcome: outcomeLoader },
+      }),
+    );
+
+    const cutoff = new Date('2024-06-01T20:00:00Z');
+    const games = await source.getTeamGames(HOME, 2024, cutoff);
+
+    expect(outcomeLoader).toHaveBeenCalledTimes(1);
+    expect(games).toHaveLength(1);
+    expect(games[0].completedAt).toEqual(new Date('2024-06-01T22:00:00Z'));
+  });
+
+  it('conservatively loads feed when officialDate is missing', async () => {
+    const missingDateGame = {
+      ...canonicalScheduleGame({ gamePk: 1, status: 'FINAL' }),
+      officialDate: '',
+    };
+    const loader = vi.fn(async () => [missingDateGame]);
+    const outcomeLoader = vi.fn(async () => canonicalOutcome());
+
+    const source = createMLBHistoricalTeamGameSource(
+      buildDeps({
+        scheduleLoader: { loadForDateRange: loader },
+        outcomeLoader: { loadOutcome: outcomeLoader },
+      }),
+    );
+
+    const cutoff = new Date('2024-06-01T20:00:00Z');
+    const games = await source.getTeamGames(HOME, 2024, cutoff);
+
+    expect(outcomeLoader).toHaveBeenCalledTimes(1);
+    expect(games).toHaveLength(1);
+  });
+
+  it('does not load outcome for FINAL game with future officialDate', async () => {
+    const loader = vi.fn(async () => [
+      canonicalScheduleGame({ gamePk: 1, officialDate: '2024-06-03', status: 'FINAL' }),
+    ]);
+    const outcomeLoader = vi.fn(async () => canonicalOutcome());
+
+    const source = createMLBHistoricalTeamGameSource(
+      buildDeps({
+        scheduleLoader: { loadForDateRange: loader },
+        outcomeLoader: { loadOutcome: outcomeLoader },
+      }),
+    );
+
+    await source.getTeamGames(HOME, 2024, new Date('2024-06-01T20:00:00Z'));
+
+    expect(outcomeLoader).not.toHaveBeenCalled();
+  });
+
+  it('preserves duplicate gamePk dedup after date filtering', async () => {
+    const loader = vi.fn(async () => [
+      canonicalScheduleGame({ gamePk: 1, officialDate: '2024-06-02', status: 'FINAL' }),
+      canonicalScheduleGame({ gamePk: 1, officialDate: '2024-06-01', status: 'FINAL' }),
+    ]);
+    const source = createMLBHistoricalTeamGameSource(
+      buildDeps({
+        scheduleLoader: { loadForDateRange: loader },
+        outcomeLoader: { loadOutcome: vi.fn(async () => canonicalOutcome()) },
+      }),
+    );
+
+    const games = await source.getTeamGames(HOME, 2024, new Date('2024-06-01T20:00:00Z'));
+
+    expect(games).toHaveLength(1);
+    expect(games[0].gamePk).toBe(1);
   });
 });

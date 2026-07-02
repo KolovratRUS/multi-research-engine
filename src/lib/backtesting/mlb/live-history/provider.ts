@@ -48,6 +48,7 @@ export interface HistoricalTeamGameSource {
   getTeamGames(
     teamId: number,
     season: number,
+    cutoff: Date,
   ): Promise<readonly CompletedHistoricalTeamGame[]>;
 }
 
@@ -55,6 +56,7 @@ export interface HistoricalPitcherAppearanceSource {
   getPitcherAppearances(
     personId: number,
     season: number,
+    cutoff: Date,
   ): Promise<readonly HistoricalPitcherAppearance[]>;
 }
 
@@ -157,6 +159,7 @@ export class LiveMLBHistoricalProvider implements MLBHistoricalDataProvider {
         await this.deps.pitcherAppearanceSource.getPitcherAppearances(
           personId,
           season,
+          cutoff,
         );
       this.providerStats.pitcherAggregations += 1;
       const aggregate = this.deps.pitcherAggregator(appearances, personId, cutoff);
@@ -174,7 +177,7 @@ export class LiveMLBHistoricalProvider implements MLBHistoricalDataProvider {
     try {
       const season = cutoff.getUTCFullYear();
       this.providerStats.teamSourceRequests += 1;
-      const games = await this.deps.teamGameSource.getTeamGames(teamId, season);
+      const games = await this.deps.teamGameSource.getTeamGames(teamId, season, cutoff);
       this.providerStats.teamAggregations += 1;
       const aggregate = this.deps.teamAggregator(games, teamId, cutoff);
       return this.mapTeamAggregate(aggregate, cutoff);
@@ -194,7 +197,7 @@ export class LiveMLBHistoricalProvider implements MLBHistoricalDataProvider {
   ): Promise<HistoricalTeamGame[]> {
     try {
       const season = cutoff.getUTCFullYear();
-      const games = await this.deps.teamGameSource.getTeamGames(teamId, season);
+      const games = await this.deps.teamGameSource.getTeamGames(teamId, season, cutoff);
       this.providerStats.teamSourceRequests += 1;
 
       const eligible = games.filter((game) =>

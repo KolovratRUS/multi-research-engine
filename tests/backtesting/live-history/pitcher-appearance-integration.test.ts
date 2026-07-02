@@ -138,8 +138,8 @@ describe('pitcher-appearance integration', () => {
       gameFeedLoader: { loadGameFeed: makeLoader(fetchImpl).loadGameFeed.bind(makeLoader(fetchImpl)) },
     });
 
-    const appearances = await source.getPitcherAppearances(playerId, 2024);
     const cutoff = new Date('2024-06-02T00:00:00Z');
+    const appearances = await source.getPitcherAppearances(playerId, 2024, cutoff);
     const aggregate = aggregatePitcherHistory(appearances, playerId, cutoff);
 
     expect(appearances).toHaveLength(1);
@@ -169,8 +169,8 @@ describe('pitcher-appearance integration', () => {
       gameFeedLoader: { loadGameFeed: makeLoader(fetchImpl).loadGameFeed.bind(makeLoader(fetchImpl)) },
     });
 
-    const appearances = await source.getPitcherAppearances(playerId, 2024);
     const cutoff = new Date('2024-06-01T20:00:00Z');
+    const appearances = await source.getPitcherAppearances(playerId, 2024, cutoff);
     const aggregate = aggregatePitcherHistory(appearances, playerId, cutoff);
 
     expect(appearances).toHaveLength(1);
@@ -196,8 +196,8 @@ describe('pitcher-appearance integration', () => {
       gameFeedLoader: { loadGameFeed: makeLoader(fetchImpl).loadGameFeed.bind(makeLoader(fetchImpl)) },
     });
 
-    const appearances = await source.getPitcherAppearances(playerId, 2024);
     const cutoff = new Date('2024-06-02T00:00:00Z');
+    const appearances = await source.getPitcherAppearances(playerId, 2024, cutoff);
     const aggregate = aggregatePitcherHistory(appearances, playerId, cutoff);
 
     expect(appearances).toHaveLength(1);
@@ -227,7 +227,8 @@ describe('pitcher-appearance integration', () => {
       gameFeedLoader: { loadGameFeed: makeLoader(fetchImpl).loadGameFeed.bind(makeLoader(fetchImpl)) },
     });
 
-    const appearances = await source.getPitcherAppearances(playerId, 2024);
+    const cutoff = new Date('2024-06-02T00:00:00Z');
+    const appearances = await source.getPitcherAppearances(playerId, 2024, cutoff);
 
     expect(appearances).toHaveLength(0);
   });
@@ -247,8 +248,8 @@ describe('pitcher-appearance integration', () => {
       gameFeedLoader: { loadGameFeed: makeLoader(fetchImpl).loadGameFeed.bind(makeLoader(fetchImpl)) },
     });
 
-    const appearances = await source.getPitcherAppearances(playerId, 2024);
     const cutoff = new Date('2024-06-02T00:00:00Z');
+    const appearances = await source.getPitcherAppearances(playerId, 2024, cutoff);
     const aggregate = aggregatePitcherHistory(appearances, playerId, cutoff);
 
     expect(appearances).toHaveLength(1);
@@ -282,8 +283,8 @@ describe('pitcher-appearance integration', () => {
       gameFeedLoader: { loadGameFeed: makeLoader(fetchImpl).loadGameFeed.bind(makeLoader(fetchImpl)) },
     });
 
-    const appearances = await source.getPitcherAppearances(playerId, 2024);
     const cutoff = new Date('2024-06-02T00:00:00Z');
+    const appearances = await source.getPitcherAppearances(playerId, 2024, cutoff);
     const aggregate = aggregatePitcherHistory(appearances, playerId, cutoff);
 
     expect(appearances[0].strikeouts).toBe(0);

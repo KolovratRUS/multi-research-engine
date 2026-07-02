@@ -5,6 +5,7 @@ import type {
   HistoricalCompletionTimeSource,
 } from './types';
 import type { HistoricalPitcherAppearanceSource } from './provider';
+import { isOfficialDateAfterCutoff } from './historical-date';
 
 export interface PitcherAppearanceSourceOptions {
   readonly scheduleLoader: {
@@ -48,6 +49,7 @@ export function createMLBHistoricalPitcherAppearanceSource(
     async getPitcherAppearances(
       personId: number,
       season: number,
+      cutoff: Date,
     ): Promise<readonly HistoricalPitcherAppearance[]> {
       validatePersonId(personId);
       validateSeason(season);
@@ -75,6 +77,9 @@ export function createMLBHistoricalPitcherAppearanceSource(
       const appearances: HistoricalPitcherAppearance[] = [];
 
       for (const scheduleGame of deduped.values()) {
+        if (isOfficialDateAfterCutoff(scheduleGame.officialDate, cutoff)) {
+          continue;
+        }
         let feed: CanonicalHistoricalPitcherFeed;
         try {
           feed = await gameFeedLoader.loadGameFeed(scheduleGame.gamePk);

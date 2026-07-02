@@ -7,6 +7,7 @@ import type {
 } from './types';
 import type { HistoricalTeamGameSource } from './provider';
 import { aggregateTeamHistory } from './team-aggregator';
+import { isOfficialDateAfterCutoff } from './historical-date';
 
 export interface TeamGameSourceOptions {
   readonly scheduleLoader: {
@@ -41,7 +42,11 @@ export function createMLBHistoricalTeamGameSource(
   const { scheduleLoader, outcomeLoader } = options;
 
   return {
-    async getTeamGames(teamId: number, season: number): Promise<readonly CompletedHistoricalTeamGame[]> {
+    async getTeamGames(
+      teamId: number,
+      season: number,
+      cutoff: Date,
+    ): Promise<readonly CompletedHistoricalTeamGame[]> {
       validateTeamId(teamId);
       validateSeason(season);
 
@@ -73,6 +78,10 @@ export function createMLBHistoricalTeamGameSource(
 
       const normalized: CompletedHistoricalTeamGame[] = [];
       for (const game of deduped.values()) {
+        if (isOfficialDateAfterCutoff(game.officialDate, cutoff)) {
+          continue;
+        }
+
         const isHome = game.homeTeamId === teamId;
         const opponentTeamId = isHome ? game.awayTeamId : game.homeTeamId;
         let runsScored: number | null = null;

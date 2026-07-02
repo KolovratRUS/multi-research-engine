@@ -152,7 +152,7 @@ describe('team-game completion integration', () => {
       outcomeLoader: { loadOutcome: async (gamePk: number) => loader.loadOutcome(gamePk) },
     });
 
-    const games = await source.getTeamGames(HOME_TEAM, 2024);
+    const games = await source.getTeamGames(HOME_TEAM, 2024, cutoff);
 
     expect(games).toHaveLength(3);
     expect(games.every((game) => game.status === 'FINAL')).toBe(true);
