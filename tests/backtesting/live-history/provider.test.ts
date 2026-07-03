@@ -24,6 +24,7 @@ import type {
 } from '@/lib/backtesting/mlb/live-history/types';
 import { aggregateTeamHistory } from '@/lib/backtesting/mlb/live-history/team-aggregator';
 import { aggregatePitcherHistory } from '@/lib/backtesting/mlb/live-history/pitcher-aggregator';
+import type { PregamePitcherObservationWriter } from '@/lib/backtesting/mlb/live-history/pregame-pitcher-observation-store';
 
 const fixedNow = new Date('2024-06-25T12:00:00Z');
 
@@ -716,5 +717,75 @@ describe('LiveMLBHistoricalProvider', () => {
     expect(game.probablePitchers?.home?.fetchedAt.getTime()).toBe(
       scheduleFetchedAt.getTime(),
     );
+  });
+
+  it('diagnostics reflect capture stats after schedule load', async () => {
+    const fixedNow = new Date('2024-06-01T16:20:00Z');
+    const writer: PregamePitcherObservationWriter = {
+      recordProspectivePitcherObservations: async () => ({
+        observationsConsidered: 1,
+        observationsWritten: 1,
+        exactDuplicatesSkipped: 0,
+        retrospectiveWritesBlocked: 0,
+        corruptRecords: 0,
+        eligibleSelectionHits: 0,
+        eligibleSelectionMisses: 0,
+        warnings: [],
+      }),
+    };
+    const provider = new LiveMLBHistoricalProvider(
+      buildDeps({
+        scheduleLoader: {
+          loadForDateRange: async () => [
+            canonicalScheduleGame({
+              gamePk: 7000,
+              officialDate: '2024-06-01',
+              status: 'FINAL',
+              scheduledStart: new Date('2024-06-01T16:20:00Z'),
+              cutoffTime: new Date('2024-06-01T16:00:00Z'),
+              homeTeamId: 111,
+              awayTeamId: 222,
+              homeTeamName: 'Home',
+              awayTeamName: 'Away',
+              venueId: 1,
+              venueName: 'Field',
+              doubleheader: false,
+              gameNumber: 1,
+              scheduledInnings: 9,
+              homeProbablePitcherId: null,
+              awayProbablePitcherId: null,
+              homeStarterSource: 'UNAVAILABLE',
+              awayStarterSource: 'UNAVAILABLE',
+              rescheduledFromGamePk: null,
+              warnings: [],
+              provenance: {
+                endpoint: '/api/v1/schedule',
+                fetchedAt: new Date('2024-06-01T12:00:00Z'),
+                sourceTimestamp: new Date('2024-06-01T12:00:00Z'),
+              },
+            }),
+          ],
+        },
+        pregamePitcherCapture: { context: 'PROSPECTIVE_LIVE', writer },
+        now: () => fixedNow,
+      }),
+    );
+
+    const initial = provider.stats();
+    expect(initial.pregamePitcherCapture).toEqual({
+      enabled: true,
+      observationsConsidered: 0,
+      observationsWritten: 0,
+      exactDuplicatesSkipped: 0,
+      retrospectiveWritesBlocked: 0,
+      corruptRecords: 0,
+      warnings: [],
+    });
+
+    await provider.fetchGamesForDate('2024-06-01');
+
+    const updated = provider.stats();
+    expect(updated.pregamePitcherCapture?.observationsWritten).toBe(1);
+    expect(updated.pregamePitcherCapture?.observationsConsidered).toBe(1);
   });
 });

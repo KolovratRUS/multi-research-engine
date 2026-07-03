@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import os from 'os';
 import path from 'node:path';
 import { createLiveMLBHistoricalProvider } from '@/lib/backtesting/mlb/live-history/provider-factory';
+import type { PregamePitcherObservationWriter } from '@/lib/backtesting/mlb/live-history/pregame-pitcher-observation-store';
 
 describe('LiveMLBHistoricalProviderFactory', () => {
   let tempRoot: string;
@@ -40,6 +41,21 @@ describe('LiveMLBHistoricalProviderFactory', () => {
     scheduledInnings: 9,
     ...overrides,
   });
+
+  function createObservationWriterStub(): PregamePitcherObservationWriter {
+    return {
+      recordProspectivePitcherObservations: async () => ({
+        observationsConsidered: 0,
+        observationsWritten: 0,
+        exactDuplicatesSkipped: 0,
+        retrospectiveWritesBlocked: 0,
+        corruptRecords: 0,
+        eligibleSelectionHits: 0,
+        eligibleSelectionMisses: 0,
+        warnings: [],
+      }),
+    };
+  }
 
   const makeFeedPayload = (overrides: Record<string, unknown> = {}): unknown => ({
     gamePk: 1001,
@@ -205,5 +221,81 @@ describe('LiveMLBHistoricalProviderFactory', () => {
     for (const token of forbidden) {
       expect(source).not.toContain(token);
     }
+  });
+
+  it('capture flag absent leaves no capture config and no writer factory', () => {
+    const writerFactory = vi.fn();
+    const result = createLiveMLBHistoricalProvider({
+      cacheRoot: tempRoot,
+      cacheVersion: 'v1',
+      capturePregamePitchers: false,
+      observationWriterFactory: writerFactory,
+    });
+
+    expect(result.pregamePitcherCapture).toBeUndefined();
+    expect(writerFactory).not.toHaveBeenCalled();
+    expect(result.provider.stats().pregamePitcherCapture).toBeUndefined();
+    expect(result.deps.pregamePitcherCapture).toBeUndefined();
+  });
+
+  it('capture flag true creates PROSPECTIVE_LIVE config with zero counters', () => {
+    const writerFactory = vi.fn().mockReturnValue(createObservationWriterStub());
+    const result = createLiveMLBHistoricalProvider({
+      cacheRoot: tempRoot,
+      cacheVersion: 'v1',
+      capturePregamePitchers: true,
+      observationWriterFactory: writerFactory,
+    });
+
+    expect(result.pregamePitcherCapture).toBeDefined();
+    expect(result.pregamePitcherCapture?.context).toBe('PROSPECTIVE_LIVE');
+    expect(writerFactory).toHaveBeenCalledTimes(1);
+    expect(writerFactory).toHaveBeenCalledWith(
+      expect.objectContaining({}),
+      undefined,
+    );
+
+    const stats = result.provider.stats();
+    expect(stats.pregamePitcherCapture).toEqual({
+      enabled: true,
+      observationsConsidered: 0,
+      observationsWritten: 0,
+      exactDuplicatesSkipped: 0,
+      retrospectiveWritesBlocked: 0,
+      corruptRecords: 0,
+      warnings: [],
+    });
+  });
+
+  it('forwards deterministic now and writer factory', () => {
+    const fixedNow = new Date('2024-06-01T12:00:00Z');
+    const now = () => fixedNow;
+    const writerFactory = vi.fn().mockReturnValue(createObservationWriterStub());
+    const result = createLiveMLBHistoricalProvider({
+      cacheRoot: tempRoot,
+      cacheVersion: 'v1',
+      capturePregamePitchers: true,
+      now,
+      observationWriterFactory: writerFactory,
+    });
+
+    expect(result.pregamePitcherCapture?.writer).toBe(writerFactory.mock.results[0].value);
+    expect(writerFactory).toHaveBeenCalledWith(
+      expect.anything(),
+      now,
+    );
+  });
+
+  it('capture config does not affect existing HTTP loader behavior', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, makeScheduleResponse()));
+    const result = createLiveMLBHistoricalProvider({
+      cacheRoot: tempRoot,
+      cacheVersion: 'v1',
+      capturePregamePitchers: true,
+      fetchImpl,
+    });
+
+    await result.scheduleLoader.loadForDateRange('2024-06-01', '2024-06-01');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

@@ -11,6 +11,10 @@ import { createMLBHistoricalPitcherAppearanceSource } from './pitcher-appearance
 import { LiveMLBHistoricalProvider } from './provider';
 import { aggregateTeamHistory } from './team-aggregator';
 import { aggregatePitcherHistory } from './pitcher-aggregator';
+import { createMLBPregamePitcherObservationStore } from './pregame-pitcher-observation-store';
+import { createPregamePitcherObservationWriter } from './pregame-pitcher-observation-writer';
+import type { PregamePitcherObservationWriter } from './pregame-pitcher-observation-store';
+import { capturePregamePitcherObservations } from './pregame-pitcher-observation-capture';
 
 export interface LiveMLBHistoricalProviderFactoryResult {
   readonly provider: LiveMLBHistoricalProvider;
@@ -22,6 +26,10 @@ export interface LiveMLBHistoricalProviderFactoryResult {
   readonly teamGameSource: ReturnType<typeof createMLBHistoricalTeamGameSource>;
   readonly pitcherFeedLoader: ReturnType<typeof createPitcherFeedLoader>;
   readonly pitcherAppearanceSource: ReturnType<typeof createMLBHistoricalPitcherAppearanceSource>;
+  readonly pregamePitcherCapture?: {
+    readonly context: 'PROSPECTIVE_LIVE';
+    readonly writer: PregamePitcherObservationWriter;
+  };
 }
 
 export interface LiveMLBHistoricalProviderFactoryOptions {
@@ -32,6 +40,11 @@ export interface LiveMLBHistoricalProviderFactoryOptions {
   readonly now?: () => Date;
   readonly timeoutMs?: number;
   readonly maxRetries?: number;
+  readonly capturePregamePitchers?: boolean;
+  readonly observationWriterFactory?: (
+    store: ReturnType<typeof createMLBPregamePitcherObservationStore>,
+    now?: () => Date,
+  ) => PregamePitcherObservationWriter;
 }
 
 export function createLiveMLBHistoricalProvider(
@@ -80,6 +93,16 @@ export function createLiveMLBHistoricalProvider(
     gameFeedLoader: pitcherFeedLoader,
   });
 
+  const shouldCapture = options.capturePregamePitchers === true;
+  let pregamePitcherCapture: LiveMLBHistoricalProviderFactoryResult['pregamePitcherCapture'];
+  if (shouldCapture) {
+    const store = createMLBPregamePitcherObservationStore(options.cacheRoot, options.now);
+    const writer = options.observationWriterFactory
+      ? options.observationWriterFactory(store, options.now)
+      : createPregamePitcherObservationWriter({ store, now: options.now });
+    pregamePitcherCapture = { context: 'PROSPECTIVE_LIVE', writer };
+  }
+
   const provider = new LiveMLBHistoricalProvider({
     scheduleLoader,
     outcomeLoader,
@@ -88,6 +111,7 @@ export function createLiveMLBHistoricalProvider(
     teamAggregator: aggregateTeamHistory,
     pitcherAggregator: aggregatePitcherHistory,
     now: options.now,
+    ...(pregamePitcherCapture ? { pregamePitcherCapture } : {}),
   });
 
   const deps: LiveHistoricalProviderDependencies = {
@@ -98,6 +122,7 @@ export function createLiveMLBHistoricalProvider(
     teamAggregator: aggregateTeamHistory,
     pitcherAggregator: aggregatePitcherHistory,
     now: options.now,
+    ...(pregamePitcherCapture ? { pregamePitcherCapture } : {}),
   };
 
   return {
@@ -110,5 +135,6 @@ export function createLiveMLBHistoricalProvider(
     teamGameSource,
     pitcherFeedLoader,
     pitcherAppearanceSource,
+    ...(pregamePitcherCapture ? { pregamePitcherCapture } : {}),
   };
 }

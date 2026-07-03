@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import {
   parseMLBBacktestCLIArgs,
@@ -8,7 +11,8 @@ import {
   type MLBBacktestCLIDependencies,
   type LiveCLIDiagnostics,
   type LiveProviderFactoryResultForCLI,
-} from '@/lib/backtesting/cli';
+  createLiveProviderForCLI,
+  } from '@/lib/backtesting/cli';
 import type { BacktestPrediction } from '@/lib/backtesting/types';
 
 const mockStdout: string[] = [];
@@ -24,6 +28,34 @@ function createIO() {
 function resetIO() {
   mockStdout.length = 0;
   mockStderr.length = 0;
+}
+
+function makeScheduleResponse(games: unknown[] = []) {
+  return { dates: [{ date: '2024-06-01', games }] };
+}
+
+function makeScheduleGame(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    gamePk: 1001,
+    officialDate: '2024-06-01',
+    gameDate: '2024-06-01T16:20:00Z',
+    status: { abstractGameState: 'Final', detailedState: 'Final' },
+    teams: {
+      home: {
+        team: { id: 1, name: 'Home' },
+        probablePitcher: { id: 1001 },
+      },
+      away: {
+        team: { id: 2, name: 'Away' },
+        probablePitcher: { id: 1002 },
+      },
+    },
+    venue: { id: 1, name: 'Stadium' },
+    doubleHeader: 'N',
+    gameNumber: 1,
+    scheduledInnings: 9,
+    ...overrides,
+  };
 }
 
 function orchestrateDefaultMockResult() {
@@ -254,6 +286,103 @@ describe('parseMLBBacktestCLIArgs', () => {
     expect((result as CLIBacktestCLIError).code).toBe('UNKNOWN_OPTION');
   });
 
+  it('parses --capture-pregame-pitchers as a bare true flag', () => {
+    const result = parseMLBBacktestCLIArgs(['--source', 'live', '--date', '2024-06-01', '--capture-pregame-pitchers']);
+    if ('code' in result) {
+      throw new Error(`Expected parsed options, got error: ${JSON.stringify(result)}`);
+    }
+    expect(result.capturePregamePitchers).toBe(true);
+  });
+
+  it('rejects duplicate --capture-pregame-pitchers', () => {
+    const result = parseMLBBacktestCLIArgs([
+      '--source', 'live', '--date', '2024-06-01',
+      '--capture-pregame-pitchers', '--capture-pregame-pitchers',
+    ]);
+    expect('code' in result).toBe(true);
+    expect((result as CLIBacktestCLIError).code).toBe('DUPLICATE_OPTION');
+  });
+
+  it('rejects --capture-pregame-pitchers without live source', async () => {
+    const deps: MLBBacktestCLIDependencies = {
+      orchestrate: async () => orchestrateDefaultMockResult(),
+    };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(['--capture-pregame-pitchers'], io, deps);
+    expect(code).toBe(1);
+    expect(mockStderr.length).toBeGreaterThan(0);
+  });
+
+  it('passes capturePregamePitchers through to live factory', async () => {
+    const mockProvider = {
+      fetchGamesForDate: vi.fn(),
+      fetchGameOutcome: vi.fn(),
+      fetchPitcherStatsAsOf: vi.fn(),
+      fetchTeamStatsAsOf: vi.fn(),
+      fetchRecentGamesBefore: vi.fn(),
+    };
+
+    const createLiveProvider = vi.fn().mockReturnValue({
+      provider: mockProvider,
+      getDiagnostics: () => createLiveDiagnostics(),
+    });
+
+    const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
+    const deps: MLBBacktestCLIDependencies = {
+      orchestrate: mockOrchestrate,
+      createLiveProvider,
+    };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(['--source', 'live', '--date', '2024-06-01', '--capture-pregame-pitchers'], io, deps);
+    expect(code).toBe(0);
+    expect(createLiveProvider).toHaveBeenCalledTimes(1);
+    expect(createLiveProvider.mock.calls[0][0].capturePregamePitchers).toBe(true);
+  });
+  it('creates fresh capture diagnostics for each getDiagnostics call', async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-cli-capture-diag-'));
+    try {
+      const fetchImpl = vi.fn().mockImplementation(async () =>
+        new Response(JSON.stringify(makeScheduleResponse([makeScheduleGame()])), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      const options = {
+        cacheRoot: tempRoot,
+        cacheVersion: 'v1',
+        capturePregamePitchers: true,
+        fetchImpl,
+      };
+
+      const wrapper = createLiveProviderForCLI(options);
+
+      const before = wrapper.getDiagnostics();
+      expect(before.provider.pregamePitcherCapture?.enabled).toBe(true);
+      expect(before.provider.pregamePitcherCapture?.observationsConsidered).toBe(0);
+      expect(before.provider.pregamePitcherCapture?.observationsWritten).toBe(0);
+      expect(before.provider.pregamePitcherCapture?.exactDuplicatesSkipped).toBe(0);
+      expect(before.provider.pregamePitcherCapture?.retrospectiveWritesBlocked).toBe(0);
+      expect(before.pregamePitcherCapture?.enabled).toBe(true);
+      expect(before.pregamePitcherCapture?.observationsConsidered).toBe(0);
+      expect(before.pregamePitcherCapture?.observationsWritten).toBe(0);
+      expect(before.pregamePitcherCapture?.exactDuplicatesSkipped).toBe(0);
+      expect(before.pregamePitcherCapture?.retrospectiveWritesBlocked).toBe(0);
+
+      await wrapper.provider.fetchGamesForDate('2024-06-01');
+
+      const after = wrapper.getDiagnostics();
+      expect(after.pregamePitcherCapture?.observationsConsidered).toBe(1);
+      expect(after.pregamePitcherCapture?.observationsWritten).toBe(1);
+      expect(after.pregamePitcherCapture?.exactDuplicatesSkipped).toBe(0);
+      expect(after.pregamePitcherCapture?.retrospectiveWritesBlocked).toBe(0);
+      expect(after.pregamePitcherCapture).toEqual(after.provider.pregamePitcherCapture);
+      expect(after.pregamePitcherCapture).not.toBe(before.pregamePitcherCapture);
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+
   it('rejects unknown positional argument', () => {
     const result = parseMLBBacktestCLIArgs(['hello']);
     expect('code' in result).toBe(true);
@@ -354,6 +483,25 @@ describe('parseMLBBacktestCLIArgs', () => {
     expect(result.maxRetries).toBe(3);
   });
 
+  it('parses --capture-pregame-pitchers as a bare true flag', () => {
+    const result = parseMLBBacktestCLIArgs(['--capture-pregame-pitchers']);
+    if ('code' in result) {
+      throw new Error(`Expected success, got: ${result.message}`);
+    }
+    expect(result.capturePregamePitchers).toBe(true);
+  });
+
+  it('rejects duplicate --capture-pregame-pitchers', () => {
+    const result = parseMLBBacktestCLIArgs([
+      '--capture-pregame-pitchers',
+      '--capture-pregame-pitchers',
+    ]);
+    expect('code' in result).toBe(true);
+    expect((result as CLIBacktestCLIError).code).toBe('DUPLICATE_OPTION');
+    expect((result as CLIBacktestCLIError).option).toBe('capture-pregame-pitchers');
+  });
+
+
   it('rejects blank --cache-root', () => {
     const result = parseMLBBacktestCLIArgs(['--cache-root', '']);
     expect('code' in result).toBe(true);
@@ -421,6 +569,10 @@ describe('parseMLBBacktestCLIArgs', () => {
 
 describe('runMLBBacktestCLI', () => {
   afterEach(() => {
+    resetIO();
+  });
+
+  beforeEach(() => {
     resetIO();
   });
 

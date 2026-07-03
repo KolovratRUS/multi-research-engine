@@ -7,6 +7,7 @@ import {
 import { orchestrateHistoricalBacktest, HistoricalBacktestOrchestrationError } from '@/lib/backtesting/orchestrator';
 import { createLiveMLBHistoricalProvider } from '@/lib/backtesting/mlb/live-history/provider-factory';
 import type { LiveMLBHistoricalProviderFactoryOptions } from '@/lib/backtesting/mlb/live-history/provider-factory';
+import type { LiveHistoricalProviderStats } from '@/lib/backtesting/mlb/live-history/provider';
 import path from 'node:path';
 import type {
   BacktestMetrics,
@@ -38,6 +39,7 @@ export interface MLBBacktestCLIOptions {
   readonly forceRefresh?: boolean;
   readonly timeoutMs?: number;
   readonly maxRetries?: number;
+  readonly capturePregamePitchers?: boolean;
 }
 
 export interface CLIBacktestCLIError {
@@ -58,16 +60,18 @@ export interface LiveProviderFactoryResultForCLI {
 }
 
 export interface LiveCLIDiagnostics {
-  readonly provider: {
-    readonly scheduleRequests: number;
-    readonly outcomeRequests: number;
-    readonly teamSourceRequests: number;
-    readonly pitcherSourceRequests: number;
-    readonly teamAggregations: number;
-    readonly pitcherAggregations: number;
-  };
+  readonly provider: LiveHistoricalProviderStats;
   readonly http: MLBHistoricalHttpClientStats;
   readonly cache: CacheStats;
+  readonly pregamePitcherCapture?: {
+    readonly enabled: boolean;
+    readonly observationsConsidered: number;
+    readonly observationsWritten: number;
+    readonly exactDuplicatesSkipped: number;
+    readonly retrospectiveWritesBlocked: number;
+    readonly corruptRecords: number;
+    readonly warnings: readonly string[];
+  };
 }
 
 const KNOWN_OPTIONS = new Set([
@@ -83,6 +87,7 @@ const KNOWN_OPTIONS = new Set([
   'force-refresh',
   'timeout-ms',
   'max-retries',
+  'capture-pregame-pitchers',
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -153,7 +158,12 @@ export function parseMLBBacktestCLIArgs(
       continue;
     }
 
-    if (value === undefined && key !== 'force-refresh') {
+    if (key === 'capture-pregame-pitchers') {
+      state.capturePregamePitchers = true;
+      continue;
+    }
+
+    if (value === undefined && key !== 'force-refresh' && key !== 'capture-pregame-pitchers') {
       if (idx >= argv.length) {
         return {
           code: 'MISSING_VALUE',
@@ -339,6 +349,7 @@ export function parseMLBBacktestCLIArgs(
     ...(state.forceRefresh !== undefined ? { forceRefresh: state.forceRefresh as boolean } : {}),
     ...(state.timeoutMs !== undefined ? { timeoutMs: state.timeoutMs as number } : {}),
     ...(state.maxRetries !== undefined ? { maxRetries: state.maxRetries as number } : {}),
+    ...(state.capturePregamePitchers !== undefined ? { capturePregamePitchers: state.capturePregamePitchers as boolean } : {}),
   } satisfies MLBBacktestCLIOptions;
 }
 
@@ -363,6 +374,7 @@ function printHelp(stdout: (message: string) => void): void {
     '  --force-refresh [true|false] Bypass cache on live requests (default: false)',
     '  --timeout-ms <ms>         HTTP timeout in milliseconds',
     '  --max-retries <n>         Maximum HTTP retry attempts',
+    '  --capture-pregame-pitchers  Record MLB probable-pitcher observations (live only)',
     '  --output text             Human-readable output (default)',
     '  --output json             Machine-readable JSON output',
     '  --help, -h                Show this help',
@@ -727,11 +739,21 @@ export function createLiveProviderForCLI(
 
   return {
     provider: result.provider,
-    getDiagnostics: () => ({
-      provider: result.provider.stats(),
-      http: result.client.getStats(),
-      cache: result.cache.stats(),
-    }),
+    getDiagnostics: () => {
+      const providerStats = result.provider.stats();
+
+      return {
+        provider: providerStats,
+        http: result.client.getStats(),
+        cache: result.cache.stats(),
+        ...(providerStats.pregamePitcherCapture
+          ? {
+              pregamePitcherCapture:
+                providerStats.pregamePitcherCapture,
+            }
+          : {}),
+      };
+    },
   };
 }
 
@@ -774,6 +796,10 @@ export async function runMLBBacktestCLI(
     stderr('Live mode requires --date or --start and --end.');
     return 1;
   }
+  if (parsed.capturePregamePitchers && parsed.source !== 'live') {
+    stderr('--capture-pregame-pitchers requires --source live.');
+    return 1;
+  }
 
   let provider: MLBHistoricalDataProvider;
   let fixture: MLBHistoricalFixture | undefined;
@@ -808,6 +834,7 @@ export async function runMLBBacktestCLI(
       ...(parsed.maxRetries !== undefined ? { maxRetries: parsed.maxRetries } : {}),
       ...(injectNow ? { now: injectNow } : {}),
       ...(dependencies.liveFetchImpl ? { fetchImpl: dependencies.liveFetchImpl } : {}),
+      ...(parsed.capturePregamePitchers === true ? { capturePregamePitchers: true } : {}),
     };
 
     liveResult = createLiveProvider(providerFactoryOptions);

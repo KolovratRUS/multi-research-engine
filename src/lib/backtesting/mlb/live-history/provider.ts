@@ -17,6 +17,8 @@ import type {
 } from './types';
 import { aggregateTeamHistory } from './team-aggregator';
 import { aggregatePitcherHistory } from './pitcher-aggregator';
+import type { PregamePitcherObservationWriter } from './pregame-pitcher-observation-store';
+import { capturePregamePitcherObservations } from './pregame-pitcher-observation-capture';
 
 type EligibleRecentTeamGame =
   Omit<
@@ -75,7 +77,11 @@ export interface LiveHistoricalProviderDependencies {
   readonly teamAggregator: typeof aggregateTeamHistory;
   readonly pitcherAggregator: typeof aggregatePitcherHistory;
   readonly now?: () => Date;
-}
+  readonly pregamePitcherCapture?: {
+    readonly context: 'PROSPECTIVE_LIVE';
+    readonly writer: PregamePitcherObservationWriter;
+  };
+};
 
 export interface LiveHistoricalProviderStats {
   readonly scheduleRequests: number;
@@ -84,6 +90,15 @@ export interface LiveHistoricalProviderStats {
   readonly pitcherSourceRequests: number;
   readonly teamAggregations: number;
   readonly pitcherAggregations: number;
+  readonly pregamePitcherCapture?: {
+    readonly enabled: boolean;
+    readonly observationsConsidered: number;
+    readonly observationsWritten: number;
+    readonly exactDuplicatesSkipped: number;
+    readonly retrospectiveWritesBlocked: number;
+    readonly corruptRecords: number;
+    readonly warnings: readonly string[];
+  };
 }
 
 export class LiveMLBHistoricalProvider implements MLBHistoricalDataProvider {
@@ -96,6 +111,17 @@ export class LiveMLBHistoricalProvider implements MLBHistoricalDataProvider {
     pitcherSourceRequests: number;
     teamAggregations: number;
     pitcherAggregations: number;
+    pregamePitcherConsidered: number;
+    pregamePitcherWritten: number;
+    pregamePitcherExactDuplicatesSkipped: number;
+    pregamePitcherRetrospectiveWritesBlocked: number;
+    pregamePitcherCorruptRecords: number;
+    pregamePitcherWarnings: string[];
+  };
+
+  private readonly pregamePitcherCapture?: {
+    readonly context: 'PROSPECTIVE_LIVE';
+    readonly writer: PregamePitcherObservationWriter;
   };
 
   constructor(deps: LiveHistoricalProviderDependencies) {
@@ -107,13 +133,44 @@ export class LiveMLBHistoricalProvider implements MLBHistoricalDataProvider {
       pitcherSourceRequests: 0,
       teamAggregations: 0,
       pitcherAggregations: 0,
+      pregamePitcherConsidered: 0,
+      pregamePitcherWritten: 0,
+      pregamePitcherExactDuplicatesSkipped: 0,
+      pregamePitcherRetrospectiveWritesBlocked: 0,
+      pregamePitcherCorruptRecords: 0,
+      pregamePitcherWarnings: [],
     };
+    this.pregamePitcherCapture = deps.pregamePitcherCapture;
   }
 
   async fetchGamesForDate(date: string): Promise<HistoricalMLBGame[]> {
     this.providerStats.scheduleRequests += 1;
     try {
       const games = await this.deps.scheduleLoader.loadForDateRange(date, date);
+
+      if (this.pregamePitcherCapture && games.length > 0) {
+        const captureResult = await capturePregamePitcherObservations({
+          writer: this.pregamePitcherCapture.writer,
+          games,
+          sourceEndpoint: '/api/v1/schedule',
+          sourceRequestParameters: {
+            sportId: 1,
+            startDate: date,
+            endDate: date,
+            hydrate: 'probablePitcher,venue',
+          },
+        });
+        this.providerStats.pregamePitcherConsidered +=
+          captureResult.observationsConsidered;
+        this.providerStats.pregamePitcherWritten += captureResult.observationsWritten;
+        this.providerStats.pregamePitcherExactDuplicatesSkipped +=
+          captureResult.exactDuplicatesSkipped;
+        this.providerStats.pregamePitcherRetrospectiveWritesBlocked +=
+          captureResult.retrospectiveWritesBlocked;
+        this.providerStats.pregamePitcherCorruptRecords += captureResult.corruptRecords;
+        this.providerStats.pregamePitcherWarnings.push(...captureResult.warnings);
+      }
+
       const mapped = games.map((game) => this.mapScheduleGame(game));
       mapped.sort((a, b) => {
         const startDiff = a.gameDate.getTime() - b.gameDate.getTime();
@@ -233,7 +290,28 @@ export class LiveMLBHistoricalProvider implements MLBHistoricalDataProvider {
   }
 
   stats(): LiveHistoricalProviderStats {
-    return { ...this.providerStats };
+    const stats: LiveHistoricalProviderStats = {
+      scheduleRequests: this.providerStats.scheduleRequests,
+      outcomeRequests: this.providerStats.outcomeRequests,
+      teamSourceRequests: this.providerStats.teamSourceRequests,
+      pitcherSourceRequests: this.providerStats.pitcherSourceRequests,
+      teamAggregations: this.providerStats.teamAggregations,
+      pitcherAggregations: this.providerStats.pitcherAggregations,
+      ...(this.pregamePitcherCapture
+        ? {
+            pregamePitcherCapture: {
+              enabled: true,
+              observationsConsidered: this.providerStats.pregamePitcherConsidered,
+              observationsWritten: this.providerStats.pregamePitcherWritten,
+              exactDuplicatesSkipped: this.providerStats.pregamePitcherExactDuplicatesSkipped,
+              retrospectiveWritesBlocked: this.providerStats.pregamePitcherRetrospectiveWritesBlocked,
+              corruptRecords: this.providerStats.pregamePitcherCorruptRecords,
+              warnings: [...this.providerStats.pregamePitcherWarnings],
+            },
+          }
+        : {}),
+    };
+    return stats;
   }
 
   clearStats(): void {
@@ -243,6 +321,12 @@ export class LiveMLBHistoricalProvider implements MLBHistoricalDataProvider {
     this.providerStats.pitcherSourceRequests = 0;
     this.providerStats.teamAggregations = 0;
     this.providerStats.pitcherAggregations = 0;
+    this.providerStats.pregamePitcherConsidered = 0;
+    this.providerStats.pregamePitcherWritten = 0;
+    this.providerStats.pregamePitcherExactDuplicatesSkipped = 0;
+    this.providerStats.pregamePitcherRetrospectiveWritesBlocked = 0;
+    this.providerStats.pregamePitcherCorruptRecords = 0;
+    this.providerStats.pregamePitcherWarnings = [];
   }
 
   private mapScheduleGame(game: CanonicalHistoricalScheduleGame): HistoricalMLBGame {
@@ -382,7 +466,7 @@ export class LiveMLBHistoricalProvider implements MLBHistoricalDataProvider {
       baseOnBalls: start.walks,
       pitches: start.pitches ?? undefined,
       homeRunsAllowed: start.homeRunsAllowed,
-      hits: start.hitsAllowed,
+      hitsAllowed: start.hitsAllowed,
       gamePk: start.gamePk,
     }));
 
