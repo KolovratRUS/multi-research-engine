@@ -11,115 +11,24 @@ import type {
   BacktestPrediction,
   ResearchConstructionReport,
 } from '@/lib/backtesting/types';
+
 import type { HistoricalBacktestOrchestrationResult } from '@/lib/backtesting/orchestrator';
+import {
+  buildFixtureComparison,
+  buildFixtureOrchestrationResult,
+  buildFixturePrediction,
+  FIXTURE_GENERATED_AT,
+} from './helpers/historical-research-export-fixtures';
 
 const FIXTURE_DIR = path.join(__dirname, 'fixtures', 'historical-research-export');
-
-function buildMockPrediction(overrides: Partial<BacktestPrediction> = {}): BacktestPrediction {
-  return {
-    eventId: `event-${overrides.gamePk ?? 1}`,
-    gamePk: overrides.gamePk ?? 1,
-    eventDate: '2024-06-01',
-    homeTeamId: overrides.homeTeamId ?? 1,
-    awayTeamId: overrides.awayTeamId ?? 2,
-    homeTeam: 'Home',
-    awayTeam: 'Away',
-    predictedSide: overrides.predictedSide ?? null,
-    researchStrengthScore: overrides.researchStrengthScore ?? 50,
-    confidence: overrides.confidence ?? 60,
-    dataQuality: overrides.dataQuality ?? 70,
-    volatility: overrides.volatility ?? 'LOW',
-    componentScores: overrides.componentScores ?? {},
-    warnings: overrides.warnings ?? [],
-    modelVersion: overrides.modelVersion ?? 'full-v1',
-    featureVersion: overrides.featureVersion ?? 'feature-v1',
-    generatedAt: new Date('2024-06-01T00:00:00Z'),
-    historicalCutoffTime: new Date('2024-06-01T00:00:00Z'),
-    actualWinner: overrides.actualWinner ?? 'HOME',
-    correct: overrides.correct ?? null,
-    voided: overrides.voided ?? false,
-    abstained: overrides.abstained ?? false,
-    abstentionReason: overrides.abstentionReason,
-    homePitcherAvailable: overrides.homePitcherAvailable ?? true,
-    awayPitcherAvailable: overrides.awayPitcherAvailable ?? true,
-    researchConstructionMode: overrides.researchConstructionMode ?? 'FULL',
-    researchModelVersion: overrides.researchModelVersion ?? 'full-v1',
-    includedEvidenceDomains: overrides.includedEvidenceDomains ?? [],
-    excludedEvidenceDomains: overrides.excludedEvidenceDomains ?? [],
-  };
-}
-
-function buildMockOrchestrationResult(
-  predictions: BacktestPrediction[] = [],
-  abstentions: BacktestPrediction[] = [],
-): HistoricalBacktestOrchestrationResult {
-  return {
-    dateRange: { startDate: '2024-06-01', endDate: '2024-06-03' },
-    requestedDates: ['2024-06-01', '2024-06-02', '2024-06-03'],
-    scheduleRequests: 3,
-    discoveredGames: 2,
-    uniqueGames: 2,
-    duplicateGamesRemoved: 0,
-    firstGameStart: new Date('2024-06-01T16:20:00Z'),
-    lastGameStart: new Date('2024-06-03T19:05:00Z'),
-    games: [],
-    runnerResult: {
-      predictions,
-      abstentions,
-      metrics: {
-        predictionsMade: predictions.filter(p => !p.voided && !p.abstained).length,
-        gamesSkipped: abstentions.length,
-        voids: 0,
-        accuracy: 0,
-        homePickRate: 0,
-        awayPickRate: 0,
-        accuracyByConfidenceBucket: {},
-        accuracyByDataQualityBucket: {},
-        accuracyByVolatilityBucket: {},
-        accuracyWithBothPitchersKnown: null,
-        accuracyWithMissingPitcher: null,
-        accuracyByMonth: {},
-        naiveHomeBaseline: null,
-        naiveRecentBaseline: null,
-        naiveSeasonBaseline: null,
-      },
-    },
-  };
-}
-
-function buildMockComparison(): ResearchConstructionReport {
-  return {
-    totalGames: 2,
-    generatedAtSource: '2024-06-01T00:00:00.000Z',
-    full: { attempts: 2, produced: 1, abstained: 1 },
-    teamOnly: { attempts: 2, produced: 1, abstained: 1 },
-    paired: {
-      bothProduced: 1,
-      fullOnlyProduced: 0,
-      teamOnlyOnlyProduced: 0,
-      bothAbstained: 1,
-      sameSide: 1,
-      differentSide: 0,
-    },
-    scoreComparison: {
-      full: { averageResearchStrengthScore: 55, averageConfidence: 65, averageDataQuality: 75 },
-      teamOnly: { averageResearchStrengthScore: 45, averageConfidence: 55, averageDataQuality: 65 },
-    },
-    volatilityCounts: {
-      full: { LOW: 1, MEDIUM: 0, HIGH: 0 },
-      teamOnly: { LOW: 1, MEDIUM: 0, HIGH: 0 },
-    },
-    warningCounts: { total: 1, full: 0, teamOnly: 1 },
-  };
-}
 
 describe('buildHistoricalResearchExport', () => {
   it('A: exportVersion is stable', () => {
     const result = buildHistoricalResearchExport({
-      orchestrationResult: buildMockOrchestrationResult(),
+      orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'FULL',
       source: 'fixture',
-      generatedAt: new Date('2024-06-01T00:00:00Z'),
+      generatedAt: FIXTURE_GENERATED_AT,
     });
     expect(result.exportVersion).toBe(HISTORICAL_RESEARCH_EXPORT_VERSION);
   });
@@ -127,7 +36,7 @@ describe('buildHistoricalResearchExport', () => {
   it('B: generatedAt uses caller-provided timestamp', () => {
     const timestamp = new Date('2024-05-15T12:30:00Z');
     const result = buildHistoricalResearchExport({
-      orchestrationResult: buildMockOrchestrationResult(),
+      orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'FULL',
       source: 'fixture',
       generatedAt: timestamp,
@@ -137,7 +46,7 @@ describe('buildHistoricalResearchExport', () => {
 
   it('C: predictions and abstentions serialize expected fields', () => {
     const predictions = [
-      buildMockPrediction({
+      buildFixturePrediction({
         gamePk: 1,
         warnings: ['p-warn'],
         includedEvidenceDomains: ['team-offense'],
@@ -145,13 +54,13 @@ describe('buildHistoricalResearchExport', () => {
       }),
     ];
     const abstentions = [
-      buildMockPrediction({ gamePk: 2, abstained: true, warnings: ['a-warn'] }),
+      buildFixturePrediction({ gamePk: 2, abstained: true, warnings: ['a-warn'] }),
     ];
     const result = buildHistoricalResearchExport({
-      orchestrationResult: buildMockOrchestrationResult(predictions, abstentions),
+      orchestrationResult: buildFixtureOrchestrationResult(predictions, abstentions),
       researchConstruction: 'FULL',
       source: 'fixture',
-      generatedAt: new Date('2024-06-01T00:00:00Z'),
+      generatedAt: FIXTURE_GENERATED_AT,
     });
     expect(result.predictions).toHaveLength(1);
     expect(result.abstentions).toHaveLength(1);
@@ -170,12 +79,12 @@ describe('buildHistoricalResearchExport', () => {
   });
 
   it('D: BOTH mode includes comparison report', () => {
-    const comparison = buildMockComparison();
+    const comparison = buildFixtureComparison();
     const result = buildHistoricalResearchExport({
-      orchestrationResult: buildMockOrchestrationResult(),
+      orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'BOTH',
       source: 'fixture',
-      generatedAt: new Date('2024-06-01T00:00:00Z'),
+      generatedAt: FIXTURE_GENERATED_AT,
       comparison,
     });
     expect(result.comparison).toBe(comparison);
@@ -183,29 +92,29 @@ describe('buildHistoricalResearchExport', () => {
 
   it('E: FULL-only mode omits comparison', () => {
     const result = buildHistoricalResearchExport({
-      orchestrationResult: buildMockOrchestrationResult(),
+      orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'FULL',
       source: 'fixture',
-      generatedAt: new Date('2024-06-01T00:00:00Z'),
-      comparison: buildMockComparison(),
+      generatedAt: FIXTURE_GENERATED_AT,
+      comparison: buildFixtureComparison(),
     });
     expect(result.comparison).toBeUndefined();
   });
 
   it('F: TEAM_ONLY-only mode omits comparison', () => {
     const result = buildHistoricalResearchExport({
-      orchestrationResult: buildMockOrchestrationResult(),
+      orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'TEAM_ONLY',
       source: 'fixture',
-      generatedAt: new Date('2024-06-01T00:00:00Z'),
-      comparison: buildMockComparison(),
+      generatedAt: FIXTURE_GENERATED_AT,
+      comparison: buildFixtureComparison(),
     });
     expect(result.comparison).toBeUndefined();
   });
 
   it('G: warnings and evidence domains are preserved', () => {
     const predictions = [
-      buildMockPrediction({
+      buildFixturePrediction({
         gamePk: 1,
         warnings: ['w1'],
         includedEvidenceDomains: ['domain-a'],
@@ -213,13 +122,13 @@ describe('buildHistoricalResearchExport', () => {
       }),
     ];
     const abs = [
-      buildMockPrediction({ gamePk: 2, abstained: true, warnings: ['w2', 'w3'] }),
+      buildFixturePrediction({ gamePk: 2, abstained: true, warnings: ['w2', 'w3'] }),
     ];
     const result = buildHistoricalResearchExport({
-      orchestrationResult: buildMockOrchestrationResult(predictions, abs),
+      orchestrationResult: buildFixtureOrchestrationResult(predictions, abs),
       researchConstruction: 'TEAM_ONLY',
       source: 'fixture',
-      generatedAt: new Date('2024-06-01T00:00:00Z'),
+      generatedAt: FIXTURE_GENERATED_AT,
     });
     expect(result.predictions[0] as ExportedResearchResult).toMatchObject({
       warnings: ['w1'],
@@ -233,10 +142,10 @@ describe('buildHistoricalResearchExport', () => {
 
   it('H: no forbidden odds/probability fields appear in exported object', () => {
     const result = buildHistoricalResearchExport({
-      orchestrationResult: buildMockOrchestrationResult(),
+      orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'FULL',
       source: 'fixture',
-      generatedAt: new Date('2024-06-01T00:00:00Z'),
+      generatedAt: FIXTURE_GENERATED_AT,
     });
     const keys = Object.keys(result);
     const forbidden = ['modelProbability', 'impliedProbability', 'calibratedProbability'];
@@ -249,10 +158,10 @@ describe('buildHistoricalResearchExport', () => {
 
   it('I: object is JSON.stringify-safe', () => {
     const result = buildHistoricalResearchExport({
-      orchestrationResult: buildMockOrchestrationResult(),
+      orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'FULL',
       source: 'fixture',
-      generatedAt: new Date('2024-06-01T00:00:00Z'),
+      generatedAt: FIXTURE_GENERATED_AT,
     });
     const json = JSON.stringify(result);
     const parsed = JSON.parse(json);
@@ -263,21 +172,21 @@ describe('buildHistoricalResearchExport', () => {
 });
 
 describe('historical research export golden files', () => {
-  const generatedAt = new Date('2024-06-01T00:00:00Z');
+  const generatedAt = FIXTURE_GENERATED_AT;
 
   function buildPrediction(overrides: Partial<BacktestPrediction> = {}): BacktestPrediction {
-    return buildMockPrediction(overrides);
+    return buildFixturePrediction(overrides);
   }
 
   function buildOrchestrationResult(
     predictions: BacktestPrediction[] = [],
     abstentions: BacktestPrediction[] = [],
   ): HistoricalBacktestOrchestrationResult {
-    return buildMockOrchestrationResult(predictions, abstentions);
+    return buildFixtureOrchestrationResult(predictions, abstentions);
   }
 
   function buildComparison(): ResearchConstructionReport {
-    return buildMockComparison();
+    return buildFixtureComparison();
   }
 
   it('matches full-export-v1.json golden file', async () => {
