@@ -227,6 +227,85 @@ export const TEAM_ONLY_EXCLUDED_DOMAINS: readonly string[] = [
   EVIDENCE_DOMAIN_WEATHER_ROOF,
 ];
 
+export interface ModeMetrics {
+  readonly predictionsMade: number;
+  readonly abstentions: number;
+  readonly voids: number;
+  readonly accuracy: number | null;
+  readonly homePickRate: number | null;
+  readonly awayPickRate: number | null;
+  readonly averageDataQuality: number | null;
+  readonly averageConfidence: number | null;
+  readonly accuracyWithBothPitchersKnown: number | null;
+  readonly accuracyWithMissingPitcher: number | null;
+}
+
+export interface ConstructionComparisonAgreement {
+  readonly overlappingGamePks: number;
+  readonly agreements: number;
+  readonly agreementRate: number | null;
+}
+
+export interface ConstructionComparison {
+  readonly full: ModeMetrics;
+  readonly teamOnly: ModeMetrics;
+  readonly agreement: ConstructionComparisonAgreement;
+}
+
+export interface ConstructionVolatilityCount {
+  readonly LOW: number;
+  readonly MEDIUM: number;
+  readonly HIGH: number;
+}
+
+export interface ConstructionWarningCounts {
+  readonly total: number;
+  readonly full: number;
+  readonly teamOnly: number;
+}
+
+export interface ConstructionPairedOutcomes {
+  readonly bothProduced: number;
+  readonly fullOnlyProduced: number;
+  readonly teamOnlyOnlyProduced: number;
+  readonly bothAbstained: number;
+  readonly sameSide: number;
+  readonly differentSide: number;
+}
+
+export interface ResearchConstructionReport {
+  readonly totalGames: number;
+  readonly generatedAtSource: string;
+  readonly full: {
+    readonly attempts: number;
+    readonly produced: number;
+    readonly abstained: number;
+  };
+  readonly teamOnly: {
+    readonly attempts: number;
+    readonly produced: number;
+    readonly abstained: number;
+  };
+  readonly paired: ConstructionPairedOutcomes;
+  readonly scoreComparison: {
+    readonly full: {
+      readonly averageResearchStrengthScore: number | null;
+      readonly averageConfidence: number | null;
+      readonly averageDataQuality: number | null;
+    };
+    readonly teamOnly: {
+      readonly averageResearchStrengthScore: number | null;
+      readonly averageConfidence: number | null;
+      readonly averageDataQuality: number | null;
+    };
+  };
+  readonly volatilityCounts: {
+    readonly full: ConstructionVolatilityCount;
+    readonly teamOnly: ConstructionVolatilityCount;
+  };
+  readonly warningCounts: ConstructionWarningCounts;
+}
+
 export type AbstentionReason =
   | 'GAME_NOT_ELIGIBLE'
   | 'BOTH_PITCHERS_UNAVAILABLE'

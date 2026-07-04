@@ -1,4 +1,4 @@
-import type { BacktestPrediction, BacktestMetrics, NaiveBaselineContext } from './types';
+import type { BacktestPrediction, BacktestMetrics, NaiveBaselineContext, ModeMetrics, ConstructionComparison, ConstructionComparisonAgreement, ResearchConstructionReport } from './types';
 
 export function computeBacktestMetrics(
   predictions: BacktestPrediction[],
@@ -114,11 +114,250 @@ export function computeBacktestMetrics(
     accuracyByConfidenceBucket: accuracyByConfidenceBucket,
     accuracyByDataQualityBucket: accuracyByDataQualityBucket,
     accuracyByVolatilityBucket: accuracyByVolatilityBucket,
-    accuracyWithBothPitchersKnown: accuracyWithBothPitchersKnown,
-    accuracyWithMissingPitcher: accuracyWithMissingPitcher,
+    accuracyWithBothPitchersKnown,
+    accuracyWithMissingPitcher,
     accuracyByMonth: accuracyByMonth,
     naiveHomeBaseline,
     naiveRecentBaseline,
     naiveSeasonBaseline,
+  };
+}
+
+function average(
+  items: BacktestPrediction[],
+  valueFn: (p: BacktestPrediction) => number,
+): number | null {
+  if (items.length === 0) return null;
+  return items.reduce((sum, p) => sum + valueFn(p), 0) / items.length;
+}
+
+export function computeModeMetrics(
+  predictions: readonly BacktestPrediction[],
+  abstentions: readonly BacktestPrediction[],
+  mode: 'FULL' | 'TEAM_ONLY',
+  naiveContext?: NaiveBaselineContext,
+): ModeMetrics;
+export function computeModeMetrics(
+  predictions: readonly BacktestPrediction[],
+  abstentions: readonly BacktestPrediction[],
+  mode: 'FULL' | 'TEAM_ONLY',
+  naiveContext?: NaiveBaselineContext,
+): ModeMetrics {
+  const modePredictions = predictions.filter((p) => p.researchConstructionMode === mode);
+  const modeAbstentions = abstentions.filter((p) => p.researchConstructionMode === mode);
+  const metrics = computeBacktestMetrics(modePredictions, naiveContext);
+
+  return {
+    predictionsMade: metrics.predictionsMade,
+    abstentions: modeAbstentions.length,
+    voids: metrics.voids,
+    accuracy: metrics.predictionsMade > 0 ? metrics.accuracy : null,
+    homePickRate: metrics.predictionsMade > 0 ? metrics.homePickRate : null,
+    awayPickRate: metrics.predictionsMade > 0 ? metrics.awayPickRate : null,
+    averageDataQuality: average(modePredictions, (p) => p.dataQuality),
+    averageConfidence: average(modePredictions, (p) => p.confidence),
+    accuracyWithBothPitchersKnown: metrics.accuracyWithBothPitchersKnown,
+    accuracyWithMissingPitcher: metrics.accuracyWithMissingPitcher,
+  };
+}
+
+export function computeConstructionComparison(
+  predictions: readonly BacktestPrediction[],
+  abstentions: readonly BacktestPrediction[],
+  naiveContext?: NaiveBaselineContext,
+): ConstructionComparison {
+  const full = computeModeMetrics(predictions, abstentions, 'FULL', naiveContext);
+  const teamOnly = computeModeMetrics(predictions, abstentions, 'TEAM_ONLY', naiveContext);
+
+  const byGamePk = new Map<number, { full?: 'HOME' | 'AWAY' | null; teamOnly?: 'HOME' | 'AWAY' | null }>();
+  for (const p of predictions) {
+    if (p.abstained) continue;
+    const entry = byGamePk.get(p.gamePk) ?? {};
+    if (p.researchConstructionMode === 'FULL') {
+      entry.full = p.predictedSide;
+    } else if (p.researchConstructionMode === 'TEAM_ONLY') {
+      entry.teamOnly = p.predictedSide;
+    }
+    byGamePk.set(p.gamePk, entry);
+  }
+
+  let overlappingGamePks = 0;
+  let agreements = 0;
+  for (const entry of byGamePk.values()) {
+    if (entry.full !== undefined && entry.teamOnly !== undefined && entry.full !== null && entry.teamOnly !== null) {
+      overlappingGamePks += 1;
+      if (entry.full === entry.teamOnly) {
+        agreements += 1;
+      }
+    }
+  }
+
+  return {
+    full,
+    teamOnly,
+    agreement: {
+      overlappingGamePks,
+      agreements,
+      agreementRate: overlappingGamePks > 0 ? agreements / overlappingGamePks : null,
+    },
+  };
+}
+
+export function computeResearchConstructionReport(
+  predictions: readonly BacktestPrediction[],
+  abstentions: readonly BacktestPrediction[],
+  options?: {
+    generatedAtSource?: string;
+    totalGames?: number;
+  },
+): ResearchConstructionReport {
+  const all = [...predictions, ...abstentions];
+  const generatedAtSource = options?.generatedAtSource ?? 'unknown';
+  const totalGames = options?.totalGames ?? new Set(all.map((p) => p.gamePk)).size;
+
+  const counts = new Map<string, number>();
+  for (const p of all) {
+    const key = `${p.gamePk}:${p.researchConstructionMode}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const duplicates = [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([key]) => key)
+    .sort();
+  if (duplicates.length > 0) {
+    throw new Error(`Duplicate research constructions detected: ${duplicates.join(', ')}`);
+  }
+
+  const full = {
+    attempts: 0,
+    produced: 0,
+    abstained: 0,
+    scoreSum: 0,
+    confidenceSum: 0,
+    dataQualitySum: 0,
+    warnings: 0,
+    volatility: { LOW: 0, MEDIUM: 0, HIGH: 0 } as Record<'LOW' | 'MEDIUM' | 'HIGH', number>,
+  };
+
+  const teamOnly = {
+    attempts: 0,
+    produced: 0,
+    abstained: 0,
+    scoreSum: 0,
+    confidenceSum: 0,
+    dataQualitySum: 0,
+    warnings: 0,
+    volatility: { LOW: 0, MEDIUM: 0, HIGH: 0 } as Record<'LOW' | 'MEDIUM' | 'HIGH', number>,
+  };
+
+  const fullProducedMap = new Map<number, BacktestPrediction>();
+  const teamOnlyProducedMap = new Map<number, BacktestPrediction>();
+  const fullAbstainedSet = new Set<number>();
+  const teamOnlyAbstainedSet = new Set<number>();
+
+  for (const p of all) {
+    const mode = p.researchConstructionMode;
+    const bucket = mode === 'FULL' ? full : teamOnly;
+    bucket.attempts++;
+    if (p.abstained) {
+      bucket.abstained++;
+      if (mode === 'FULL') {
+        fullAbstainedSet.add(p.gamePk);
+      } else {
+        teamOnlyAbstainedSet.add(p.gamePk);
+      }
+    } else {
+      bucket.produced++;
+      bucket.scoreSum += p.researchStrengthScore;
+      bucket.confidenceSum += p.confidence;
+      bucket.dataQualitySum += p.dataQuality;
+      bucket.volatility[p.volatility] = (bucket.volatility[p.volatility] ?? 0) + 1;
+      if (mode === 'FULL') {
+        fullProducedMap.set(p.gamePk, p);
+      } else {
+        teamOnlyProducedMap.set(p.gamePk, p);
+      }
+    }
+    bucket.warnings += p.warnings.length;
+  }
+
+  let bothProduced = 0;
+  let fullOnlyProduced = 0;
+  let teamOnlyOnlyProduced = 0;
+  let bothAbstained = 0;
+  let sameSide = 0;
+  let differentSide = 0;
+
+  const allGamePks = new Set([
+    ...fullProducedMap.keys(),
+    ...teamOnlyProducedMap.keys(),
+    ...fullAbstainedSet,
+    ...teamOnlyAbstainedSet,
+  ]);
+
+  for (const gamePk of allGamePks) {
+    const fullProduced = fullProducedMap.get(gamePk);
+    const teamOnlyProduced = teamOnlyProducedMap.get(gamePk);
+    const fullAbstained = fullAbstainedSet.has(gamePk);
+    const teamOnlyAbstained = teamOnlyAbstainedSet.has(gamePk);
+
+    if (fullProduced && teamOnlyProduced) {
+      bothProduced++;
+      if (fullProduced.predictedSide !== null && teamOnlyProduced.predictedSide !== null) {
+        if (fullProduced.predictedSide === teamOnlyProduced.predictedSide) {
+          sameSide++;
+        } else {
+          differentSide++;
+        }
+      }
+    } else if (fullProduced && !fullAbstained && !teamOnlyProduced && !teamOnlyAbstained) {
+      fullOnlyProduced++;
+    } else if (fullProduced && teamOnlyAbstained && !teamOnlyProduced) {
+      fullOnlyProduced++;
+    } else if (teamOnlyProduced && !fullProduced && !fullAbstained && !teamOnlyAbstained) {
+      teamOnlyOnlyProduced++;
+    } else if (teamOnlyProduced && fullAbstained && !fullProduced) {
+      teamOnlyOnlyProduced++;
+    } else if (fullAbstained && teamOnlyAbstained) {
+      bothAbstained++;
+    }
+  }
+
+  const avg = (produced: number, sum: number) => (produced > 0 ? sum / produced : null);
+
+  return {
+    totalGames,
+    generatedAtSource,
+    full: { attempts: full.attempts, produced: full.produced, abstained: full.abstained },
+    teamOnly: { attempts: teamOnly.attempts, produced: teamOnly.produced, abstained: teamOnly.abstained },
+    paired: {
+      bothProduced,
+      fullOnlyProduced,
+      teamOnlyOnlyProduced,
+      bothAbstained,
+      sameSide,
+      differentSide,
+    },
+    scoreComparison: {
+      full: {
+        averageResearchStrengthScore: avg(full.produced, full.scoreSum),
+        averageConfidence: avg(full.produced, full.confidenceSum),
+        averageDataQuality: avg(full.produced, full.dataQualitySum),
+      },
+      teamOnly: {
+        averageResearchStrengthScore: avg(teamOnly.produced, teamOnly.scoreSum),
+        averageConfidence: avg(teamOnly.produced, teamOnly.confidenceSum),
+        averageDataQuality: avg(teamOnly.produced, teamOnly.dataQualitySum),
+      },
+    },
+    volatilityCounts: {
+      full: { ...full.volatility } as { LOW: number; MEDIUM: number; HIGH: number },
+      teamOnly: { ...teamOnly.volatility } as { LOW: number; MEDIUM: number; HIGH: number },
+    },
+    warningCounts: {
+      total: full.warnings + teamOnly.warnings,
+      full: full.warnings,
+      teamOnly: teamOnly.warnings,
+    },
   };
 }

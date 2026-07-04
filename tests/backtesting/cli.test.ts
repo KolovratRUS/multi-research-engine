@@ -187,8 +187,8 @@ function orchestrateMockResultWithRunnerParts(
     lastGameStart: new Date('2024-06-01T19:05:00Z'),
     games: [],
     runnerResult: {
-      predictions: predictions.map((item) => ({ ...basePrediction, warnings: [...item.warnings] })),
-      abstentions: abstentions.map((item) => ({ ...baseAbstention, warnings: [...item.warnings] })),
+      predictions: predictions.map((item, index) => ({ ...basePrediction, gamePk: index + 1, warnings: [...item.warnings] })),
+      abstentions: abstentions.map((item, index) => ({ ...baseAbstention, gamePk: predictions.length + index + 1, warnings: [...item.warnings] })),
       metrics: {
         predictionsMade: predictions.length,
         gamesSkipped: 0,
@@ -1237,5 +1237,286 @@ describe('runMLBBacktestCLI', () => {
     expect(parsed.predictions).toHaveLength(0);
     expect(parsed.abstentions).toHaveLength(1);
     expect(parsed.runner.warningCount).toBe(1);
+  });
+
+  it('both mode JSON output includes per-mode comparison', async () => {
+    const basePrediction = buildMockPrediction();
+    const mockResult = {
+      dateRange: { startDate: '2024-06-01', endDate: '2024-06-01' },
+      requestedDates: ['2024-06-01'],
+      scheduleRequests: 1,
+      discoveredGames: 2,
+      uniqueGames: 2,
+      duplicateGamesRemoved: 0,
+      firstGameStart: new Date('2024-06-01T16:20:00Z'),
+      lastGameStart: new Date('2024-06-01T19:05:00Z'),
+      games: [],
+      runnerResult: {
+        predictions: [
+          {
+            ...basePrediction,
+            gamePk: 1,
+            predictedSide: 'HOME',
+            correct: true,
+            researchConstructionMode: 'FULL',
+            dataQuality: 80,
+            confidence: 90,
+            warnings: ['p-warn-1'],
+          },
+          {
+            ...basePrediction,
+            gamePk: 1,
+            predictedSide: 'HOME',
+            correct: true,
+            researchConstructionMode: 'TEAM_ONLY',
+            dataQuality: 70,
+            confidence: 70,
+            warnings: ['t-warn-1'],
+          },
+          {
+            ...basePrediction,
+            gamePk: 2,
+            predictedSide: 'AWAY',
+            correct: false,
+            researchConstructionMode: 'FULL',
+            dataQuality: 60,
+            confidence: 50,
+            volatility: 'HIGH',
+            warnings: ['p-warn-2'],
+          },
+        ],
+        abstentions: [
+          {
+            ...basePrediction,
+            abstained: true,
+            abstentionReason: 'BOTH_PITCHERS_UNAVAILABLE',
+            researchConstructionMode: 'FULL',
+            gamePk: 3,
+            warnings: ['a-warn-1'],
+          },
+        ],
+        metrics: {
+          predictionsMade: 3,
+          gamesSkipped: 1,
+          voids: 0,
+          accuracy: 2 / 3,
+          homePickRate: 1 / 3,
+          awayPickRate: 2 / 3,
+          accuracyByConfidenceBucket: {},
+          accuracyByDataQualityBucket: {},
+          accuracyByVolatilityBucket: {},
+          accuracyWithBothPitchersKnown: null,
+          accuracyWithMissingPitcher: null,
+          accuracyByMonth: {},
+          naiveHomeBaseline: null,
+          naiveRecentBaseline: null,
+          naiveSeasonBaseline: null,
+        },
+      },
+    };
+
+    const mockOrchestrate = vi.fn().mockResolvedValue(mockResult);
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(
+      ['--date', '2024-06-01', '--output', 'json', '--research-construction', 'both'],
+      io,
+      deps,
+    );
+    expect(code).toBe(0);
+    const parsed = JSON.parse(mockStdout[0]);
+    expect(parsed.runner.researchConstruction.fullResearchProduced).toBe(2);
+    expect(parsed.runner.researchConstruction.teamOnlyResearchProduced).toBe(1);
+    expect(parsed.runner.researchConstruction.comparison.paired.fullOnlyProduced).toBe(1);
+    expect(parsed.runner.researchConstruction.comparison.paired.teamOnlyOnlyProduced).toBe(0);
+    expect(parsed.runner.researchConstruction.comparison.paired.bothProduced).toBe(1);
+    expect(parsed.runner.researchConstruction.comparison.paired.bothAbstained).toBe(0);
+    expect(parsed.runner.researchConstruction.comparison.paired.sameSide).toBe(1);
+    expect(parsed.runner.researchConstruction.comparison.paired.differentSide).toBe(0);
+    expect(parsed.runner.researchConstruction.comparison.volatilityCounts.full.HIGH).toBe(1);
+    expect(parsed.runner.researchConstruction.comparison.warningCounts.total).toBe(4);
+  });
+
+  it('both mode JSON output omits comparison for non-both mode', async () => {
+    const basePrediction = buildMockPrediction();
+    const mockResult = {
+      dateRange: { startDate: '2024-06-01', endDate: '2024-06-01' },
+      requestedDates: ['2024-06-01'],
+      scheduleRequests: 1,
+      discoveredGames: 2,
+      uniqueGames: 2,
+      duplicateGamesRemoved: 0,
+      firstGameStart: new Date('2024-06-01T16:20:00Z'),
+      lastGameStart: new Date('2024-06-01T19:05:00Z'),
+      games: [],
+      runnerResult: {
+        predictions: [
+          {
+            ...basePrediction,
+            gamePk: 1,
+            predictedSide: 'HOME',
+            correct: true,
+            researchConstructionMode: 'FULL',
+          },
+        ],
+        abstentions: [],
+        metrics: {
+          predictionsMade: 1,
+          gamesSkipped: 0,
+          voids: 0,
+          accuracy: 1,
+          homePickRate: 1,
+          awayPickRate: 0,
+          accuracyByConfidenceBucket: {},
+          accuracyByDataQualityBucket: {},
+          accuracyByVolatilityBucket: {},
+          accuracyWithBothPitchersKnown: null,
+          accuracyWithMissingPitcher: null,
+          accuracyByMonth: {},
+          naiveHomeBaseline: null,
+          naiveRecentBaseline: null,
+          naiveSeasonBaseline: null,
+        },
+      },
+    };
+
+    const mockOrchestrate = vi.fn().mockResolvedValue(mockResult);
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(
+      ['--date', '2024-06-01', '--output', 'json'],
+      io,
+      deps,
+    );
+    expect(code).toBe(0);
+    const parsed = JSON.parse(mockStdout[0]);
+    expect(parsed.runner.researchConstruction.comparison).toBeUndefined();
+    expect(parsed.runner.researchConstruction.fullResearchProduced).toBe(1);
+    expect(parsed.runner.researchConstruction.teamOnlyResearchProduced).toBe(0);
+  });
+
+  it('both mode text output includes comparison section', async () => {
+    const basePrediction = buildMockPrediction();
+    const mockResult = {
+      dateRange: { startDate: '2024-06-01', endDate: '2024-06-01' },
+      requestedDates: ['2024-06-01'],
+      scheduleRequests: 1,
+      discoveredGames: 2,
+      uniqueGames: 2,
+      duplicateGamesRemoved: 0,
+      firstGameStart: new Date('2024-06-01T16:20:00Z'),
+      lastGameStart: new Date('2024-06-01T19:05:00Z'),
+      games: [],
+      runnerResult: {
+        predictions: [
+          {
+            ...basePrediction,
+            gamePk: 1,
+            predictedSide: 'HOME',
+            correct: true,
+            researchConstructionMode: 'FULL',
+            dataQuality: 80,
+            confidence: 90,
+          },
+          {
+            ...basePrediction,
+            gamePk: 1,
+            predictedSide: 'HOME',
+            correct: true,
+            researchConstructionMode: 'TEAM_ONLY',
+            dataQuality: 70,
+            confidence: 70,
+          },
+        ],
+        abstentions: [],
+        metrics: {
+          predictionsMade: 2,
+          gamesSkipped: 0,
+          voids: 0,
+          accuracy: 1,
+          homePickRate: 1,
+          awayPickRate: 0,
+          accuracyByConfidenceBucket: {},
+          accuracyByDataQualityBucket: {},
+          accuracyByVolatilityBucket: {},
+          accuracyWithBothPitchersKnown: null,
+          accuracyWithMissingPitcher: null,
+          accuracyByMonth: {},
+          naiveHomeBaseline: null,
+          naiveRecentBaseline: null,
+          naiveSeasonBaseline: null,
+        },
+      },
+    };
+
+    const mockOrchestrate = vi.fn().mockResolvedValue(mockResult);
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(
+      ['--date', '2024-06-01', '--output', 'text', '--research-construction', 'both'],
+      io,
+      deps,
+    );
+    expect(code).toBe(0);
+    const output = mockStdout.join('\n');
+    expect(output).toContain('Research Construction Comparison');
+    expect(output).toContain('both produced=1');
+    expect(output).toContain('both abstained=0');
+    expect(output).toContain('same-side=1');
+    expect(output).toContain('different-side=0');
+    expect(output).toContain('full avg strength=0.0');
+    expect(output).toContain('team-only avg strength=0.0');
+  });
+
+  it('non-both mode text output omits comparison section', async () => {
+    const basePrediction = buildMockPrediction();
+    const mockResult = {
+      dateRange: { startDate: '2024-06-01', endDate: '2024-06-01' },
+      requestedDates: ['2024-06-01'],
+      scheduleRequests: 1,
+      discoveredGames: 1,
+      uniqueGames: 1,
+      duplicateGamesRemoved: 0,
+      firstGameStart: new Date('2024-06-01T16:20:00Z'),
+      lastGameStart: new Date('2024-06-01T19:05:00Z'),
+      games: [],
+      runnerResult: {
+        predictions: [
+          {
+            ...basePrediction,
+            gamePk: 1,
+            predictedSide: 'HOME',
+            correct: true,
+            researchConstructionMode: 'FULL',
+          },
+        ],
+        abstentions: [],
+        metrics: {
+          predictionsMade: 1,
+          gamesSkipped: 0,
+          voids: 0,
+          accuracy: 1,
+          homePickRate: 1,
+          awayPickRate: 0,
+          accuracyByConfidenceBucket: {},
+          accuracyByDataQualityBucket: {},
+          accuracyByVolatilityBucket: {},
+          accuracyWithBothPitchersKnown: null,
+          accuracyWithMissingPitcher: null,
+          accuracyByMonth: {},
+          naiveHomeBaseline: null,
+          naiveRecentBaseline: null,
+          naiveSeasonBaseline: null,
+        },
+      },
+    };
+
+    const mockOrchestrate = vi.fn().mockResolvedValue(mockResult);
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const code = await runMLBBacktestCLI(['--date', '2024-06-01', '--output', 'text'], io, deps);
+    expect(code).toBe(0);
+    const output = mockStdout.join('\n');
+    expect(output).not.toContain('Comparison');
   });
 });

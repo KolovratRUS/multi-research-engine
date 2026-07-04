@@ -22,6 +22,8 @@ import type {
   CacheStats,
 } from '@/lib/backtesting/mlb/live-history/types';
 import type { RunnerContext } from '@/lib/backtesting/runner';
+import type { ConstructionComparison, ModeMetrics, ResearchConstructionReport } from '@/lib/backtesting/types';
+import { computeResearchConstructionReport } from '@/lib/backtesting/metrics';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -505,6 +507,7 @@ interface JSONSerializedResult {
       readonly teamOnlyResearchAttempts: number;
       readonly teamOnlyResearchProduced: number;
       readonly teamOnlyResearchAbstained: number;
+      readonly comparison?: ResearchConstructionReport;
     };
   };
   readonly predictions: readonly SerializedPredictionForJSON[];
@@ -627,6 +630,14 @@ interface SerializableResultInput {
   readonly games: readonly HistoricalMLBGame[];
 }
 
+function formatNullable(value: number | null, digits = 1): string {
+  return value !== null ? value.toFixed(digits) : 'n/a';
+}
+
+function formatNullablePercent(value: number | null): string {
+  return value !== null ? `${(value * 100).toFixed(1)}%` : 'n/a';
+}
+
 function countWarnings(
   predictions: readonly { readonly warnings: readonly string[] }[],
   abstentions: readonly { readonly warnings: readonly string[] }[],
@@ -639,19 +650,32 @@ function countWarnings(
 
 function buildResearchConstructionDiagnostics(
   result: Readonly<{ readonly predictions: readonly BacktestPrediction[]; readonly abstentions: readonly BacktestPrediction[] }>,
-) {
+): {
+  readonly fullResearchAttempts: number;
+  readonly fullResearchProduced: number;
+  readonly fullResearchAbstained: number;
+  readonly teamOnlyResearchAttempts: number;
+  readonly teamOnlyResearchProduced: number;
+  readonly teamOnlyResearchAbstained: number;
+  readonly comparison?: ResearchConstructionReport;
+} {
   const fullPredictions = result.predictions.filter((p) => p.researchConstructionMode === 'FULL' && !p.abstained);
   const teamOnlyPredictions = result.predictions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY' && !p.abstained);
   const fullAbstentions = result.abstentions.filter((p) => p.researchConstructionMode === 'FULL');
   const teamOnlyAbstentions = result.abstentions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY');
 
   return {
-    fullResearchAttempts: result.predictions.filter((p) => p.researchConstructionMode === 'FULL').length + result.abstentions.filter((p) => p.researchConstructionMode === 'FULL').length,
+    fullResearchAttempts:
+      result.predictions.filter((p) => p.researchConstructionMode === 'FULL').length +
+      result.abstentions.filter((p) => p.researchConstructionMode === 'FULL').length,
     fullResearchProduced: fullPredictions.length,
     fullResearchAbstained: fullAbstentions.length,
-    teamOnlyResearchAttempts: result.predictions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY').length + result.abstentions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY').length,
+    teamOnlyResearchAttempts:
+      result.predictions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY').length +
+      result.abstentions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY').length,
     teamOnlyResearchProduced: teamOnlyPredictions.length,
     teamOnlyResearchAbstained: teamOnlyAbstentions.length,
+    comparison: computeResearchConstructionReport(result.predictions, result.abstentions),
   };
 }
 
@@ -659,6 +683,7 @@ function serializeJSONResult(
   result: SerializableResultInput,
   source: 'fixture' | 'live',
   diagnostics?: LiveCLIDiagnostics,
+  researchConstruction?: 'FULL' | 'TEAM_ONLY' | 'BOTH',
 ): JSONSerializedResult {
   const predictions = result.runnerResult.predictions;
   const abstentions = result.runnerResult.abstentions;
@@ -670,6 +695,7 @@ function serializeJSONResult(
       : null;
   const warningCount = countWarnings(predictions, abstentions);
 
+  const researchDiagnostics = buildResearchConstructionDiagnostics(result.runnerResult);
   return {
     meta: {
       source,
@@ -699,7 +725,10 @@ function serializeJSONResult(
       accuracyWithMissingPitcher: metrics.accuracyWithMissingPitcher,
       averageDataQuality: avgDataQuality,
       warningCount,
-      researchConstruction: buildResearchConstructionDiagnostics(result.runnerResult),
+      researchConstruction: (() => {
+        const { comparison, ...rest } = researchDiagnostics;
+        return researchConstruction === 'BOTH' && comparison ? { ...rest, comparison } : { ...rest };
+      })(),
     },
     ...(source === 'live' && diagnostics ? { provider: diagnostics.provider } : {}),
     ...(source === 'live' && diagnostics ? { http: diagnostics.http } : {}),
@@ -782,6 +811,27 @@ function printTextResult(
     );
     lines.push(
       `  Team-only attempts: ${researchDiagnostics.teamOnlyResearchAttempts}, produced: ${researchDiagnostics.teamOnlyResearchProduced}, abstained: ${researchDiagnostics.teamOnlyResearchAbstained}`,
+    );
+  }
+
+  if (researchConstruction === 'BOTH' && researchDiagnostics.comparison) {
+    const comp = researchDiagnostics.comparison;
+    lines.push('');
+    lines.push('Research Construction Comparison');
+    lines.push(
+      `  Paired: both produced=${comp.paired.bothProduced}, both abstained=${comp.paired.bothAbstained}, full-only produced=${comp.paired.fullOnlyProduced}, team-only-only produced=${comp.paired.teamOnlyOnlyProduced}, same-side=${comp.paired.sameSide}, different-side=${comp.paired.differentSide}`,
+    );
+    lines.push(
+      `  VOLATILITY FULL: LOW=${comp.volatilityCounts.full.LOW}, MEDIUM=${comp.volatilityCounts.full.MEDIUM}, HIGH=${comp.volatilityCounts.full.HIGH}, TEAM_ONLY: LOW=${comp.volatilityCounts.teamOnly.LOW}, MEDIUM=${comp.volatilityCounts.teamOnly.MEDIUM}, HIGH=${comp.volatilityCounts.teamOnly.HIGH}`,
+    );
+    lines.push(
+      `  WARNINGS: total=${comp.warningCounts.total}, full=${comp.warningCounts.full}, team-only=${comp.warningCounts.teamOnly}`,
+    );
+    lines.push(
+      `  SCORES: full avg strength=${formatNullable(comp.scoreComparison.full.averageResearchStrengthScore)}, confidence=${formatNullable(comp.scoreComparison.full.averageConfidence)}, dataQuality=${formatNullable(comp.scoreComparison.full.averageDataQuality)}`,
+    );
+    lines.push(
+      `         team-only avg strength=${formatNullable(comp.scoreComparison.teamOnly.averageResearchStrengthScore)}, confidence=${formatNullable(comp.scoreComparison.teamOnly.averageConfidence)}, dataQuality=${formatNullable(comp.scoreComparison.teamOnly.averageDataQuality)}`,
     );
   }
 
@@ -949,9 +999,9 @@ export async function runMLBBacktestCLI(
     }
 
     if (parsed.output === 'json') {
-      stdout(JSON.stringify(serializeJSONResult(result, parsed.source, diagnostics), null, 2));
+      stdout(JSON.stringify(serializeJSONResult(result, parsed.source, diagnostics, parsed.researchConstruction), null, 2));
     } else {
-      stdout(printTextResult(result, parsed.source, diagnostics));
+      stdout(printTextResult(result, parsed.source, diagnostics, parsed.researchConstruction));
     }
 
     return 0;
