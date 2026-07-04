@@ -3,6 +3,7 @@ import type {
   ResearchConstructionReport,
 } from './types';
 import type { HistoricalBacktestOrchestrationResult } from './orchestrator';
+import crypto from 'node:crypto';
 
 export const HISTORICAL_RESEARCH_EXPORT_VERSION = 'historical-research-export-v1';
 
@@ -38,8 +39,33 @@ export interface ExportedResearchResult {
   readonly excludedEvidenceDomains: readonly string[];
 }
 
+export interface HistoricalResearchExportManifest {
+  readonly exportId: string;
+  readonly exportVersion: typeof HISTORICAL_RESEARCH_EXPORT_VERSION;
+  readonly generatedAt: string;
+  readonly source: 'fixture' | 'live';
+  readonly researchConstruction: 'FULL' | 'TEAM_ONLY' | 'BOTH';
+  readonly dateRange: {
+    readonly startDate: string;
+    readonly endDate: string;
+  };
+  readonly requestedDateCount: number;
+  readonly resultCounts: {
+    readonly predictions: number;
+    readonly abstentions: number;
+    readonly warnings: number;
+  };
+  readonly comparisonIncluded: boolean;
+  readonly evidenceDomainSummary: {
+    readonly included: readonly string[];
+    readonly excluded: readonly string[];
+  };
+  readonly warningSummary: readonly string[];
+}
+
 export interface HistoricalResearchExport {
   readonly exportVersion: typeof HISTORICAL_RESEARCH_EXPORT_VERSION;
+  readonly manifest: HistoricalResearchExportManifest;
   readonly generatedAt: string;
   readonly source: 'fixture' | 'live';
   readonly dateRange: {
@@ -98,13 +124,74 @@ function serializePrediction(prediction: BacktestPrediction): ExportedResearchRe
 }
 
 function countWarnings(
-  predictions: readonly BacktestPrediction[],
-  abstentions: readonly BacktestPrediction[],
+  predictions: readonly ExportedResearchResult[],
+  abstentions: readonly ExportedResearchResult[],
 ): number {
   return (
     predictions.reduce((sum, item) => sum + item.warnings.length, 0) +
     abstentions.reduce((sum, item) => sum + item.warnings.length, 0)
   );
+}
+
+function buildEvidenceDomainAndWarningSummary(
+  predictions: readonly ExportedResearchResult[],
+  abstentions: readonly ExportedResearchResult[],
+): { included: readonly string[]; excluded: readonly string[]; warningSummary: readonly string[] } {
+  const included = new Set<string>();
+  const excluded = new Set<string>();
+  const warningSummary = new Set<string>();
+
+  for (const item of [...predictions, ...abstentions]) {
+    for (const domain of item.includedEvidenceDomains) {
+      included.add(domain);
+    }
+    for (const domain of item.excludedEvidenceDomains) {
+      excluded.add(domain);
+    }
+    for (const warning of item.warnings) {
+      warningSummary.add(warning);
+    }
+  }
+
+  return {
+    included: Object.freeze([...included].sort()),
+    excluded: Object.freeze([...excluded].sort()),
+    warningSummary: Object.freeze([...warningSummary].sort()),
+  };
+}
+
+function buildExportId(seed: {
+  readonly exportVersion: typeof HISTORICAL_RESEARCH_EXPORT_VERSION;
+  readonly source: 'fixture' | 'live';
+  readonly researchConstruction: 'FULL' | 'TEAM_ONLY' | 'BOTH';
+  readonly dateRange: { readonly startDate: string; readonly endDate: string };
+  readonly requestedDateCount: number;
+  readonly resultCounts: { readonly predictions: number; readonly abstentions: number; readonly warnings: number };
+  readonly comparisonIncluded: boolean;
+  readonly evidenceDomainSummary: { readonly included: readonly string[]; readonly excluded: readonly string[] };
+  readonly warningSummary: readonly string[];
+}): string {
+  const seedString = [
+    seed.exportVersion,
+    seed.source,
+    seed.researchConstruction,
+    `${seed.dateRange.startDate}..${seed.dateRange.endDate}`,
+    `${seed.requestedDateCount}d`,
+    `${seed.resultCounts.predictions}p`,
+    `${seed.resultCounts.abstentions}a`,
+    `${seed.resultCounts.warnings}w`,
+    seed.comparisonIncluded ? 'cmp' : 'nocmp',
+    [...seed.evidenceDomainSummary.included].sort().join('|'),
+    [...seed.evidenceDomainSummary.excluded].sort().join('|'),
+    [...seed.warningSummary].sort().join('|'),
+  ].join(':');
+
+  const hash = crypto
+    .createHash('sha256')
+    .update(seedString, 'utf8')
+    .digest('hex')
+    .slice(0, 12);
+  return `historical-research-export-v1:${hash}`;
 }
 
 export function buildHistoricalResearchExport(params: {
@@ -115,19 +202,67 @@ export function buildHistoricalResearchExport(params: {
   readonly comparison?: ResearchConstructionReport;
 }): HistoricalResearchExport {
   const { orchestrationResult, researchConstruction, source, generatedAt, comparison } = params;
-  const predictions = orchestrationResult.runnerResult.predictions;
-  const abstentions = orchestrationResult.runnerResult.abstentions;
-  const predictionsMade = predictions.filter((p: BacktestPrediction) => !p.voided && !p.abstained).length;
-  const warningCount = countWarnings(predictions, abstentions);
+  const rawPredictions = orchestrationResult.runnerResult.predictions;
+  const rawAbstentions = orchestrationResult.runnerResult.abstentions;
+  const predictionsMade = rawPredictions.filter((p: BacktestPrediction) => !p.voided && !p.abstained).length;
 
-  const exportObj: HistoricalResearchExport = {
+  const predictions = Object.freeze(rawPredictions.map(serializePrediction));
+  const abstentions = Object.freeze(rawAbstentions.map(serializePrediction));
+
+  const totalWarnings = countWarnings(predictions, abstentions);
+  const { included, excluded, warningSummary } = buildEvidenceDomainAndWarningSummary(predictions, abstentions);
+  const comparisonIncluded = Boolean(researchConstruction === 'BOTH' && comparison);
+
+  const manifest: HistoricalResearchExportManifest = {
+    exportId: buildExportId({
+      exportVersion: HISTORICAL_RESEARCH_EXPORT_VERSION,
+      source,
+      researchConstruction,
+      dateRange: {
+        startDate: orchestrationResult.dateRange.startDate,
+        endDate: orchestrationResult.dateRange.endDate,
+      },
+      requestedDateCount: orchestrationResult.requestedDates.length,
+      resultCounts: {
+        predictions: predictions.length,
+        abstentions: abstentions.length,
+        warnings: totalWarnings,
+      },
+      comparisonIncluded,
+      evidenceDomainSummary: { included, excluded },
+      warningSummary,
+    }),
     exportVersion: HISTORICAL_RESEARCH_EXPORT_VERSION,
     generatedAt: generatedAt.toISOString(),
     source,
-    dateRange: Object.freeze({
+    researchConstruction,
+    dateRange: {
       startDate: orchestrationResult.dateRange.startDate,
       endDate: orchestrationResult.dateRange.endDate,
-    }),
+    },
+    requestedDateCount: orchestrationResult.requestedDates.length,
+    resultCounts: {
+      predictions: predictions.length,
+      abstentions: abstentions.length,
+      warnings: totalWarnings,
+    },
+    comparisonIncluded,
+    evidenceDomainSummary: {
+      included,
+      excluded,
+    },
+    warningSummary,
+  };
+
+  const exportObj: HistoricalResearchExport = {
+    exportVersion: HISTORICAL_RESEARCH_EXPORT_VERSION,
+    manifest,
+    generatedAt: generatedAt.toISOString(),
+    source,
+    dateRange: {
+      startDate: orchestrationResult.dateRange.startDate,
+      endDate: orchestrationResult.dateRange.endDate,
+    },
     requestedDates: Object.freeze([...orchestrationResult.requestedDates]),
     researchConstruction,
     runSummary: Object.freeze({
@@ -137,11 +272,11 @@ export function buildHistoricalResearchExport(params: {
       duplicateGamesRemoved: orchestrationResult.duplicateGamesRemoved,
       predictionsMade,
       abstentions: abstentions.length,
-      warningCount,
+      warningCount: totalWarnings,
     }),
-    ...(researchConstruction === 'BOTH' && comparison ? { comparison } : {}),
-    predictions: Object.freeze(predictions.map(serializePrediction)),
-    abstentions: Object.freeze(abstentions.map(serializePrediction)),
+    ...(comparisonIncluded ? { comparison } : {}),
+    predictions,
+    abstentions,
   };
 
   return Object.freeze(exportObj);

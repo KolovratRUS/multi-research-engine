@@ -1,5 +1,31 @@
 {
   "exportVersion": "historical-research-export-v1",
+  "manifest": {
+    "exportId": "historical-research-export-v1:490fdbb1871a",
+    "exportVersion": "historical-research-export-v1",
+    "generatedAt": "2024-06-01T00:00:00.000Z",
+    "source": "fixture",
+    "researchConstruction": "TEAM_ONLY",
+    "dateRange": {
+      "startDate": "2024-06-01",
+      "endDate": "2024-06-03"
+    },
+    "requestedDateCount": 3,
+    "resultCounts": {
+      "predictions": 0,
+      "abstentions": 1,
+      "warnings": 2
+    },
+    "comparisonIncluded": false,
+    "evidenceDomainSummary": {
+      "included": [],
+      "excluded": []
+    },
+    "warningSummary": [
+      "abs-warn-1",
+      "abs-warn-2"
+    ]
+  },
   "generatedAt": "2024-06-01T00:00:00.000Z",
   "source": "fixture",
   "dateRange": {

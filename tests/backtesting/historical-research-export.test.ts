@@ -1,17 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { promises as fs } from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import {
   buildHistoricalResearchExport,
   HISTORICAL_RESEARCH_EXPORT_VERSION,
   type HistoricalResearchExport,
   type ExportedResearchResult,
+  type HistoricalResearchExportManifest,
 } from '@/lib/backtesting/historical-research-export';
 import type {
   BacktestPrediction,
   ResearchConstructionReport,
 } from '@/lib/backtesting/types';
-
 import type { HistoricalBacktestOrchestrationResult } from '@/lib/backtesting/orchestrator';
 import {
   buildFixtureComparison,
@@ -23,7 +24,197 @@ import {
 const FIXTURE_DIR = path.join(__dirname, 'fixtures', 'historical-research-export');
 
 describe('buildHistoricalResearchExport', () => {
-  it('A: exportVersion is stable', () => {
+  it('A: manifest exists and mirrors export metadata', () => {
+    const result = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    const manifest = result.manifest as HistoricalResearchExportManifest;
+    expect(manifest).toBeDefined();
+    expect(manifest.exportId).toBe(result.manifest.exportId);
+    expect(manifest.exportVersion).toBe(HISTORICAL_RESEARCH_EXPORT_VERSION);
+    expect(manifest.generatedAt).toBe(result.generatedAt);
+    expect(manifest.source).toBe(result.source);
+    expect(manifest.researchConstruction).toBe(result.researchConstruction);
+    expect(manifest.dateRange.startDate).toBe(result.dateRange.startDate);
+    expect(manifest.dateRange.endDate).toBe(result.dateRange.endDate);
+    expect(manifest.requestedDateCount).toBe(result.requestedDates.length);
+    expect(manifest.resultCounts.predictions).toBe(result.predictions.length);
+    expect(manifest.resultCounts.abstentions).toBe(result.abstentions.length);
+    expect(manifest.resultCounts.warnings).toBe(result.runSummary.warningCount);
+    expect(manifest.comparisonIncluded).toBe(Boolean(result.comparison));
+  });
+
+  it('B: exportId is deterministic for identical inputs', () => {
+    const a = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    const b = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    expect(a.manifest.exportId).toBe(b.manifest.exportId);
+  });
+
+  it('C: exportId changes when construction/date range/counts change', () => {
+    const base = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult([
+        buildFixturePrediction({ gamePk: 1, warnings: ['x'], includedEvidenceDomains: ['a'], excludedEvidenceDomains: ['b'] }),
+      ]),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+
+    const changedConstruction = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult([
+        buildFixturePrediction({ gamePk: 1, warnings: ['x'], includedEvidenceDomains: ['a'], excludedEvidenceDomains: ['b'] }),
+      ]),
+      researchConstruction: 'TEAM_ONLY',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    expect(changedConstruction.manifest.exportId).not.toBe(base.manifest.exportId);
+
+    const changedComparison = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult([
+        buildFixturePrediction({ gamePk: 1, warnings: ['x'], includedEvidenceDomains: ['a'], excludedEvidenceDomains: ['b'] }),
+      ]),
+      researchConstruction: 'BOTH',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+      comparison: buildFixtureComparison(),
+    });
+    expect(changedComparison.manifest.exportId).not.toBe(base.manifest.exportId);
+  });
+
+  it('D: resultCounts reflect predictions, abstentions, warnings', () => {
+    const predictions = [
+      buildFixturePrediction({ gamePk: 1, warnings: ['p1', 'p2'] }),
+    ];
+    const abstentions = [
+      buildFixturePrediction({ gamePk: 2, abstained: true, warnings: ['a1'] }),
+    ];
+    const result = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(predictions, abstentions),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    const counts = result.manifest.resultCounts;
+    expect(counts.predictions).toBe(1);
+    expect(counts.abstentions).toBe(1);
+    expect(counts.warnings).toBe(3);
+  });
+
+  it('E: comparisonIncluded true for BOTH with comparison', () => {
+    const result = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(),
+      researchConstruction: 'BOTH',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+      comparison: buildFixtureComparison(),
+    });
+    expect(result.manifest.comparisonIncluded).toBe(true);
+  });
+
+  it('F: comparisonIncluded false for FULL and TEAM_ONLY without comparison', () => {
+    const full = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+      comparison: buildFixtureComparison(),
+    });
+    expect(full.manifest.comparisonIncluded).toBe(false);
+
+    const teamOnly = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(),
+      researchConstruction: 'TEAM_ONLY',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+      comparison: buildFixtureComparison(),
+    });
+    expect(teamOnly.manifest.comparisonIncluded).toBe(false);
+
+    const both = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(),
+      researchConstruction: 'BOTH',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    expect(both.manifest.comparisonIncluded).toBe(false);
+  });
+
+  it('G: evidenceDomainSummary is sorted unique across predictions and abstentions', () => {
+    const predictions = [
+      buildFixturePrediction({ gamePk: 1, includedEvidenceDomains: ['b'], excludedEvidenceDomains: ['B'] }),
+    ];
+    const abstentions = [
+      buildFixturePrediction({ gamePk: 2, abstained: true, includedEvidenceDomains: ['a', 'b'], excludedEvidenceDomains: ['A'] }),
+    ];
+    const result = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(predictions, abstentions),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    expect(result.manifest.evidenceDomainSummary.included).toEqual(['a', 'b']);
+    expect(result.manifest.evidenceDomainSummary.excluded).toEqual(['A', 'B']);
+  });
+
+  it('H: warningSummary is sorted unique across predictions and abstentions', () => {
+    const predictions = [
+      buildFixturePrediction({ gamePk: 1, warnings: ['z', 'a'] }),
+    ];
+    const abstentions = [
+      buildFixturePrediction({ gamePk: 2, abstained: true, warnings: ['a', 'm'] }),
+    ];
+    const result = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(predictions, abstentions),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    expect(result.manifest.warningSummary).toEqual(['a', 'm', 'z']);
+    expect(result.manifest.resultCounts.warnings).toBe(4);
+  });
+
+  it('I: manifest contains no forbidden odds/probability fields', () => {
+    const result = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    const manifest = result.manifest as HistoricalResearchExportManifest;
+    const keys = Object.keys(manifest);
+    const forbiddenInManifest = ['modelProbability', 'impliedProbability', 'calibratedProbability', 'odds', 'sportsbook'];
+    for (const field of forbiddenInManifest) {
+      expect(keys).not.toContain(field);
+    }
+    expect(JSON.stringify(manifest)).not.toMatch(/modelProbability|impliedProbability|calibratedProbability|odds|sportsbook/);
+  });
+
+  it('J: modelProbability remains absent', () => {
+    const result = buildHistoricalResearchExport({
+      orchestrationResult: buildFixtureOrchestrationResult(),
+      researchConstruction: 'FULL',
+      source: 'fixture',
+      generatedAt: FIXTURE_GENERATED_AT,
+    });
+    expect(result).not.toHaveProperty('modelProbability');
+    expect(result.manifest).not.toHaveProperty('modelProbability');
+  });
+
+  it('exportVersion is stable', () => {
     const result = buildHistoricalResearchExport({
       orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'FULL',
@@ -33,7 +224,7 @@ describe('buildHistoricalResearchExport', () => {
     expect(result.exportVersion).toBe(HISTORICAL_RESEARCH_EXPORT_VERSION);
   });
 
-  it('B: generatedAt uses caller-provided timestamp', () => {
+  it('generatedAt uses caller-provided timestamp', () => {
     const timestamp = new Date('2024-05-15T12:30:00Z');
     const result = buildHistoricalResearchExport({
       orchestrationResult: buildFixtureOrchestrationResult(),
@@ -44,7 +235,7 @@ describe('buildHistoricalResearchExport', () => {
     expect(result.generatedAt).toBe('2024-05-15T12:30:00.000Z');
   });
 
-  it('C: predictions and abstentions serialize expected fields', () => {
+  it('predictions and abstentions serialize expected fields', () => {
     const predictions = [
       buildFixturePrediction({
         gamePk: 1,
@@ -78,7 +269,7 @@ describe('buildHistoricalResearchExport', () => {
     expect(a.warnings).toEqual(['a-warn']);
   });
 
-  it('D: BOTH mode includes comparison report', () => {
+  it('BOTH mode includes comparison report', () => {
     const comparison = buildFixtureComparison();
     const result = buildHistoricalResearchExport({
       orchestrationResult: buildFixtureOrchestrationResult(),
@@ -90,7 +281,7 @@ describe('buildHistoricalResearchExport', () => {
     expect(result.comparison).toBe(comparison);
   });
 
-  it('E: FULL-only mode omits comparison', () => {
+  it('FULL-only mode omits comparison', () => {
     const result = buildHistoricalResearchExport({
       orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'FULL',
@@ -101,7 +292,7 @@ describe('buildHistoricalResearchExport', () => {
     expect(result.comparison).toBeUndefined();
   });
 
-  it('F: TEAM_ONLY-only mode omits comparison', () => {
+  it('TEAM_ONLY-only mode omits comparison', () => {
     const result = buildHistoricalResearchExport({
       orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'TEAM_ONLY',
@@ -112,7 +303,7 @@ describe('buildHistoricalResearchExport', () => {
     expect(result.comparison).toBeUndefined();
   });
 
-  it('G: warnings and evidence domains are preserved', () => {
+  it('warnings and evidence domains are preserved', () => {
     const predictions = [
       buildFixturePrediction({
         gamePk: 1,
@@ -140,7 +331,7 @@ describe('buildHistoricalResearchExport', () => {
     });
   });
 
-  it('H: no forbidden odds/probability fields appear in exported object', () => {
+  it('no forbidden odds/probability fields appear in exported object', () => {
     const result = buildHistoricalResearchExport({
       orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'FULL',
@@ -156,7 +347,7 @@ describe('buildHistoricalResearchExport', () => {
     expect(exportedKeys).not.toMatch(/modelProbability|impliedProbability|calibratedProbability/);
   });
 
-  it('I: object is JSON.stringify-safe', () => {
+  it('object is JSON.stringify-safe', () => {
     const result = buildHistoricalResearchExport({
       orchestrationResult: buildFixtureOrchestrationResult(),
       researchConstruction: 'FULL',
