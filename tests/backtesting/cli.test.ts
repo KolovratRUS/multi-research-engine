@@ -162,6 +162,10 @@ function buildMockPrediction(warnings: readonly string[] = []): BacktestPredicti
     abstained: false,
     homePitcherAvailable: false,
     awayPitcherAvailable: false,
+    researchConstructionMode: 'FULL',
+    researchModelVersion: 'test',
+    includedEvidenceDomains: [],
+    excludedEvidenceDomains: [],
   };
 }
 

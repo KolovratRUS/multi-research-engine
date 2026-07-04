@@ -195,12 +195,45 @@ export interface ExploratoryScoreConfig {
   };
 }
 
+export type ResearchConstructionMode = 'FULL' | 'TEAM_ONLY';
+
+export const RESEARCH_MODEL_VERSIONS = {
+  FULL: 'exploratory-unvalidated-v1',
+  TEAM_ONLY: 'MLB_TEAM_ONLY_V1',
+} as const;
+
+export const EVIDENCE_DOMAIN_TEAM_OFFENSE = 'team-offense';
+export const EVIDENCE_DOMAIN_HOME_PARK = 'home-park';
+export const EVIDENCE_DOMAIN_REST_TRAVEL = 'rest-travel';
+export const EVIDENCE_DOMAIN_STARTING_PITCHER = 'starting-pitcher';
+export const EVIDENCE_DOMAIN_OPPONENT_BATTING = 'opponent-batting';
+export const EVIDENCE_DOMAIN_BULLPEN = 'bullpen';
+export const EVIDENCE_DOMAIN_OFFENSE_LINEUP = 'offense-lineup';
+export const EVIDENCE_DOMAIN_INJURIES_LINEUP = 'injuries-lineup';
+export const EVIDENCE_DOMAIN_WEATHER_ROOF = 'weather-roof';
+
+export const TEAM_ONLY_INCLUDED_DOMAINS: readonly string[] = [
+  EVIDENCE_DOMAIN_TEAM_OFFENSE,
+  EVIDENCE_DOMAIN_HOME_PARK,
+  EVIDENCE_DOMAIN_REST_TRAVEL,
+];
+
+export const TEAM_ONLY_EXCLUDED_DOMAINS: readonly string[] = [
+  EVIDENCE_DOMAIN_STARTING_PITCHER,
+  EVIDENCE_DOMAIN_OPPONENT_BATTING,
+  EVIDENCE_DOMAIN_BULLPEN,
+  EVIDENCE_DOMAIN_OFFENSE_LINEUP,
+  EVIDENCE_DOMAIN_INJURIES_LINEUP,
+  EVIDENCE_DOMAIN_WEATHER_ROOF,
+];
+
 export type AbstentionReason =
   | 'GAME_NOT_ELIGIBLE'
   | 'BOTH_PITCHERS_UNAVAILABLE'
   | 'HOME_PITCHER_UNAVAILABLE'
   | 'AWAY_PITCHER_UNAVAILABLE'
   | 'BOTH_TEAM_PROFILES_UNAVAILABLE'
+  | 'TEAM_ONLY_INSUFFICIENT_TEAM_EVIDENCE'
   | 'INSUFFICIENT_FEATURE_COVERAGE'
   | 'DATA_QUALITY_BELOW_THRESHOLD';
 
@@ -230,6 +263,10 @@ export interface BacktestPrediction {
   abstentionReason?: string;
   homePitcherAvailable: boolean;
   awayPitcherAvailable: boolean;
+  researchConstructionMode: ResearchConstructionMode;
+  researchModelVersion: string;
+  includedEvidenceDomains: readonly string[];
+  excludedEvidenceDomains: readonly string[];
 }
 
 export interface BacktestMetrics {

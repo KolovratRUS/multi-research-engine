@@ -40,6 +40,7 @@ export interface MLBBacktestCLIOptions {
   readonly timeoutMs?: number;
   readonly maxRetries?: number;
   readonly capturePregamePitchers?: boolean;
+  readonly researchConstruction?: 'FULL' | 'TEAM_ONLY' | 'BOTH';
 }
 
 export interface CLIBacktestCLIError {
@@ -88,6 +89,7 @@ const KNOWN_OPTIONS = new Set([
   'timeout-ms',
   'max-retries',
   'capture-pregame-pitchers',
+  'research-construction',
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -311,6 +313,25 @@ export function parseMLBBacktestCLIArgs(
       state.maxRetries = num;
       continue;
     }
+
+    if (key === 'research-construction') {
+      if (value !== 'full' && value !== 'team-only' && value !== 'both') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: "Invalid --research-construction. Expected 'full', 'team-only', or 'both'.",
+        };
+      }
+      const mapped =
+        value === 'full'
+          ? 'FULL'
+          : value === 'team-only'
+            ? 'TEAM_ONLY'
+            : 'BOTH';
+      state.researchConstruction = mapped;
+      continue;
+    }
   }
 
   if (state.date !== undefined && (state.startDate || state.endDate)) {
@@ -350,6 +371,7 @@ export function parseMLBBacktestCLIArgs(
     ...(state.timeoutMs !== undefined ? { timeoutMs: state.timeoutMs as number } : {}),
     ...(state.maxRetries !== undefined ? { maxRetries: state.maxRetries as number } : {}),
     ...(state.capturePregamePitchers !== undefined ? { capturePregamePitchers: state.capturePregamePitchers as boolean } : {}),
+    ...(state.researchConstruction !== undefined ? { researchConstruction: state.researchConstruction as 'FULL' | 'TEAM_ONLY' | 'BOTH' } : {}),
   } satisfies MLBBacktestCLIOptions;
 }
 
@@ -375,6 +397,7 @@ function printHelp(stdout: (message: string) => void): void {
     '  --timeout-ms <ms>         HTTP timeout in milliseconds',
     '  --max-retries <n>         Maximum HTTP retry attempts',
     '  --capture-pregame-pitchers  Record MLB probable-pitcher observations (live only)',
+    '  --research-construction <mode>  full (default), team-only, or both',
     '  --output text             Human-readable output (default)',
     '  --output json             Machine-readable JSON output',
     '  --help, -h                Show this help',
@@ -440,6 +463,10 @@ interface SerializedPredictionForJSON {
   readonly abstentionReason?: string;
   readonly homePitcherAvailable: boolean;
   readonly awayPitcherAvailable: boolean;
+  readonly researchConstructionMode: string;
+  readonly researchModelVersion: string;
+  readonly includedEvidenceDomains: readonly string[];
+  readonly excludedEvidenceDomains: readonly string[];
 }
 
 interface JSONSerializedResult {
@@ -471,6 +498,14 @@ interface JSONSerializedResult {
     readonly accuracyWithMissingPitcher: number | null;
     readonly averageDataQuality: number | null;
     readonly warningCount: number;
+    readonly researchConstruction: {
+      readonly fullResearchAttempts: number;
+      readonly fullResearchProduced: number;
+      readonly fullResearchAbstained: number;
+      readonly teamOnlyResearchAttempts: number;
+      readonly teamOnlyResearchProduced: number;
+      readonly teamOnlyResearchAbstained: number;
+    };
   };
   readonly predictions: readonly SerializedPredictionForJSON[];
   readonly abstentions: readonly SerializedPredictionForJSON[];
@@ -536,6 +571,10 @@ function serializePredictionForJSON(
     readonly abstentionReason?: string;
     readonly homePitcherAvailable: boolean;
     readonly awayPitcherAvailable: boolean;
+    readonly researchConstructionMode: string;
+    readonly researchModelVersion: string;
+    readonly includedEvidenceDomains: readonly string[];
+    readonly excludedEvidenceDomains: readonly string[];
   },
 ): SerializedPredictionForJSON {
   return {
@@ -564,6 +603,10 @@ function serializePredictionForJSON(
     abstentionReason: prediction.abstentionReason,
     homePitcherAvailable: prediction.homePitcherAvailable,
     awayPitcherAvailable: prediction.awayPitcherAvailable,
+    researchConstructionMode: prediction.researchConstructionMode,
+    researchModelVersion: prediction.researchModelVersion,
+    includedEvidenceDomains: prediction.includedEvidenceDomains,
+    excludedEvidenceDomains: prediction.excludedEvidenceDomains,
   };
 }
 
@@ -592,6 +635,24 @@ function countWarnings(
     predictions.reduce((sum, item) => sum + item.warnings.length, 0) +
     abstentions.reduce((sum, item) => sum + item.warnings.length, 0)
   );
+}
+
+function buildResearchConstructionDiagnostics(
+  result: Readonly<{ readonly predictions: readonly BacktestPrediction[]; readonly abstentions: readonly BacktestPrediction[] }>,
+) {
+  const fullPredictions = result.predictions.filter((p) => p.researchConstructionMode === 'FULL' && !p.abstained);
+  const teamOnlyPredictions = result.predictions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY' && !p.abstained);
+  const fullAbstentions = result.abstentions.filter((p) => p.researchConstructionMode === 'FULL');
+  const teamOnlyAbstentions = result.abstentions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY');
+
+  return {
+    fullResearchAttempts: result.predictions.filter((p) => p.researchConstructionMode === 'FULL').length + result.abstentions.filter((p) => p.researchConstructionMode === 'FULL').length,
+    fullResearchProduced: fullPredictions.length,
+    fullResearchAbstained: fullAbstentions.length,
+    teamOnlyResearchAttempts: result.predictions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY').length + result.abstentions.filter((p) => p.researchConstructionMode === 'TEAM_ONLY').length,
+    teamOnlyResearchProduced: teamOnlyPredictions.length,
+    teamOnlyResearchAbstained: teamOnlyAbstentions.length,
+  };
 }
 
 function serializeJSONResult(
@@ -638,6 +699,7 @@ function serializeJSONResult(
       accuracyWithMissingPitcher: metrics.accuracyWithMissingPitcher,
       averageDataQuality: avgDataQuality,
       warningCount,
+      researchConstruction: buildResearchConstructionDiagnostics(result.runnerResult),
     },
     ...(source === 'live' && diagnostics ? { provider: diagnostics.provider } : {}),
     ...(source === 'live' && diagnostics ? { http: diagnostics.http } : {}),
@@ -655,6 +717,7 @@ function printTextResult(
   result: SerializableResultInput,
   source: 'fixture' | 'live',
   diagnostics?: LiveCLIDiagnostics,
+  researchConstruction?: 'FULL' | 'TEAM_ONLY' | 'BOTH',
 ): string {
   const predictions = result.runnerResult.predictions;
   const abstentions = result.runnerResult.abstentions;
@@ -707,7 +770,20 @@ function printTextResult(
     'Quality',
     `  Average data quality: ${avgDataQuality.toFixed(1)}`,
     `  Warning count: ${warningCount}`,
+    '',
+    'Research Construction',
+    `  Mode: ${result.requestedDates.length > 0 ? (researchConstruction ?? 'full') : 'n/a'}`,
   ];
+
+  const researchDiagnostics = buildResearchConstructionDiagnostics(result.runnerResult);
+  if (researchDiagnostics.fullResearchAttempts > 0 || researchDiagnostics.teamOnlyResearchAttempts > 0) {
+    lines.push(
+      `  Full attempts: ${researchDiagnostics.fullResearchAttempts}, produced: ${researchDiagnostics.fullResearchProduced}, abstained: ${researchDiagnostics.fullResearchAbstained}`,
+    );
+    lines.push(
+      `  Team-only attempts: ${researchDiagnostics.teamOnlyResearchAttempts}, produced: ${researchDiagnostics.teamOnlyResearchProduced}, abstained: ${researchDiagnostics.teamOnlyResearchAbstained}`,
+    );
+  }
 
   if (source === 'live' && diagnostics) {
     lines.push(
@@ -854,6 +930,7 @@ export async function runMLBBacktestCLI(
     deterministicTime: injectNow?.() ?? new Date(),
     featureVersion: 'exploratory-unvalidated-v1',
     modelVersion: 'exploratory-unvalidated-v1',
+    researchConstruction: parsed.researchConstruction,
     naiveBaselineContext: {
       recentWinRates: parsed.source === 'live' ? {} : fixture!.recentWinRates,
       seasonWinRates: parsed.source === 'live' ? {} : fixture!.seasonWinRates,
