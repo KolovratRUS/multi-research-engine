@@ -14,6 +14,7 @@ import {
   createLiveProviderForCLI,
   } from '@/lib/backtesting/cli';
 import type { BacktestPrediction } from '@/lib/backtesting/types';
+import { HISTORICAL_RESEARCH_EXPORT_VERSION } from '@/lib/backtesting/historical-research-export';
 
 const mockStdout: string[] = [];
 const mockStderr: string[] = [];
@@ -1518,5 +1519,224 @@ describe('runMLBBacktestCLI', () => {
     expect(code).toBe(0);
     const output = mockStdout.join('\n');
     expect(output).not.toContain('Comparison');
+  });
+
+  it('rejects duplicate --export-json', () => {
+    const result = parseMLBBacktestCLIArgs([
+      '--export-json', '/tmp/a.json', '--export-json', '/tmp/b.json',
+    ]);
+    expect('code' in result).toBe(true);
+    expect((result as CLIBacktestCLIError).code).toBe('DUPLICATE_OPTION');
+  });
+
+  it('--export-json missing value exits with parse error', () => {
+    const result = parseMLBBacktestCLIArgs(['--export-json']);
+    expect('code' in result).toBe(true);
+    expect((result as CLIBacktestCLIError).code).toBe('MISSING_VALUE');
+  });
+
+  it('rejects empty --export-json path', () => {
+    const result = parseMLBBacktestCLIArgs(['--export-json', '']);
+    expect('code' in result).toBe(true);
+    expect((result as CLIBacktestCLIError).code).toBe('INVALID_OPTION');
+  });
+
+  it('writes export file with valid JSON and preserves stdout', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-export-valid-'));
+    const exportPath = path.join(tempDir, 'export.json');
+    try {
+      const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
+      const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+      const io = createIO();
+      const code = await runMLBBacktestCLI(
+        ['--date', '2024-06-01', '--output', 'text', '--export-json', exportPath],
+        io,
+        deps,
+      );
+      expect(code).toBe(0);
+      const content = await fs.readFile(exportPath, 'utf-8');
+      const parsed = JSON.parse(content);
+      expect(parsed.exportVersion).toBe(HISTORICAL_RESEARCH_EXPORT_VERSION);
+      expect(parsed.predictions).toEqual([]);
+      expect(parsed.abstentions).toEqual([]);
+      expect(parsed.runSummary.predictionsMade).toBe(0);
+      expect(parsed.runSummary.abstentions).toBe(0);
+      expect(mockStdout.length).toBeGreaterThan(0);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('BOTH mode export includes comparison report', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-export-both-'));
+    const exportPath = path.join(tempDir, 'export.json');
+    try {
+      const basePrediction = buildMockPrediction();
+      const mockResult = {
+        dateRange: { startDate: '2024-06-01', endDate: '2024-06-01' },
+        requestedDates: ['2024-06-01'],
+        scheduleRequests: 1,
+        discoveredGames: 2,
+        uniqueGames: 2,
+        duplicateGamesRemoved: 0,
+        firstGameStart: new Date('2024-06-01T16:20:00Z'),
+        lastGameStart: new Date('2024-06-01T19:05:00Z'),
+        games: [],
+        runnerResult: {
+          predictions: [
+            {
+              ...basePrediction,
+              gamePk: 1,
+              predictedSide: 'HOME',
+              correct: true,
+              researchConstructionMode: 'FULL',
+            },
+            {
+              ...basePrediction,
+              gamePk: 1,
+              predictedSide: 'HOME',
+              correct: true,
+              researchConstructionMode: 'TEAM_ONLY',
+            },
+          ],
+          abstentions: [],
+          metrics: {
+            predictionsMade: 2,
+            gamesSkipped: 0,
+            voids: 0,
+            accuracy: 1,
+            homePickRate: 1,
+            awayPickRate: 0,
+            accuracyByConfidenceBucket: {},
+            accuracyByDataQualityBucket: {},
+            accuracyByVolatilityBucket: {},
+            accuracyWithBothPitchersKnown: null,
+            accuracyWithMissingPitcher: null,
+            accuracyByMonth: {},
+            naiveHomeBaseline: null,
+            naiveRecentBaseline: null,
+            naiveSeasonBaseline: null,
+          },
+        },
+      };
+
+      const mockOrchestrate = vi.fn().mockResolvedValue(mockResult);
+      const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+      const io = createIO();
+      const code = await runMLBBacktestCLI(
+        ['--date', '2024-06-01', '--output', 'json', '--research-construction', 'both', '--export-json', exportPath],
+        io,
+        deps,
+      );
+      expect(code).toBe(0);
+      const content = await fs.readFile(exportPath, 'utf-8');
+      const parsed = JSON.parse(content);
+      expect(parsed.exportVersion).toBe(HISTORICAL_RESEARCH_EXPORT_VERSION);
+      expect(parsed.researchConstruction).toBe('BOTH');
+      expect(parsed.predictions).toHaveLength(2);
+      expect(parsed.abstentions).toHaveLength(0);
+      expect(parsed.comparison).toBeDefined();
+      expect(parsed.comparison.paired.bothProduced).toBe(1);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('FULL mode export omits comparison', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-export-full-'));
+    const exportPath = path.join(tempDir, 'export.json');
+    try {
+      const basePrediction = buildMockPrediction();
+      const mockResult = {
+        dateRange: { startDate: '2024-06-01', endDate: '2024-06-01' },
+        requestedDates: ['2024-06-01'],
+        scheduleRequests: 1,
+        discoveredGames: 1,
+        uniqueGames: 1,
+        duplicateGamesRemoved: 0,
+        firstGameStart: new Date('2024-06-01T16:20:00Z'),
+        lastGameStart: new Date('2024-06-01T19:05:00Z'),
+        games: [],
+        runnerResult: {
+          predictions: [
+            {
+              ...basePrediction,
+              gamePk: 1,
+              predictedSide: 'HOME',
+              correct: true,
+              researchConstructionMode: 'FULL',
+            },
+          ],
+          abstentions: [],
+          metrics: {
+            predictionsMade: 1,
+            gamesSkipped: 0,
+            voids: 0,
+            accuracy: 1,
+            homePickRate: 1,
+            awayPickRate: 0,
+            accuracyByConfidenceBucket: {},
+            accuracyByDataQualityBucket: {},
+            accuracyByVolatilityBucket: {},
+            accuracyWithBothPitchersKnown: null,
+            accuracyWithMissingPitcher: null,
+            accuracyByMonth: {},
+            naiveHomeBaseline: null,
+            naiveRecentBaseline: null,
+            naiveSeasonBaseline: null,
+          },
+        },
+      };
+
+      const mockOrchestrate = vi.fn().mockResolvedValue(mockResult);
+      const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+      const io = createIO();
+      const code = await runMLBBacktestCLI(
+        ['--date', '2024-06-01', '--output', 'json', '--export-json', exportPath],
+        io,
+        deps,
+      );
+      expect(code).toBe(0);
+      const content = await fs.readFile(exportPath, 'utf-8');
+      const parsed = JSON.parse(content);
+      expect(parsed.researchConstruction).toBe('FULL');
+      expect(parsed.comparison).toBeUndefined();
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails clearly when parent path is a file for --export-json', async () => {
+    const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const tempParent = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-export-parent-'));
+    const parentAsFile = path.join(tempParent, 'not-a-dir');
+    await fs.writeFile(parentAsFile, 'not-a-directory');
+    const badPath = path.join(parentAsFile, 'child.json');
+    const code = await runMLBBacktestCLI(
+      ['--date', '2024-06-01', '--export-json', badPath],
+      io,
+      deps,
+    );
+    expect(code).toBe(1);
+    expect(mockStderr.length).toBeGreaterThan(0);
+    expect(mockStderr.some(msg => msg.includes('Backtest failed'))).toBe(true);
+  });
+
+  it('fails clearly when parent directory is missing for --export-json', async () => {
+    const mockOrchestrate = vi.fn().mockResolvedValue(orchestrateDefaultMockResult());
+    const deps: MLBBacktestCLIDependencies = { orchestrate: mockOrchestrate };
+    const io = createIO();
+    const tempParent = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-export-parent-'));
+    const missingParent = path.join(tempParent, 'missing', 'export.json');
+    const code = await runMLBBacktestCLI(
+      ['--date', '2024-06-01', '--export-json', missingParent],
+      io,
+      deps,
+    );
+    expect(code).toBe(1);
+    expect(mockStderr.length).toBeGreaterThan(0);
+    expect(mockStderr.some(msg => msg.includes('Backtest failed'))).toBe(true);
   });
 });

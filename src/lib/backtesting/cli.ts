@@ -9,6 +9,7 @@ import { createLiveMLBHistoricalProvider } from '@/lib/backtesting/mlb/live-hist
 import type { LiveMLBHistoricalProviderFactoryOptions } from '@/lib/backtesting/mlb/live-history/provider-factory';
 import type { LiveHistoricalProviderStats } from '@/lib/backtesting/mlb/live-history/provider';
 import path from 'node:path';
+import { promises as fs } from 'node:fs';
 import type {
   BacktestMetrics,
   BacktestPrediction,
@@ -24,6 +25,7 @@ import type {
 import type { RunnerContext } from '@/lib/backtesting/runner';
 import type { ConstructionComparison, ModeMetrics, ResearchConstructionReport } from '@/lib/backtesting/types';
 import { computeResearchConstructionReport } from '@/lib/backtesting/metrics';
+import { buildHistoricalResearchExport } from '@/lib/backtesting/historical-research-export';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -43,6 +45,7 @@ export interface MLBBacktestCLIOptions {
   readonly maxRetries?: number;
   readonly capturePregamePitchers?: boolean;
   readonly researchConstruction?: 'FULL' | 'TEAM_ONLY' | 'BOTH';
+  readonly exportJson?: string;
 }
 
 export interface CLIBacktestCLIError {
@@ -92,6 +95,7 @@ const KNOWN_OPTIONS = new Set([
   'max-retries',
   'capture-pregame-pitchers',
   'research-construction',
+  'export-json',
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -334,6 +338,19 @@ export function parseMLBBacktestCLIArgs(
       state.researchConstruction = mapped;
       continue;
     }
+
+    if (key === 'export-json') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --export-json. Expected a non-empty path.',
+        };
+      }
+      state.exportJson = value.trim();
+      continue;
+    }
   }
 
   if (state.date !== undefined && (state.startDate || state.endDate)) {
@@ -364,6 +381,7 @@ export function parseMLBBacktestCLIArgs(
     source: state.source as 'fixture' | 'live',
     output: state.output as 'text' | 'json',
     help: state.help as boolean,
+    exportJson: state.exportJson as string | undefined,
     ...(state.date !== undefined ? { date: state.date as string } : {}),
     ...(state.startDate !== undefined ? { startDate: state.startDate as string } : {}),
     ...(state.endDate !== undefined ? { endDate: state.endDate as string } : {}),
@@ -400,6 +418,7 @@ function printHelp(stdout: (message: string) => void): void {
     '  --max-retries <n>         Maximum HTTP retry attempts',
     '  --capture-pregame-pitchers  Record MLB probable-pitcher observations (live only)',
     '  --research-construction <mode>  full (default), team-only, or both',
+    '  --export-json <path>      Write stable historical research export to file',
     '  --output text             Human-readable output (default)',
     '  --output json             Machine-readable JSON output',
     '  --help, -h                Show this help',
@@ -996,6 +1015,32 @@ export async function runMLBBacktestCLI(
     let diagnostics: LiveCLIDiagnostics | undefined;
     if (liveResult) {
       diagnostics = liveResult.getDiagnostics();
+    }
+
+    const exportComparison =
+      parsed.researchConstruction === 'BOTH'
+        ? computeResearchConstructionReport(
+            result.runnerResult.predictions,
+            result.runnerResult.abstentions,
+          )
+        : undefined;
+
+    const exportPayload = buildHistoricalResearchExport({
+      orchestrationResult: result,
+      researchConstruction: parsed.researchConstruction ?? 'FULL',
+      source: parsed.source,
+      generatedAt: injectNow?.() ?? new Date(),
+      comparison: exportComparison,
+    });
+
+    if (parsed.exportJson) {
+      const resolvedPath = path.resolve(parsed.exportJson);
+      const exportDir = path.dirname(resolvedPath);
+      const exportDirStat = await fs.stat(exportDir);
+      if (!exportDirStat.isDirectory()) {
+        throw new Error(`Export parent path is not a directory: ${exportDir}`);
+      }
+      await fs.writeFile(resolvedPath, `${JSON.stringify(exportPayload, null, 2)}\n`, 'utf-8');
     }
 
     if (parsed.output === 'json') {
