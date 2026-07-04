@@ -1,0 +1,61 @@
+{
+  "exportVersion": "historical-research-export-v1",
+  "generatedAt": "2024-06-01T00:00:00.000Z",
+  "source": "fixture",
+  "dateRange": {
+    "startDate": "2024-06-01",
+    "endDate": "2024-06-03"
+  },
+  "requestedDates": [
+    "2024-06-01",
+    "2024-06-02",
+    "2024-06-03"
+  ],
+  "researchConstruction": "TEAM_ONLY",
+  "runSummary": {
+    "scheduleRequests": 3,
+    "discoveredGames": 2,
+    "uniqueGames": 2,
+    "duplicateGamesRemoved": 0,
+    "predictionsMade": 0,
+    "abstentions": 1,
+    "warningCount": 2
+  },
+  "predictions": [],
+  "abstentions": [
+    {
+      "eventId": "event-3",
+      "gamePk": 3,
+      "eventDate": "2024-06-01",
+      "homeTeamId": 1,
+      "awayTeamId": 2,
+      "homeTeam": "Home",
+      "awayTeam": "Away",
+      "predictedSide": null,
+      "researchStrengthScore": 50,
+      "confidence": 60,
+      "dataQuality": 70,
+      "volatility": "LOW",
+      "componentScores": {},
+      "warnings": [
+        "abs-warn-1",
+        "abs-warn-2"
+      ],
+      "modelVersion": "full-v1",
+      "featureVersion": "feature-v1",
+      "generatedAt": "2024-06-01T00:00:00.000Z",
+      "historicalCutoffTime": "2024-06-01T00:00:00.000Z",
+      "actualWinner": "HOME",
+      "correct": null,
+      "voided": false,
+      "abstained": true,
+      "abstentionReason": "QUALITY_BELOW_THRESHOLD",
+      "homePitcherAvailable": true,
+      "awayPitcherAvailable": true,
+      "researchConstructionMode": "TEAM_ONLY",
+      "researchModelVersion": "team-only-v1",
+      "includedEvidenceDomains": [],
+      "excludedEvidenceDomains": []
+    }
+  ]
+}
