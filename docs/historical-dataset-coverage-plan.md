@@ -228,3 +228,5 @@ Do not proceed to those phases without explicit authorization and updated docume
 ## Coverage-run templates
 
 Use `docs/historical-coverage-run-log-template.md` to record future coverage runs and `docs/historical-coverage-artifact-naming.md` to name artifacts consistently.
+
+The first Phase 2C observer-note example is `docs/historical-coverage-run-log-smoke01.md`.
