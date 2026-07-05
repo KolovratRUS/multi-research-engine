@@ -10,6 +10,7 @@ import {
 
 const FIXTURE_DIR = path.join(__dirname, 'fixtures', 'historical-research-export');
 const REVIEW_FIXTURE_DIR = path.join(__dirname, 'fixtures', 'historical-research-export-review');
+const REVIEW_JSON_FIXTURE_DIR = path.join(__dirname, 'fixtures', 'historical-research-export-review-json');
 
 const mockStdout: string[] = [];
 const mockStderr: string[] = [];
@@ -28,6 +29,10 @@ function resetIO() {
 
 async function readReviewFixture(name: string): Promise<string> {
   return fs.readFile(path.join(REVIEW_FIXTURE_DIR, name), 'utf-8');
+}
+
+async function readReviewJsonFixture(name: string): Promise<string> {
+  return fs.readFile(path.join(REVIEW_JSON_FIXTURE_DIR, name), 'utf-8');
 }
 
 async function runReview(args: string[], deps: MLBBacktestCLIDependencies = {}) {
@@ -271,5 +276,206 @@ describe('cli review export', () => {
     expect(code).toBe(0);
     const combined = `${stdout}\n${stderr}`;
     expect(combined).not.toMatch(/modelProbability/i);
+  });
+
+  it('A1: FULL review with --output json matches fixture exactly', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'full-export-v1.json');
+    const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath, '--output', 'json']);
+    expect(code).toBe(0);
+    expect(stderr).toBe('');
+    expect(stdout).toBe(await readReviewJsonFixture('full-review-json-v1.json'));
+  });
+
+  it('B1: TEAM_ONLY review with --output json matches fixture exactly', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'team-only-export-v1.json');
+    const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath, '--output', 'json']);
+    expect(code).toBe(0);
+    expect(stderr).toBe('');
+    expect(stdout).toBe(await readReviewJsonFixture('team-only-review-json-v1.json'));
+  });
+
+  it('C1: BOTH review with --output json matches fixture exactly', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'both-export-v1.json');
+    const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath, '--output', 'json']);
+    expect(code).toBe(0);
+    expect(stderr).toBe('');
+    expect(stdout).toBe(await readReviewJsonFixture('both-review-json-v1.json'));
+  });
+
+  it('D1: abstention review with --output json matches fixture exactly', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'abstention-export-v1.json');
+    const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath, '--output', 'json']);
+    expect(code).toBe(0);
+    expect(stderr).toBe('');
+    expect(stdout).toBe(await readReviewJsonFixture('abstention-review-json-v1.json'));
+  });
+
+  it('E1: invalid manifest with --output json matches fixture exactly', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-review-bad-manifest-json-'));
+    const badPath = path.join(tempDir, 'bad-manifest.json');
+    await fs.writeFile(
+      badPath,
+      JSON.stringify({
+        exportVersion: 'historical-research-export-v1',
+        manifest: {
+          exportId: 'bad',
+          exportVersion: 'historical-research-export-v1',
+          generatedAt: '2024-06-01T00:00:00.000Z',
+          source: 'fixture',
+          researchConstruction: 'FULL',
+          dateRange: { startDate: '2024-06-01', endDate: '2024-06-03' },
+          requestedDateCount: 3,
+          resultCounts: { predictions: 999, abstentions: 0, warnings: 0 },
+          comparisonIncluded: false,
+          evidenceDomainSummary: { included: [], excluded: [] },
+          warningSummary: [],
+        },
+        generatedAt: '2024-06-01T00:00:00.000Z',
+        source: 'fixture',
+        dateRange: { startDate: '2024-06-01', endDate: '2024-06-03' },
+        requestedDates: ['2024-06-01', '2024-06-02', '2024-06-03'],
+        researchConstruction: 'FULL',
+        predictions: [],
+        abstentions: [],
+      }),
+      'utf-8',
+    );
+    try {
+      const { code, stdout } = await runReview(['--review-export-json', badPath, '--output', 'json']);
+      expect(code).toBe(1);
+      expect(stdout).toBe(await readReviewJsonFixture('invalid-manifest-review-json-v1.json'));
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('F1: invalid manifest text output still matches text fixture', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-review-bad-manifest-text-'));
+    const badPath = path.join(tempDir, 'bad-manifest.json');
+    await fs.writeFile(
+      badPath,
+      JSON.stringify({
+        exportVersion: 'historical-research-export-v1',
+        manifest: {
+          exportId: 'bad',
+          exportVersion: 'historical-research-export-v1',
+          generatedAt: '2024-06-01T00:00:00.000Z',
+          source: 'fixture',
+          researchConstruction: 'FULL',
+          dateRange: { startDate: '2024-06-01', endDate: '2024-06-03' },
+          requestedDateCount: 3,
+          resultCounts: { predictions: 999, abstentions: 0, warnings: 0 },
+          comparisonIncluded: false,
+          evidenceDomainSummary: { included: [], excluded: [] },
+          warningSummary: [],
+        },
+        generatedAt: '2024-06-01T00:00:00.000Z',
+        source: 'fixture',
+        dateRange: { startDate: '2024-06-01', endDate: '2024-06-03' },
+        requestedDates: ['2024-06-01', '2024-06-02', '2024-06-03'],
+        researchConstruction: 'FULL',
+        predictions: [],
+        abstentions: [],
+      }),
+      'utf-8',
+    );
+    try {
+      const { code, stderr } = await runReview(['--review-export-json', badPath]);
+      expect(code).toBe(1);
+      expect(stderr).toBe(await readReviewFixture('invalid-manifest-review-v1.txt'));
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('G1: JSON review does not include raw predictions or abstentions', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'full-export-v1.json');
+    const { code, stdout } = await runReview(['--review-export-json', exportPath, '--output', 'json']);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.summary).not.toHaveProperty('predictions');
+    expect(parsed.summary).not.toHaveProperty('abstentions');
+  });
+
+  it('H1: JSON review does not include forbidden odds/probability concepts', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'full-export-v1.json');
+    const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath, '--output', 'json']);
+    expect(code).toBe(0);
+    const combined = `${stdout}\n${stderr}`;
+    expect(combined).not.toMatch(
+      /\bodds\b|\bsportsbook\b|\bimplied probability\b|\bexpected value\b|\bEV\b|\bROI\b|\bedge\b|\bfavorite\b|\budnerdog\b|\bline movement\b|\bpublic betting\b|\bmarket movement\b|\bbetting value\b/i,
+    );
+  });
+
+  it('I1: JSON review does not include modelProbability', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'full-export-v1.json');
+    const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath, '--output', 'json']);
+    expect(code).toBe(0);
+    const combined = `${stdout}\n${stderr}`;
+    expect(combined).not.toMatch(/modelProbability/i);
+  });
+
+  it('J1: review --output json does not call orchestrate', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'full-export-v1.json');
+    const mockOrchestrate = vi.fn();
+    const { code } = await runReview(['--review-export-json', exportPath, '--output', 'json'], {
+      orchestrate: mockOrchestrate,
+    });
+    expect(code).toBe(0);
+    expect(mockOrchestrate).not.toHaveBeenCalled();
+  });
+
+  it('K1: review --output json does not construct live provider', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'full-export-v1.json');
+    const createLiveProvider = vi.fn();
+    const { code } = await runReview(['--review-export-json', exportPath, '--output', 'json'], {
+      createLiveProvider,
+    });
+    expect(code).toBe(0);
+    expect(createLiveProvider).not.toHaveBeenCalled();
+  });
+
+  it('L1: review --output json does not write files', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'full-export-v1.json');
+    const missingDir = path.join(os.tmpdir(), 'mlb-review-json-no-write-phase1p');
+    const reviewPath = path.join(missingDir, 'export.json');
+    const { code, stdout } = await runReview(['--review-export-json', reviewPath, '--output', 'json']);
+    expect(code).toBe(1);
+    expect(stdout).toBe('');
+    expect(fs.stat(missingDir).then(() => true, () => false)).resolves.toBe(false);
+  });
+
+  it('M1: missing file with --output json keeps stderr text and exit 1', async () => {
+    const { code, stdout, stderr } = await runReview([
+      '--review-export-json',
+      '/tmp/missing-phase1p-export.json',
+      '--output',
+      'json',
+    ]);
+    expect(code).toBe(1);
+    expect(stdout).toBe('');
+    expect(stderr).toContain('Export file not found');
+  });
+
+  it('N1: invalid JSON with --output json keeps stderr text and exit 1', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-review-bad-json-phase1p-'));
+    const badPath = path.join(tempDir, 'bad.json');
+    await fs.writeFile(badPath, 'not-json', 'utf-8');
+    try {
+      const { code, stdout, stderr } = await runReview(['--review-export-json', badPath, '--output', 'json']);
+      expect(code).toBe(1);
+      expect(stdout).toBe('');
+      expect(stderr).toContain('Invalid JSON in export file');
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('O1: default text output remains unchanged outside JSON mode', async () => {
+    const exportPath = path.join(FIXTURE_DIR, 'full-export-v1.json');
+    const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath]);
+    expect(code).toBe(0);
+    expect(stderr).toBe('');
+    expect(stdout).toBe(await readReviewFixture('full-review-v1.txt'));
   });
 });

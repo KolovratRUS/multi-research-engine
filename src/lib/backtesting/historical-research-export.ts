@@ -88,6 +88,27 @@ export interface HistoricalResearchExport {
   readonly abstentions: readonly ExportedResearchResult[];
 }
 
+export const HISTORICAL_RESEARCH_EXPORT_REVIEW_VERSION = 'historical-research-export-review-v1';
+
+export interface HistoricalResearchExportReviewJson {
+  readonly reviewVersion: typeof HISTORICAL_RESEARCH_EXPORT_REVIEW_VERSION;
+  readonly valid: boolean;
+  readonly summary: HistoricalResearchExportReviewSummary | null;
+  readonly issues: readonly HistoricalResearchExportValidationIssue[];
+}
+
+export function buildHistoricalResearchExportReviewJson(
+  summary: HistoricalResearchExportReviewSummary | null,
+  issues: readonly HistoricalResearchExportValidationIssue[],
+): HistoricalResearchExportReviewJson {
+  return {
+    reviewVersion: HISTORICAL_RESEARCH_EXPORT_REVIEW_VERSION,
+    valid: summary !== null && issues.length === 0,
+    summary,
+    issues,
+  };
+}
+
 export interface HistoricalResearchExportReviewSummary {
   readonly exportId: string;
   readonly exportVersion: string;

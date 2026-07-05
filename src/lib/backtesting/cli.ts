@@ -27,6 +27,7 @@ import type { ConstructionComparison, ModeMetrics, ResearchConstructionReport } 
 import { computeResearchConstructionReport } from '@/lib/backtesting/metrics';
 import {
   buildHistoricalResearchExport,
+  buildHistoricalResearchExportReviewJson,
   buildHistoricalResearchExportReviewSummary,
   formatHistoricalResearchExportReview,
   formatHistoricalResearchExportValidationIssues,
@@ -1013,6 +1014,16 @@ export async function runMLBBacktestCLI(
       const content = await fs.readFile(parsed.reviewExportJson, 'utf-8');
       const parsedFile = JSON.parse(content);
       const validation = validateHistoricalResearchExportManifest(parsedFile);
+
+      if (parsed.output === 'json') {
+        const summary = validation.valid
+          ? buildHistoricalResearchExportReviewSummary(parsedFile) ?? null
+          : null;
+        const payload = buildHistoricalResearchExportReviewJson(summary, validation.issues);
+        stdout(`${JSON.stringify(payload, null, 2)}\n`);
+        return validation.valid ? 0 : 1;
+      }
+
       if (!validation.valid) {
         stderr(formatHistoricalResearchExportValidationIssues(validation.issues));
         return 1;

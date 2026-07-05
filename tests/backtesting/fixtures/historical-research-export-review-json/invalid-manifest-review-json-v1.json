@@ -1,0 +1,21 @@
+{
+  "reviewVersion": "historical-research-export-review-v1",
+  "valid": false,
+  "summary": null,
+  "issues": [
+    {
+      "code": "MANIFEST_PREDICTION_COUNT_MISMATCH",
+      "path": "manifest.resultCounts.predictions",
+      "expected": 0,
+      "actual": 999,
+      "message": "prediction count mismatch between manifest and export"
+    },
+    {
+      "code": "MANIFEST_EXPORT_ID_MISMATCH",
+      "path": "manifest.exportId",
+      "expected": "historical-research-export-v1:82e5c62abd62",
+      "actual": "bad",
+      "message": "exportId mismatch between manifest and deterministic derivation"
+    }
+  ]
+}
