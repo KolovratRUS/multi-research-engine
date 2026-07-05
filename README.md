@@ -135,6 +135,18 @@ npm run backtest:mlb -- --source live --date 2024-06-01 --force-refresh
 - **Probable-pitcher provenance.** When a schedule probable pitcher is present but no trusted pre-cutoff assignment timestamp exists, the engine marks the starter provenance as `SCHEDULE_PROBABLE_TIMESTAMP_UNKNOWN` and abstains from predicting rather than guessing.
 - **Real smoke.** Networked live smoke tests are disabled by default. Set `BACKTEST_LIVE_SMOKE=1` before running the live smoke script.
 
+## Historical export review
+
+Offline review commands for saved historical research exports are documented in `docs/historical-export-review.md`.
+
+Quick aliases:
+
+```bash
+npm run review:historical-export:full
+npm run review:historical-export:ci
+npm run review:historical-export:ci:json
+```
+
 ## Architecture
 
 The application enforces a strict two-stage separation:
