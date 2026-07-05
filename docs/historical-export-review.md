@@ -119,6 +119,8 @@ JSON output includes `valid`, `thresholdsPassed`, and `thresholdIssues` when thr
 
 A release checklist for this subsystem is documented in `docs/historical-export-review-release-checklist.md`.
 
+The rollout plan is documented in `docs/historical-export-review-rollout.md`.
+
 ## Safety and leakage notes
 
 - Review mode reads saved export files only.

@@ -149,6 +149,8 @@ npm run review:historical-export:ci:json
 
 A release checklist for the offline review subsystem is documented in `docs/historical-export-review-release-checklist.md`.
 
+The rollout plan for this subsystem is documented in `docs/historical-export-review-rollout.md`.
+
 ## Architecture
 
 The application enforces a strict two-stage separation:
