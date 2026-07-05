@@ -1,0 +1,16 @@
+Historical Research Export Review
+Manifest Valid: yes
+Export ID: historical-research-export-v1:490fdbb1871a
+Export Version: historical-research-export-v1
+Generated At: 2024-06-01T00:00:00.000Z
+Source: fixture
+Research Construction: TEAM_ONLY
+Date Range: 2024-06-01 to 2024-06-03
+Requested Dates: 3
+Predictions: 0
+Abstentions: 1
+Warnings: 2
+Comparison Included: no
+Included Evidence Domains: none
+Excluded Evidence Domains: none
+Warning Summary: abs-warn-1, abs-warn-2

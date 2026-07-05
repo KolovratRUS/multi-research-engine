@@ -1,0 +1,3 @@
+Historical Research Export Review Failed
+- MANIFEST_PREDICTION_COUNT_MISMATCH: manifest.resultCounts.predictions - prediction count mismatch between manifest and export, expected 0, actual 999
+- MANIFEST_EXPORT_ID_MISMATCH: manifest.exportId - exportId mismatch between manifest and deterministic derivation, expected "historical-research-export-v1:82e5c62abd62", actual "bad"

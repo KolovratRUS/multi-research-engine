@@ -9,6 +9,7 @@ import {
 } from '@/lib/backtesting/cli';
 
 const FIXTURE_DIR = path.join(__dirname, 'fixtures', 'historical-research-export');
+const REVIEW_FIXTURE_DIR = path.join(__dirname, 'fixtures', 'historical-research-export-review');
 
 const mockStdout: string[] = [];
 const mockStderr: string[] = [];
@@ -25,6 +26,10 @@ function resetIO() {
   mockStderr.length = 0;
 }
 
+async function readReviewFixture(name: string): Promise<string> {
+  return fs.readFile(path.join(REVIEW_FIXTURE_DIR, name), 'utf-8');
+}
+
 async function runReview(args: string[], deps: MLBBacktestCLIDependencies = {}) {
   resetIO();
   const io = createIO();
@@ -38,24 +43,7 @@ describe('cli review export', () => {
     const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath]);
     expect(code).toBe(0);
     expect(stderr).toBe('');
-    expect(stdout).toBe([
-      'Historical Research Export Review',
-      'Manifest Valid: yes',
-      'Export ID: historical-research-export-v1:d4cf35f0817d',
-      'Export Version: historical-research-export-v1',
-      'Generated At: 2024-06-01T00:00:00.000Z',
-      'Source: fixture',
-      'Research Construction: FULL',
-      'Date Range: 2024-06-01 to 2024-06-03',
-      'Requested Dates: 3',
-      'Predictions: 1',
-      'Abstentions: 0',
-      'Warnings: 1',
-      'Comparison Included: no',
-      'Included Evidence Domains: team-offense',
-      'Excluded Evidence Domains: starting-pitcher',
-      'Warning Summary: full-warn',
-    ].join('\n'));
+    expect(stdout).toBe(await readReviewFixture('full-review-v1.txt'));
   });
 
   it('B: reviews team-only-export-v1.json and exits 0 with deterministic summary', async () => {
@@ -63,24 +51,7 @@ describe('cli review export', () => {
     const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath]);
     expect(code).toBe(0);
     expect(stderr).toBe('');
-    expect(stdout).toBe([
-      'Historical Research Export Review',
-      'Manifest Valid: yes',
-      'Export ID: historical-research-export-v1:ea7ce4da7e2f',
-      'Export Version: historical-research-export-v1',
-      'Generated At: 2024-06-01T00:00:00.000Z',
-      'Source: fixture',
-      'Research Construction: TEAM_ONLY',
-      'Date Range: 2024-06-01 to 2024-06-03',
-      'Requested Dates: 3',
-      'Predictions: 1',
-      'Abstentions: 0',
-      'Warnings: 1',
-      'Comparison Included: no',
-      'Included Evidence Domains: none',
-      'Excluded Evidence Domains: none',
-      'Warning Summary: team-warn',
-    ].join('\n'));
+    expect(stdout).toBe(await readReviewFixture('team-only-review-v1.txt'));
   });
 
   it('C: reviews both-export-v1.json and prints comparison included yes', async () => {
@@ -88,9 +59,7 @@ describe('cli review export', () => {
     const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath]);
     expect(code).toBe(0);
     expect(stderr).toBe('');
-    expect(stdout).toContain('Comparison Included: yes');
-    expect(stdout).toContain('Manifest Valid: yes');
-    expect(stdout).toContain('Export ID: historical-research-export-v1:8479ad9ac604');
+    expect(stdout).toBe(await readReviewFixture('both-review-v1.txt'));
   });
 
   it('D: reviews abstention-export-v1.json and prints abstention/warning counts', async () => {
@@ -98,17 +67,14 @@ describe('cli review export', () => {
     const { code, stdout, stderr } = await runReview(['--review-export-json', exportPath]);
     expect(code).toBe(0);
     expect(stderr).toBe('');
-    expect(stdout).toContain('Predictions: 0');
-    expect(stdout).toContain('Abstentions: 1');
-    expect(stdout).toContain('Warnings: 2');
-    expect(stdout).toContain('Warning Summary: abs-warn-1, abs-warn-2');
+    expect(stdout).toBe(await readReviewFixture('abstention-review-v1.txt'));
   });
 
   it('E: review mode validates manifest and prints Manifest Valid: yes', async () => {
     const exportPath = path.join(FIXTURE_DIR, 'full-export-v1.json');
     const { code, stdout } = await runReview(['--review-export-json', exportPath]);
     expect(code).toBe(0);
-    expect(stdout).toContain('Manifest Valid: yes');
+    expect(stdout).toBe(await readReviewFixture('full-review-v1.txt'));
   });
 
   it('F: review mode does not call orchestrate', async () => {
@@ -197,9 +163,7 @@ describe('cli review export', () => {
     try {
       const { code, stderr } = await runReview(['--review-export-json', badPath]);
       expect(code).toBe(1);
-      expect(stderr).toContain('MANIFEST_PREDICTION_COUNT_MISMATCH');
-      expect(stderr).toContain('manifest.resultCounts.predictions');
-      expect(stderr).toContain('prediction count mismatch between manifest and export');
+      expect(stderr).toBe(await readReviewFixture('invalid-manifest-review-v1.txt'));
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
