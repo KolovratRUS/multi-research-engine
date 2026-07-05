@@ -114,6 +114,15 @@ Changes that break golden fixture exact-match tests are not backward-compatible 
 
 Do not change these behaviors during rollout preparation.
 
+## Phase 2 templates
+
+Future coverage runs should use the run log template and artifact naming docs:
+
+- `docs/historical-coverage-run-log-template.md`
+- `docs/historical-coverage-artifact-naming.md`
+
+These templates keep coverage runs auditable and reproducible.
+
 ## Rollout plan
 
 1. Confirm release checklist passes.

@@ -153,6 +153,8 @@ The rollout plan for this subsystem is documented in `docs/historical-export-rev
 
 The larger coverage planning doc is `docs/historical-dataset-coverage-plan.md`.
 
+Coverage-run logging and artifact naming templates are documented in `docs/historical-coverage-run-log-template.md` and `docs/historical-coverage-artifact-naming.md`.
+
 ## Architecture
 
 The application enforces a strict two-stage separation:
