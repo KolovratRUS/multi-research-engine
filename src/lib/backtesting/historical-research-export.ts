@@ -143,6 +143,64 @@ export interface HistoricalResearchExportValidationResult {
   readonly issues: readonly HistoricalResearchExportValidationIssue[];
 }
 
+export const HISTORICAL_RESEARCH_EXPORT_REVIEW_BATCH_VERSION = 'historical-research-export-review-batch-v1';
+
+export interface HistoricalResearchExportBatchReviewItem {
+  readonly file: string;
+  readonly review: HistoricalResearchExportReviewJson;
+}
+
+export interface HistoricalResearchExportBatchReviewJson {
+  readonly reviewVersion: typeof HISTORICAL_RESEARCH_EXPORT_REVIEW_BATCH_VERSION;
+  readonly valid: boolean;
+  readonly summary: {
+    readonly filesReviewed: number;
+    readonly validFiles: number;
+    readonly invalidFiles: number;
+  };
+  readonly reviews: readonly HistoricalResearchExportBatchReviewItem[];
+}
+
+export function buildHistoricalResearchExportBatchReviewJson(
+  items: readonly HistoricalResearchExportBatchReviewItem[],
+): HistoricalResearchExportBatchReviewJson {
+  const valid = items.every((item) => item.review.valid);
+  return {
+    reviewVersion: HISTORICAL_RESEARCH_EXPORT_REVIEW_BATCH_VERSION,
+    valid,
+    summary: {
+      filesReviewed: items.length,
+      validFiles: items.filter((item) => item.review.valid).length,
+      invalidFiles: items.filter((item) => !item.review.valid).length,
+    },
+    reviews: Object.freeze([...items]),
+  };
+}
+
+export function formatHistoricalResearchExportBatchReview(
+  items: readonly HistoricalResearchExportBatchReviewItem[],
+): string {
+  const lines = [
+    'Historical Research Export Batch Review',
+    `Files Reviewed: ${items.length}`,
+    `Valid Files: ${items.filter((item) => item.review.valid).length}`,
+    `Invalid Files: ${items.filter((item) => !item.review.valid).length}`,
+  ];
+
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
+    lines.push('');
+    lines.push(`File ${i + 1}: ${item.file}`);
+    if (item.review.valid) {
+      lines.push(formatHistoricalResearchExportReview(item.review.summary as HistoricalResearchExportReviewSummary));
+    } else {
+      lines.push(formatHistoricalResearchExportValidationIssues(item.review.issues));
+    }
+  }
+
+  return lines.join('\n');
+}
+
 const FORBIDDEN_KEYS = new Set<string>([
   'modelProbability',
   'impliedProbability',

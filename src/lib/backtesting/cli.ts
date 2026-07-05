@@ -27,10 +27,17 @@ import type { ConstructionComparison, ModeMetrics, ResearchConstructionReport } 
 import { computeResearchConstructionReport } from '@/lib/backtesting/metrics';
 import {
   buildHistoricalResearchExport,
+  buildHistoricalResearchExportBatchReviewJson,
   buildHistoricalResearchExportReviewJson,
   buildHistoricalResearchExportReviewSummary,
+  formatHistoricalResearchExportBatchReview,
   formatHistoricalResearchExportReview,
   formatHistoricalResearchExportValidationIssues,
+  type HistoricalResearchExportBatchReviewItem,
+  type HistoricalResearchExportReviewJson,
+  type HistoricalResearchExportReviewSummary,
+  type HistoricalResearchExportValidationResult,
+  HISTORICAL_RESEARCH_EXPORT_REVIEW_VERSION,
   validateHistoricalResearchExportManifest,
 } from '@/lib/backtesting/historical-research-export';
 
@@ -66,7 +73,7 @@ export interface MLBBacktestCLIOptions {
   readonly capturePregamePitchers?: boolean;
   readonly researchConstruction?: 'FULL' | 'TEAM_ONLY' | 'BOTH';
   readonly exportJson?: string;
-  readonly reviewExportJson?: string;
+  readonly reviewExportJsonPaths?: readonly string[];
 }
 
 export interface CLIBacktestCLIError {
@@ -174,14 +181,17 @@ export function parseMLBBacktestCLIArgs(
       };
     }
 
-    if (seen.has(key)) {
+    if (seen.has(key) && key !== 'review-export-json') {
       return {
         code: 'DUPLICATE_OPTION',
         option: key,
         message: `Duplicate option: --${key}`,
       };
     }
-    seen.add(key);
+
+    if (key !== 'review-export-json') {
+      seen.add(key);
+    }
 
     if (key === 'help') {
       state.help = true;
@@ -383,7 +393,10 @@ export function parseMLBBacktestCLIArgs(
           message: 'Invalid --review-export-json. Expected a non-empty path.',
         };
       }
-      state.reviewExportJson = value.trim();
+      state.reviewExportJsonPaths = [
+        ...((state.reviewExportJsonPaths as string[]) ?? []),
+        value.trim(),
+      ];
       continue;
     }
   }
@@ -428,7 +441,7 @@ export function parseMLBBacktestCLIArgs(
     ...(state.capturePregamePitchers !== undefined ? { capturePregamePitchers: state.capturePregamePitchers as boolean } : {}),
     ...(state.researchConstruction !== undefined ? { researchConstruction: state.researchConstruction as 'FULL' | 'TEAM_ONLY' | 'BOTH' } : {}),
     ...(state.exportJson !== undefined ? { exportJson: state.exportJson as string } : {}),
-    ...(state.reviewExportJson !== undefined ? { reviewExportJson: state.reviewExportJson as string } : {}),
+    ...(state.reviewExportJsonPaths !== undefined ? { reviewExportJsonPaths: Object.freeze([...(state.reviewExportJsonPaths as string[])]) as readonly string[] } : {}),
   } satisfies MLBBacktestCLIOptions;
 }
 
@@ -984,7 +997,7 @@ export async function runMLBBacktestCLI(
     return 1;
   }
 
-  if (parsed.reviewExportJson) {
+  if (parsed.reviewExportJsonPaths?.length) {
     if (parsed.exportJson) {
       stderr('Cannot combine --review-export-json with --export-json.');
       return 1;
@@ -1010,51 +1023,105 @@ export async function runMLBBacktestCLI(
       return 1;
     }
 
-    try {
-      const content = await fs.readFile(parsed.reviewExportJson, 'utf-8');
-      const parsedFile = JSON.parse(content);
-      const validation = validateHistoricalResearchExportManifest(parsedFile);
+    const paths = parsed.reviewExportJsonPaths;
+    const singleFile = paths.length === 1;
+    let anyInvalid = false;
+    const items: HistoricalResearchExportBatchReviewItem[] = [];
+
+    for (const rawPath of paths) {
+      let validation: HistoricalResearchExportValidationResult;
+      let parsedFile: unknown;
+      let summary: HistoricalResearchExportReviewSummary | null = null;
+
+      try {
+        const content = await fs.readFile(rawPath, 'utf-8');
+        parsedFile = JSON.parse(content);
+        validation = validateHistoricalResearchExportManifest(parsedFile);
+      } catch (error) {
+        const caught = error as unknown;
+        let issueCode = 'EXPORT_REVIEW_UNKNOWN_ERROR';
+        let issueMessage = 'Unknown error during review';
+
+        if (caught instanceof SyntaxError) {
+          issueCode = 'INVALID_JSON_IN_EXPORT_FILE';
+          issueMessage = `Invalid JSON in export file: ${caught.message}`;
+        } else if (typeof caught === 'object' && caught !== null && typeof (caught as { code?: unknown }).code === 'string') {
+          const code = (caught as { code: string }).code;
+          if (code === 'ENOENT') {
+            issueCode = 'EXPORT_REVIEW_FILE_NOT_FOUND';
+            issueMessage = `Export file not found: ${rawPath}`;
+          } else {
+            issueMessage = `Failed to read export file: ${getReadFileErrorMessage(caught)}`;
+          }
+        } else if (caught instanceof Error) {
+          issueMessage = `Historical Research Export Review Failed: ${caught.message}`;
+        }
+
+        validation = {
+          valid: false,
+          issues: [
+            {
+              code: issueCode,
+              path: 'file',
+              message: issueMessage,
+            },
+          ],
+        };
+      }
+
+      if (validation.valid) {
+        summary = buildHistoricalResearchExportReviewSummary(parsedFile) ?? null;
+      }
+
+      const review: HistoricalResearchExportReviewJson = {
+        reviewVersion: HISTORICAL_RESEARCH_EXPORT_REVIEW_VERSION,
+        valid: summary !== null && validation.issues.length === 0,
+        summary: summary ?? null,
+        issues: Object.freeze([...validation.issues]),
+      };
+
+      items.push({ file: rawPath, review });
+
+      if (!review.valid) {
+        anyInvalid = true;
+      }
+    }
+
+    if (singleFile) {
+      const only = items[0];
+      if (only.review.valid) {
+        if (parsed.output === 'json') {
+          const payload = buildHistoricalResearchExportReviewJson(
+            only.review.summary as HistoricalResearchExportReviewSummary,
+            only.review.issues,
+          );
+          stdout(`${JSON.stringify(payload, null, 2)}\n`);
+          return 0;
+        }
+
+        stdout(formatHistoricalResearchExportReview(only.review.summary as HistoricalResearchExportReviewSummary));
+        return 0;
+      }
 
       if (parsed.output === 'json') {
-        const summary = validation.valid
-          ? buildHistoricalResearchExportReviewSummary(parsedFile) ?? null
-          : null;
-        const payload = buildHistoricalResearchExportReviewJson(summary, validation.issues);
+        const payload = buildHistoricalResearchExportReviewJson(only.review.summary, only.review.issues);
         stdout(`${JSON.stringify(payload, null, 2)}\n`);
-        return validation.valid ? 0 : 1;
-      }
-
-      if (!validation.valid) {
-        stderr(formatHistoricalResearchExportValidationIssues(validation.issues));
         return 1;
       }
 
-      const summary = buildHistoricalResearchExportReviewSummary(parsedFile);
-      if (!summary) {
-        stderr('Historical Research Export Review Failed\nExport object is structurally invalid.');
-        return 1;
-      }
-
-      stdout(formatHistoricalResearchExportReview(summary));
-      return 0;
-    } catch (error) {
-      const caught = error as unknown;
-      if (caught instanceof SyntaxError) {
-        stderr(`Invalid JSON in export file: ${caught.message}`);
-      } else if (typeof caught === 'object' && caught !== null && typeof (caught as { code?: unknown }).code === 'string') {
-        const code = (caught as { code: string }).code;
-        if (code === 'ENOENT') {
-          stderr(`Export file not found: ${parsed.reviewExportJson}`);
-        } else {
-          stderr(`Failed to read export file: ${getReadFileErrorMessage(caught)}`);
-        }
-      } else if (caught instanceof Error) {
-        stderr(`Historical Research Export Review Failed: ${caught.message}`);
-      } else {
-        stderr('Historical Research Export Review Failed');
-      }
+      stderr(formatHistoricalResearchExportValidationIssues(only.review.issues));
       return 1;
     }
+
+    if (parsed.output === 'json') {
+      const payload = buildHistoricalResearchExportBatchReviewJson(items);
+      stdout(`${JSON.stringify(payload, null, 2)}\n`);
+      return anyInvalid ? 1 : 0;
+    }
+
+    stdout(formatHistoricalResearchExportBatchReview(items));
+    stderr('');
+    return anyInvalid ? 1 : 0;
   }
 
   let provider: MLBHistoricalDataProvider;

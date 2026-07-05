@@ -1,0 +1,49 @@
+{
+  "exportVersion": "historical-research-export-v1",
+  "manifest": {
+    "exportId": "bad",
+    "exportVersion": "historical-research-export-v1",
+    "generatedAt": "2024-06-01T00:00:00.000Z",
+    "source": "fixture",
+    "researchConstruction": "FULL",
+    "dateRange": {
+      "startDate": "2024-06-01",
+      "endDate": "2024-06-03"
+    },
+    "requestedDateCount": 3,
+    "resultCounts": {
+      "predictions": 999,
+      "abstentions": 0,
+      "warnings": 0
+    },
+    "comparisonIncluded": false,
+    "evidenceDomainSummary": {
+      "included": [],
+      "excluded": []
+    },
+    "warningSummary": []
+  },
+  "generatedAt": "2024-06-01T00:00:00.000Z",
+  "source": "fixture",
+  "dateRange": {
+    "startDate": "2024-06-01",
+    "endDate": "2024-06-03"
+  },
+  "requestedDates": [
+    "2024-06-01",
+    "2024-06-02",
+    "2024-06-03"
+  ],
+  "researchConstruction": "FULL",
+  "runSummary": {
+    "scheduleRequests": 3,
+    "discoveredGames": 2,
+    "uniqueGames": 2,
+    "duplicateGamesRemoved": 0,
+    "predictionsMade": 0,
+    "abstentions": 0,
+    "warningCount": 0
+  },
+  "predictions": [],
+  "abstentions": []
+}
