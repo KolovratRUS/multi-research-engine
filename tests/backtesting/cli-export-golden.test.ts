@@ -136,6 +136,11 @@ async function runExportScenario(args: string[], fixtureName: string) {
     expect(content).toBe(expected);
     expect(JSON.parse(content)).toBeDefined();
     expect(JSON.parse(expected)).toBeDefined();
+    const { validateHistoricalResearchExportManifest } = await import('@/lib/backtesting/historical-research-export');
+    const exportObj = JSON.parse(content);
+    const validation = validateHistoricalResearchExportManifest(exportObj);
+    expect(validation.valid).toBe(true);
+    expect(validation.issues).toEqual([]);
     expect(mockStdout.length).toBeGreaterThan(0);
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
