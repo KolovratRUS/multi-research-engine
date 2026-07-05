@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { runMLBBacktestCLI } from '@/lib/backtesting/cli';
+import {
+  buildHistoricalResearchExportBatchAggregateSummary,
+  type HistoricalResearchExportBatchReviewItem,
+  type HistoricalResearchExportReviewJson,
+  type HistoricalResearchExportReviewSummary,
+  HISTORICAL_RESEARCH_EXPORT_REVIEW_VERSION,
+} from '@/lib/backtesting/historical-research-export';
 import { readFileSync } from 'node:fs';
 
 const TEXT_FIXTURE_DIR = 'tests/backtesting/fixtures/historical-research-export-review';
@@ -46,7 +53,19 @@ function buildCLIOptions({
   return args;
 }
 
-it('A: batch text with FULL + TEAM_ONLY exits 0 with expected batch header', async () => {
+function buildReviewItem(
+  summary: HistoricalResearchExportReviewSummary | null,
+  valid = true,
+): HistoricalResearchExportReviewJson {
+  return {
+    reviewVersion: HISTORICAL_RESEARCH_EXPORT_REVIEW_VERSION,
+    valid,
+    summary,
+    issues: [],
+  };
+}
+
+it('A: batch text with FULL + TEAM_ONLY includes aggregate counts', async () => {
   const args = buildCLIOptions({
     reviewExportJson: [
       `${REVIEW_DIR}/full-export-v1.json`,
@@ -59,14 +78,20 @@ it('A: batch text with FULL + TEAM_ONLY exits 0 with expected batch header', asy
   expect(stdout).toContain('Files Reviewed: 2');
   expect(stdout).toContain('Valid Files: 2');
   expect(stdout).toContain('Invalid Files: 0');
+  expect(stdout).toContain('Total Requested Dates: 6');
+  expect(stdout).toContain('Total Predictions: 2');
+  expect(stdout).toContain('Total Abstentions: 0');
+  expect(stdout).toContain('Total Warnings: 2');
+  expect(stdout).toContain('Construction Counts: FULL=1, TEAM_ONLY=1, BOTH=0');
+  expect(stdout).toContain('Comparison Included Files: 0');
+  expect(stdout).toContain('Included Evidence Domains: team-offense');
+  expect(stdout).toContain('Excluded Evidence Domains: starting-pitcher');
+  expect(stdout).toContain('Warning Summary: full-warn, team-warn');
   expect(stdout).toContain(`File 1: ${REVIEW_DIR}/full-export-v1.json`);
   expect(stdout).toContain(`File 2: ${REVIEW_DIR}/team-only-export-v1.json`);
-  expect(stdout).toContain('Export Version: historical-research-export-v1');
-  expect(stdout).toContain('Research Construction: FULL');
-  expect(stdout).toContain('Research Construction: TEAM_ONLY');
 });
 
-it('B: batch JSON with FULL + TEAM_ONLY exits 0 and matches expected batch version', async () => {
+it('B: batch JSON with FULL + TEAM_ONLY summary contains aggregate values', async () => {
   const args = buildCLIOptions({
     output: 'json',
     reviewExportJson: [
@@ -79,36 +104,44 @@ it('B: batch JSON with FULL + TEAM_ONLY exits 0 and matches expected batch versi
   const payload = JSON.parse(stdout);
   expect(payload.reviewVersion).toBe('historical-research-export-review-batch-v1');
   expect(payload.valid).toBe(true);
-  expect(payload.summary).toEqual({ filesReviewed: 2, validFiles: 2, invalidFiles: 0 });
+  expect(payload.summary).toEqual({
+    filesReviewed: 2,
+    validFiles: 2,
+    invalidFiles: 0,
+    totalRequestedDates: 6,
+    totalPredictions: 2,
+    totalAbstentions: 0,
+    totalWarnings: 2,
+    constructionCounts: { FULL: 1, TEAM_ONLY: 1, BOTH: 0 },
+    comparisonIncludedFiles: 0,
+    evidenceDomainSummary: { included: ['team-offense'], excluded: ['starting-pitcher'] },
+    warningSummary: ['full-warn', 'team-warn'],
+  });
   expect(payload.reviews).toHaveLength(2);
   expect(payload.reviews[0].file).toBe(`${REVIEW_DIR}/full-export-v1.json`);
-  expect(payload.reviews[0].review.valid).toBe(true);
-  expect(payload.reviews[0].review.summary.researchConstruction).toBe('FULL');
   expect(payload.reviews[1].file).toBe(`${REVIEW_DIR}/team-only-export-v1.json`);
-  expect(payload.reviews[1].review.valid).toBe(true);
-  expect(payload.reviews[1].review.summary.researchConstruction).toBe('TEAM_ONLY');
 });
 
-it('C: batch text with one invalid manifest exits 1 and reports invalid', async () => {
+it('C: batch text with one invalid manifest excludes invalid from aggregates', async () => {
   const args = buildCLIOptions({
     reviewExportJson: [
       `${REVIEW_DIR}/full-export-v1.json`,
       `${REVIEW_DIR}/invalid-export-v1.json`,
     ],
   });
-  const { stdout, stderr, exitCode } = await runReview(args);
+  const { stdout, exitCode } = await runReview(args);
   expect(exitCode).toBe(1);
-  expect(stdout).toContain('Historical Research Export Batch Review');
   expect(stdout).toContain('Files Reviewed: 2');
   expect(stdout).toContain('Valid Files: 1');
   expect(stdout).toContain('Invalid Files: 1');
-  expect(stdout).toContain(`File 1: ${REVIEW_DIR}/full-export-v1.json`);
-  expect(stdout).toContain(`File 2: ${REVIEW_DIR}/invalid-export-v1.json`);
+  expect(stdout).toContain('Total Requested Dates: 3');
+  expect(stdout).toContain('Total Predictions: 1');
+  expect(stdout).toContain('Total Warnings: 1');
   expect(stdout).toContain('MANIFEST_PREDICTION_COUNT_MISMATCH');
-  expect(stderr).toBe('');
+  expect(stdout).toContain(`File 2: ${REVIEW_DIR}/invalid-export-v1.json`);
 });
 
-it('D: batch JSON with one invalid manifest exits 1 and reports invalid', async () => {
+it('D: batch JSON with one invalid manifest excludes invalid from aggregates', async () => {
   const args = buildCLIOptions({
     output: 'json',
     reviewExportJson: [
@@ -120,14 +153,342 @@ it('D: batch JSON with one invalid manifest exits 1 and reports invalid', async 
   expect(exitCode).toBe(1);
   const payload = JSON.parse(stdout);
   expect(payload.valid).toBe(false);
-  expect(payload.summary).toEqual({ filesReviewed: 2, validFiles: 1, invalidFiles: 1 });
-  expect(payload.reviews[0].review.valid).toBe(true);
-  expect(payload.reviews[1].review.valid).toBe(false);
+  expect(payload.summary).toEqual({
+    filesReviewed: 2,
+    validFiles: 1,
+    invalidFiles: 1,
+    totalRequestedDates: 3,
+    totalPredictions: 1,
+    totalAbstentions: 0,
+    totalWarnings: 1,
+    constructionCounts: { FULL: 1, TEAM_ONLY: 0, BOTH: 0 },
+    comparisonIncludedFiles: 0,
+    evidenceDomainSummary: { included: ['team-offense'], excluded: ['starting-pitcher'] },
+    warningSummary: ['full-warn'],
+  });
   expect(payload.reviews[1].review.summary).toBe(null);
   expect(payload.reviews[1].review.issues.some((issue: { code: string }) => issue.code === 'MANIFEST_PREDICTION_COUNT_MISMATCH')).toBe(true);
 });
 
-it('E: batch text continues after invalid first file and reviews second file', async () => {
+it('E: batch text with BOTH includes comparison and BOTH construction count', async () => {
+  const args = buildCLIOptions({
+    reviewExportJson: [
+      `${REVIEW_DIR}/both-export-v1.json`,
+      `${REVIEW_DIR}/full-export-v1.json`,
+    ],
+  });
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Construction Counts: FULL=1, TEAM_ONLY=0, BOTH=1');
+  expect(stdout).toContain('Comparison Included Files: 1');
+});
+
+it('F: batch JSON with FULL + TEAM_ONLY + BOTH includes BOTH aggregate values', async () => {
+  const args = buildCLIOptions({
+    output: 'json',
+    reviewExportJson: [
+      `${REVIEW_DIR}/full-export-v1.json`,
+      `${REVIEW_DIR}/team-only-export-v1.json`,
+      `${REVIEW_DIR}/both-export-v1.json`,
+    ],
+  });
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  const payload = JSON.parse(stdout);
+  expect(payload.summary).toEqual({
+    filesReviewed: 3,
+    validFiles: 3,
+    invalidFiles: 0,
+    totalRequestedDates: 9,
+    totalPredictions: 4,
+    totalAbstentions: 0,
+    totalWarnings: 2,
+    constructionCounts: { FULL: 1, TEAM_ONLY: 1, BOTH: 1 },
+    comparisonIncludedFiles: 1,
+    evidenceDomainSummary: { included: ['team-offense'], excluded: ['starting-pitcher'] },
+    warningSummary: ['full-warn', 'team-warn'],
+  });
+});
+
+it('G: batch missing file excludes missing file from aggregates', async () => {
+  const args = buildCLIOptions({
+    output: 'json',
+    reviewExportJson: [
+      'tests/backtesting/fixtures/historical-research-export-review/missing.json',
+      `${REVIEW_DIR}/full-export-v1.json`,
+    ],
+  });
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  const payload = JSON.parse(stdout);
+  expect(payload.summary).toEqual({
+    filesReviewed: 2,
+    validFiles: 1,
+    invalidFiles: 1,
+    totalRequestedDates: 3,
+    totalPredictions: 1,
+    totalAbstentions: 0,
+    totalWarnings: 1,
+    constructionCounts: { FULL: 1, TEAM_ONLY: 0, BOTH: 0 },
+    comparisonIncludedFiles: 0,
+    evidenceDomainSummary: { included: ['team-offense'], excluded: ['starting-pitcher'] },
+    warningSummary: ['full-warn'],
+  });
+  expect(payload.reviews[0].review.valid).toBe(false);
+  expect(payload.reviews[0].review.summary).toBe(null);
+});
+
+it('H: batch invalid JSON excludes invalid JSON from aggregates', async () => {
+  const args = buildCLIOptions({
+    output: 'json',
+    reviewExportJson: [
+      'tests/backtesting/fixtures/historical-research-export-review/bad.json',
+      `${REVIEW_DIR}/full-export-v1.json`,
+    ],
+  });
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  const payload = JSON.parse(stdout);
+  expect(payload.summary).toEqual({
+    filesReviewed: 2,
+    validFiles: 1,
+    invalidFiles: 1,
+    totalRequestedDates: 3,
+    totalPredictions: 1,
+    totalAbstentions: 0,
+    totalWarnings: 1,
+    constructionCounts: { FULL: 1, TEAM_ONLY: 0, BOTH: 0 },
+    comparisonIncludedFiles: 0,
+    evidenceDomainSummary: { included: ['team-offense'], excluded: ['starting-pitcher'] },
+    warningSummary: ['full-warn'],
+  });
+});
+
+it('I: aggregate helper dedupes evidence domains by first-seen order', () => {
+  const items: readonly HistoricalResearchExportBatchReviewItem[] = [
+    { file: 'a.json', review: buildReviewItem({ ...fakeSummary(), evidenceDomainSummary: { included: ['team-offense', 'starting-pitcher'], excluded: [] } }) },
+    { file: 'b.json', review: buildReviewItem({ ...fakeSummary(), evidenceDomainSummary: { included: ['starting-pitcher'], excluded: ['team-offense'] } }) },
+  ];
+
+  const summary = buildHistoricalResearchExportBatchAggregateSummary(items);
+  expect(summary.evidenceDomainSummary.included).toEqual(['team-offense', 'starting-pitcher']);
+  expect(summary.evidenceDomainSummary.excluded).toEqual(['team-offense']);
+});
+
+it('J: aggregate helper dedupes warning summaries by first-seen order', () => {
+  const items: readonly HistoricalResearchExportBatchReviewItem[] = [
+    { file: 'a.json', review: buildReviewItem({ ...fakeSummary(), warningSummary: ['x', 'y'] }) },
+    { file: 'b.json', review: buildReviewItem({ ...fakeSummary(), warningSummary: ['y', 'z'] }) },
+  ];
+
+  const summary = buildHistoricalResearchExportBatchAggregateSummary(items);
+  expect(summary.warningSummary).toEqual(['x', 'y', 'z']);
+});
+
+it('K: aggregate helper excludes invalid items from totals', () => {
+  const validSummary = fakeSummary();
+  const validItems: readonly HistoricalResearchExportBatchReviewItem[] = [
+    { file: 'a.json', review: buildReviewItem(validSummary) },
+    { file: 'b.json', review: buildReviewItem(null, false) },
+  ];
+
+  const summary = buildHistoricalResearchExportBatchAggregateSummary(validItems);
+  expect(summary.filesReviewed).toBe(2);
+  expect(summary.validFiles).toBe(1);
+  expect(summary.invalidFiles).toBe(1);
+  expect(summary.totalPredictions).toBe(validSummary.resultCounts.predictions);
+});
+
+it('L: aggregate helper preserves construction counts in fixed order', () => {
+  const items: readonly HistoricalResearchExportBatchReviewItem[] = [
+    { file: 'a.json', review: buildReviewItem({ ...fakeSummary(), researchConstruction: 'BOTH' }) },
+    { file: 'b.json', review: buildReviewItem({ ...fakeSummary(), researchConstruction: 'FULL' }) },
+    { file: 'c.json', review: buildReviewItem({ ...fakeSummary(), researchConstruction: 'BOTH' }) },
+  ];
+
+  const summary = buildHistoricalResearchExportBatchAggregateSummary(items);
+  expect(Object.keys(summary.constructionCounts)).toEqual(['FULL', 'TEAM_ONLY', 'BOTH']);
+  expect(summary.constructionCounts).toEqual({ FULL: 1, TEAM_ONLY: 0, BOTH: 2 });
+});
+
+it('M: batch JSON preserves input order in reviews', async () => {
+  const args = buildCLIOptions({
+    output: 'json',
+    reviewExportJson: [
+      `${REVIEW_DIR}/team-only-export-v1.json`,
+      `${REVIEW_DIR}/full-export-v1.json`,
+      `${REVIEW_DIR}/both-export-v1.json`,
+    ],
+  });
+  const { stdout } = await runReview(args);
+  const payload = JSON.parse(stdout);
+  expect(payload.reviews.map((item: { file: string }) => item.file)).toEqual([
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    `${REVIEW_DIR}/full-export-v1.json`,
+    `${REVIEW_DIR}/both-export-v1.json`,
+  ]);
+});
+
+it('N: batch JSON contains no raw predictions', async () => {
+  const args = buildCLIOptions({
+    output: 'json',
+    reviewExportJson: [
+      `${REVIEW_DIR}/full-export-v1.json`,
+      `${REVIEW_DIR}/team-only-export-v1.json`,
+    ],
+  });
+  const { stdout } = await runReview(args);
+  const serialized = JSON.stringify(JSON.parse(stdout));
+  expect(serialized).not.toContain('eventId');
+  expect(serialized).not.toContain('homeTeam');
+  expect(serialized).not.toContain('awayTeam');
+});
+
+it('O: batch JSON contains no raw abstentions', async () => {
+  const args = buildCLIOptions({
+    output: 'json',
+    reviewExportJson: [
+      `${REVIEW_DIR}/full-export-v1.json`,
+      `${REVIEW_DIR}/team-only-export-v1.json`,
+    ],
+  });
+  const { stdout } = await runReview(args);
+  const serialized = JSON.stringify(JSON.parse(stdout));
+  expect(serialized).not.toContain('abstentionReason');
+});
+
+it('P: batch JSON contains no modelProbability', async () => {
+  const args = buildCLIOptions({
+    output: 'json',
+    reviewExportJson: [
+      `${REVIEW_DIR}/full-export-v1.json`,
+      `${REVIEW_DIR}/invalid-export-v1.json`,
+    ],
+  });
+  const { stdout } = await runReview(args);
+  expect(stdout).not.toContain('modelProbability');
+});
+
+it('Q: batch JSON contains no odds/probability/betting concepts', async () => {
+  const args = buildCLIOptions({
+    output: 'json',
+    reviewExportJson: [
+      `${REVIEW_DIR}/full-export-v1.json`,
+      `${REVIEW_DIR}/team-only-export-v1.json`,
+    ],
+  });
+  const { stdout } = await runReview(args);
+  expect(stdout).not.toContain('odds');
+  expect(stdout).not.toContain('sportsbook');
+  expect(stdout).not.toContain('implied probability');
+  expect(stdout).not.toContain('expected value');
+  expect(stdout).not.toContain('EV');
+  expect(stdout).not.toContain('ROI');
+  expect(stdout).not.toContain('edge');
+});
+
+it('R: batch mode does not call orchestrate', async () => {
+  const deps: Parameters<typeof runMLBBacktestCLI>[2] = {
+    orchestrate: async () => {
+      throw new Error('orchestrate should not be called in review mode');
+    },
+  };
+  const args = buildCLIOptions({
+    reviewExportJson: [
+      `${REVIEW_DIR}/full-export-v1.json`,
+      `${REVIEW_DIR}/team-only-export-v1.json`,
+    ],
+  });
+  const exitCode = await runMLBBacktestCLI(args, undefined, deps);
+  expect(exitCode).toBe(0);
+});
+
+it('S: batch mode does not construct live provider', async () => {
+  const args = buildCLIOptions({
+    reviewExportJson: [
+      `${REVIEW_DIR}/full-export-v1.json`,
+      `${REVIEW_DIR}/team-only-export-v1.json`,
+    ],
+  });
+  const exitCode = await runMLBBacktestCLI(args, undefined, {});
+  expect(exitCode).toBe(0);
+});
+
+it('T: batch mode does not write files', async () => {
+  const args = buildCLIOptions({
+    reviewExportJson: [
+      `${REVIEW_DIR}/full-export-v1.json`,
+      `${REVIEW_DIR}/team-only-export-v1.json`,
+    ],
+  });
+  const result = await runReview(args);
+  expect(result.stdout).toContain('Historical Research Export Batch Review');
+});
+
+it('U: batch rejects --export-json combination', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+  ];
+  const { stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stderr).toBe('Cannot combine --review-export-json with --export-json.');
+});
+
+it('V: missing first review path exits 1 and still reviews second file', async () => {
+  const args = buildCLIOptions({
+    reviewExportJson: [
+      'tests/backtesting/fixtures/historical-research-export-review/missing.json',
+      `${REVIEW_DIR}/full-export-v1.json`,
+    ],
+  });
+  const { stdout, stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('EXPORT_REVIEW_FILE_NOT_FOUND');
+  expect(stdout).toContain(`File 2: ${REVIEW_DIR}/full-export-v1.json`);
+  expect(stderr).toBe('');
+});
+
+it('W: other duplicate options are still rejected', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--cache-root=/tmp',
+    '--cache-root=/tmp2',
+  ];
+  const { stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stderr).toBe('Duplicate option: --cache-root');
+});
+
+it('X: single-file behavior remains byte-identical for valid text', async () => {
+  const args = buildCLIOptions({
+    reviewExportJson: [`${REVIEW_DIR}/full-export-v1.json`],
+  });
+  const { stdout } = await runReview(args);
+  expect(stdout).toBe(
+    readFileSync(`${TEXT_FIXTURE_DIR}/full-review-v1.txt`, 'utf-8').replace(/\n$/, ''),
+  );
+});
+
+it('Y: single-file behavior remains byte-identical for valid JSON', async () => {
+  const args = buildCLIOptions({
+    output: 'json',
+    reviewExportJson: [`${REVIEW_DIR}/full-export-v1.json`],
+  });
+  const { stdout } = await runReview(args);
+  expect(stdout).toBe(
+    readFileSync(`${JSON_FIXTURE_DIR}/full-review-json-v1.json`, 'utf-8'),
+  );
+});
+
+it('Z: batch continues after invalid first file and reviews second file', async () => {
   const args = buildCLIOptions({
     reviewExportJson: [
       `${REVIEW_DIR}/invalid-export-v1.json`,
@@ -142,7 +503,7 @@ it('E: batch text continues after invalid first file and reviews second file', a
   expect(stdout).toContain('Export Version: historical-research-export-v1');
 });
 
-it('F: batch JSON continues after invalid first file and reviews second file', async () => {
+it('AA: batch JSON continues after invalid first file and reviews second file', async () => {
   const args = buildCLIOptions({
     output: 'json',
     reviewExportJson: [
@@ -160,78 +521,7 @@ it('F: batch JSON continues after invalid first file and reviews second file', a
   expect(payload.reviews[1].review.valid).toBe(true);
 });
 
-it('G: batch missing file exits 1 and still reviews other valid files', async () => {
-  const args = buildCLIOptions({
-    reviewExportJson: [
-      'tests/backtesting/fixtures/historical-research-export-review/missing.json',
-      `${REVIEW_DIR}/full-export-v1.json`,
-    ],
-  });
-  const { stdout, stderr, exitCode } = await runReview(args);
-  expect(exitCode).toBe(1);
-  expect(stdout).toContain('Historical Research Export Batch Review');
-  expect(stdout).toContain('File 1: tests/backtesting/fixtures/historical-research-export-review/missing.json');
-  expect(stdout).toContain(`File 2: ${REVIEW_DIR}/full-export-v1.json`);
-  expect(stdout).toContain('EXPORT_REVIEW_FILE_NOT_FOUND');
-  expect(stderr).toBe('');
-});
-
-it('H: batch missing file JSON exits 1 and summarizes other valid files', async () => {
-  const args = buildCLIOptions({
-    output: 'json',
-    reviewExportJson: [
-      'tests/backtesting/fixtures/historical-research-export-review/missing.json',
-      `${REVIEW_DIR}/full-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(1);
-  const payload = JSON.parse(stdout);
-  expect(payload.valid).toBe(false);
-  expect(payload.summary).toEqual({ filesReviewed: 2, validFiles: 1, invalidFiles: 1 });
-  expect(payload.reviews[0].file).toBe('tests/backtesting/fixtures/historical-research-export-review/missing.json');
-  expect(payload.reviews[0].review.valid).toBe(false);
-  expect(payload.reviews[0].review.summary).toBe(null);
-  expect(payload.reviews[0].review.issues.some((issue: { code: string }) => issue.code === 'EXPORT_REVIEW_FILE_NOT_FOUND')).toBe(true);
-  expect(payload.reviews[1].review.valid).toBe(true);
-});
-
-it('I: batch invalid JSON exits 1 and still reviews other valid files', async () => {
-  const args = buildCLIOptions({
-    output: 'json',
-    reviewExportJson: [
-      'tests/backtesting/fixtures/historical-research-export-review/bad.json',
-      `${REVIEW_DIR}/full-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(1);
-  const payload = JSON.parse(stdout);
-  expect(payload.valid).toBe(false);
-  expect(payload.summary).toEqual({ filesReviewed: 2, validFiles: 1, invalidFiles: 1 });
-  expect(payload.reviews[0].review.valid).toBe(false);
-  expect(payload.reviews[0].review.issues.some((issue: { code: string }) => issue.code === 'INVALID_JSON_IN_EXPORT_FILE')).toBe(true);
-  expect(payload.reviews[1].review.valid).toBe(true);
-});
-
-it('J: batch preserves input order for valid files', async () => {
-  const args = buildCLIOptions({
-    output: 'text',
-    reviewExportJson: [
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-      `${REVIEW_DIR}/full-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(0);
-  const firstIndex = stdout.indexOf(`File 1: ${REVIEW_DIR}/team-only-export-v1.json`);
-  const secondIndex = stdout.indexOf(`File 2: ${REVIEW_DIR}/full-export-v1.json`);
-  expect(firstIndex).toBeGreaterThanOrEqual(0);
-  expect(secondIndex).toBeGreaterThanOrEqual(0);
-  expect(firstIndex).toBeLessThan(secondIndex);
-});
-
-it('K: batch produces no stderr when some files are invalid', async () => {
+it('AB: batch produces no stderr when some files are invalid', async () => {
   const args = buildCLIOptions({
     reviewExportJson: [
       `${REVIEW_DIR}/full-export-v1.json`,
@@ -243,211 +533,18 @@ it('K: batch produces no stderr when some files are invalid', async () => {
   expect(stderr).toBe('');
 });
 
-it('L: batch does not write files', async () => {
-  const args = buildCLIOptions({
-    reviewExportJson: [
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(0);
-  expect(stdout).not.toContain('Export JSON');
-});
-
-it('M: batch JSON summary counts are correct for valid-only batch', async () => {
-  const args = buildCLIOptions({
-    output: 'json',
-    reviewExportJson: [
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-      `${REVIEW_DIR}/both-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(0);
-  const payload = JSON.parse(stdout);
-  expect(payload.valid).toBe(true);
-  expect(payload.summary).toEqual({ filesReviewed: 3, validFiles: 3, invalidFiles: 0 });
-});
-
-it('N: batch JSON summary counts are correct for invalid batch', async () => {
-  const args = buildCLIOptions({
-    output: 'json',
-    reviewExportJson: [
-      `${REVIEW_DIR}/invalid-export-v1.json`,
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(1);
-  const payload = JSON.parse(stdout);
-  expect(payload.valid).toBe(false);
-  expect(payload.summary).toEqual({ filesReviewed: 3, validFiles: 2, invalidFiles: 1 });
-});
-
-it('O: batch JSON contains no raw predictions', async () => {
-  const args = buildCLIOptions({
-    output: 'json',
-    reviewExportJson: [
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(0);
-  const payload = JSON.parse(stdout);
-  const serialized = JSON.stringify(payload);
-  expect(serialized).not.toContain('"eventId"');
-  expect(serialized).not.toContain('"homeTeam"');
-  expect(serialized).not.toContain('"awayTeam"');
-});
-
-it('P: batch JSON contains no raw abstentions', async () => {
-  const args = buildCLIOptions({
-    output: 'json',
-    reviewExportJson: [
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(0);
-  const payload = JSON.parse(stdout);
-  const serialized = JSON.stringify(payload);
-  expect(serialized).not.toContain('"abstentionReason"');
-});
-
-it('Q: batch JSON contains no modelProbability', async () => {
-  const args = buildCLIOptions({
-    output: 'json',
-    reviewExportJson: [
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/invalid-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(1);
-  expect(stdout).not.toContain('modelProbability');
-});
-
-it('R: batch JSON contains no odds/probability/betting concepts', async () => {
-  const args = buildCLIOptions({
-    output: 'json',
-    reviewExportJson: [
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-    ],
-  });
-  const { stdout, exitCode } = await runReview(args);
-  expect(exitCode).toBe(0);
-  expect(stdout).not.toContain('odds');
-  expect(stdout).not.toContain('sportsbook');
-  expect(stdout).not.toContain('implied probability');
-  expect(stdout).not.toContain('expected value');
-  expect(stdout).not.toContain('EV');
-  expect(stdout).not.toContain('ROI');
-  expect(stdout).not.toContain('edge');
-});
-
-it('S: batch mode does not call orchestrate', async () => {
-  const deps: Parameters<typeof runMLBBacktestCLI>[2] = {
-    orchestrate: async () => {
-      throw new Error('orchestrate should not be called in review mode');
-    },
+function fakeSummary(): HistoricalResearchExportReviewSummary {
+  return {
+    exportId: 'test-export-id',
+    exportVersion: 'historical-research-export-v1',
+    generatedAt: '2024-06-01T00:00:00.000Z',
+    source: 'fixture',
+    researchConstruction: 'FULL',
+    dateRange: { startDate: '2024-06-01', endDate: '2024-06-03' },
+    requestedDateCount: 3,
+    resultCounts: { predictions: 1, abstentions: 0, warnings: 1 },
+    comparisonIncluded: false,
+    evidenceDomainSummary: { included: [], excluded: [] },
+    warningSummary: [],
   };
-  const args = buildCLIOptions({
-    reviewExportJson: [
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-    ],
-  });
-  const exitCode = await runMLBBacktestCLI(args, undefined, deps);
-  expect(exitCode).toBe(0);
-});
-
-it('T: batch mode does not construct live provider', async () => {
-  const args = buildCLIOptions({
-    reviewExportJson: [
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-    ],
-  });
-  const exitCode = await runMLBBacktestCLI(args, undefined, {});
-  expect(exitCode).toBe(0);
-});
-
-it('U: batch mode does not write files', async () => {
-  const args = buildCLIOptions({
-    reviewExportJson: [
-      `${REVIEW_DIR}/full-export-v1.json`,
-      `${REVIEW_DIR}/team-only-export-v1.json`,
-    ],
-  });
-  const result = await runReview(args);
-  expect(result.stdout).toContain('Historical Research Export Batch Review');
-});
-
-it('V: batch rejects --export-json combination', async () => {
-  const args = [
-    '--review-export-json',
-    `${REVIEW_DIR}/full-export-v1.json`,
-    '--review-export-json',
-    `${REVIEW_DIR}/team-only-export-v1.json`,
-    '--export-json',
-    `${REVIEW_DIR}/full-export-v1.json`,
-  ];
-  const { stderr, exitCode } = await runReview(args);
-  expect(exitCode).toBe(1);
-  expect(stderr).toBe('Cannot combine --review-export-json with --export-json.');
-});
-
-it('W: missing first review path exits 1 and still reviews second file', async () => {
-  const args = buildCLIOptions({
-    reviewExportJson: [
-      'tests/backtesting/fixtures/historical-research-export-review/missing.json',
-      `${REVIEW_DIR}/full-export-v1.json`,
-    ],
-  });
-  const { stdout, stderr, exitCode } = await runReview(args);
-  expect(exitCode).toBe(1);
-  expect(stdout).toContain('EXPORT_REVIEW_FILE_NOT_FOUND');
-  expect(stdout).toContain(`File 2: ${REVIEW_DIR}/full-export-v1.json`);
-  expect(stderr).toBe('');
-});
-
-it('X: other duplicate options are still rejected', async () => {
-  const args = [
-    '--review-export-json',
-    `${REVIEW_DIR}/full-export-v1.json`,
-    '--review-export-json',
-    `${REVIEW_DIR}/team-only-export-v1.json`,
-    '--cache-root=/tmp',
-    '--cache-root=/tmp2',
-  ];
-  const { stderr, exitCode } = await runReview(args);
-  expect(exitCode).toBe(1);
-  expect(stderr).toBe('Duplicate option: --cache-root');
-});
-
-it('Y: single-file behavior remains byte-identical for valid text', async () => {
-  const args = buildCLIOptions({
-    reviewExportJson: [`${REVIEW_DIR}/full-export-v1.json`],
-  });
-  const { stdout } = await runReview(args);
-  expect(stdout).toBe(
-    readFileSync(`${TEXT_FIXTURE_DIR}/full-review-v1.txt`, 'utf-8').replace(/\n$/, ''),
-  );
-});
-
-it('Z: single-file behavior remains byte-identical for valid JSON', async () => {
-  const args = buildCLIOptions({
-    output: 'json',
-    reviewExportJson: [`${REVIEW_DIR}/full-export-v1.json`],
-  });
-  const { stdout } = await runReview(args);
-  expect(stdout).toBe(
-    readFileSync(`${JSON_FIXTURE_DIR}/full-review-json-v1.json`, 'utf-8'),
-  );
-});
+}

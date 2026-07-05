@@ -153,26 +153,112 @@ export interface HistoricalResearchExportBatchReviewItem {
 export interface HistoricalResearchExportBatchReviewJson {
   readonly reviewVersion: typeof HISTORICAL_RESEARCH_EXPORT_REVIEW_BATCH_VERSION;
   readonly valid: boolean;
-  readonly summary: {
-    readonly filesReviewed: number;
-    readonly validFiles: number;
-    readonly invalidFiles: number;
-  };
+  readonly summary: HistoricalResearchExportBatchAggregateSummary;
   readonly reviews: readonly HistoricalResearchExportBatchReviewItem[];
+}
+
+export interface HistoricalResearchExportBatchAggregateSummary {
+  readonly filesReviewed: number;
+  readonly validFiles: number;
+  readonly invalidFiles: number;
+  readonly totalRequestedDates: number;
+  readonly totalPredictions: number;
+  readonly totalAbstentions: number;
+  readonly totalWarnings: number;
+  readonly constructionCounts: {
+    readonly FULL: number;
+    readonly TEAM_ONLY: number;
+    readonly BOTH: number;
+  };
+  readonly comparisonIncludedFiles: number;
+  readonly evidenceDomainSummary: {
+    readonly included: readonly string[];
+    readonly excluded: readonly string[];
+  };
+  readonly warningSummary: readonly string[];
+}
+
+export function buildHistoricalResearchExportBatchAggregateSummary(
+  items: readonly HistoricalResearchExportBatchReviewItem[],
+): HistoricalResearchExportBatchAggregateSummary {
+  const validItems = items.filter((item) => item.review.valid);
+  const summaries = validItems
+    .map((item) => item.review.summary)
+    .filter((summary): summary is HistoricalResearchExportReviewSummary => summary !== null);
+
+  const includedDomains: string[] = [];
+  const excludedDomains: string[] = [];
+  const warnings: string[] = [];
+
+  let totalRequestedDates = 0;
+  let totalPredictions = 0;
+  let totalAbstentions = 0;
+  let totalWarnings = 0;
+  const constructionCounts = { FULL: 0, TEAM_ONLY: 0, BOTH: 0 };
+  let comparisonIncludedFiles = 0;
+
+  for (const summary of summaries) {
+    totalRequestedDates += summary.requestedDateCount;
+    totalPredictions += summary.resultCounts.predictions;
+    totalAbstentions += summary.resultCounts.abstentions;
+    totalWarnings += summary.resultCounts.warnings;
+
+    const construction = summary.researchConstruction as 'FULL' | 'TEAM_ONLY' | 'BOTH';
+    if (construction === 'FULL' || construction === 'TEAM_ONLY' || construction === 'BOTH') {
+      constructionCounts[construction] += 1;
+    }
+
+    if (summary.comparisonIncluded) {
+      comparisonIncludedFiles += 1;
+    }
+
+    for (const domain of summary.evidenceDomainSummary.included) {
+      if (!includedDomains.includes(domain)) {
+        includedDomains.push(domain);
+      }
+    }
+
+    for (const domain of summary.evidenceDomainSummary.excluded) {
+      if (!excludedDomains.includes(domain)) {
+        excludedDomains.push(domain);
+      }
+    }
+
+    for (const warning of summary.warningSummary) {
+      if (!warnings.includes(warning)) {
+        warnings.push(warning);
+      }
+    }
+  }
+
+  return Object.freeze({
+    filesReviewed: items.length,
+    validFiles: validItems.length,
+    invalidFiles: items.length - validItems.length,
+    totalRequestedDates,
+    totalPredictions,
+    totalAbstentions,
+    totalWarnings,
+    constructionCounts: Object.freeze({ ...constructionCounts }),
+    comparisonIncludedFiles,
+    evidenceDomainSummary: Object.freeze({
+      included: Object.freeze([...includedDomains]),
+      excluded: Object.freeze([...excludedDomains]),
+    }),
+    warningSummary: Object.freeze([...warnings]),
+  });
 }
 
 export function buildHistoricalResearchExportBatchReviewJson(
   items: readonly HistoricalResearchExportBatchReviewItem[],
 ): HistoricalResearchExportBatchReviewJson {
   const valid = items.every((item) => item.review.valid);
+  const aggregate = buildHistoricalResearchExportBatchAggregateSummary(items);
+
   return {
     reviewVersion: HISTORICAL_RESEARCH_EXPORT_REVIEW_BATCH_VERSION,
     valid,
-    summary: {
-      filesReviewed: items.length,
-      validFiles: items.filter((item) => item.review.valid).length,
-      invalidFiles: items.filter((item) => !item.review.valid).length,
-    },
+    summary: aggregate,
     reviews: Object.freeze([...items]),
   };
 }
@@ -180,11 +266,25 @@ export function buildHistoricalResearchExportBatchReviewJson(
 export function formatHistoricalResearchExportBatchReview(
   items: readonly HistoricalResearchExportBatchReviewItem[],
 ): string {
+  const aggregate = buildHistoricalResearchExportBatchAggregateSummary(items);
+  const aggregateLines = [
+    `Total Requested Dates: ${aggregate.totalRequestedDates}`,
+    `Total Predictions: ${aggregate.totalPredictions}`,
+    `Total Abstentions: ${aggregate.totalAbstentions}`,
+    `Total Warnings: ${aggregate.totalWarnings}`,
+    `Construction Counts: FULL=${aggregate.constructionCounts.FULL}, TEAM_ONLY=${aggregate.constructionCounts.TEAM_ONLY}, BOTH=${aggregate.constructionCounts.BOTH}`,
+    `Comparison Included Files: ${aggregate.comparisonIncludedFiles}`,
+    `Included Evidence Domains: ${aggregate.evidenceDomainSummary.included.length > 0 ? aggregate.evidenceDomainSummary.included.join(', ') : 'none'}`,
+    `Excluded Evidence Domains: ${aggregate.evidenceDomainSummary.excluded.length > 0 ? aggregate.evidenceDomainSummary.excluded.join(', ') : 'none'}`,
+    `Warning Summary: ${aggregate.warningSummary.length > 0 ? aggregate.warningSummary.join(', ') : 'none'}`,
+  ];
+
   const lines = [
     'Historical Research Export Batch Review',
-    `Files Reviewed: ${items.length}`,
-    `Valid Files: ${items.filter((item) => item.review.valid).length}`,
-    `Invalid Files: ${items.filter((item) => !item.review.valid).length}`,
+    `Files Reviewed: ${aggregate.filesReviewed}`,
+    `Valid Files: ${aggregate.validFiles}`,
+    `Invalid Files: ${aggregate.invalidFiles}`,
+    ...aggregateLines,
   ];
 
   for (let i = 0; i < items.length; i += 1) {
