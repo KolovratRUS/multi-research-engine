@@ -1,0 +1,5 @@
+{
+  "thresholdVersion": "historical-research-export-thresholds-v1",
+  "minValidFiles": 1,
+  "unknownField": true
+}

@@ -1,0 +1,11 @@
+{
+  "thresholdVersion": "historical-research-export-thresholds-v1",
+  "minValidFiles": 2,
+  "maxInvalidFiles": 0,
+  "minTotalPredictions": 2,
+  "maxTotalAbstentions": 0,
+  "maxTotalWarnings": 2,
+  "requireConstructions": ["FULL", "TEAM_ONLY"],
+  "requireEvidenceDomains": ["team-offense"],
+  "forbidWarnings": ["unexpected-warning"]
+}

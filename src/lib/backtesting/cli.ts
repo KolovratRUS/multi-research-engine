@@ -44,6 +44,9 @@ import {
   type HistoricalResearchExportValidationResult,
   HISTORICAL_RESEARCH_EXPORT_REVIEW_VERSION,
   validateHistoricalResearchExportManifest,
+  validateHistoricalResearchExportThresholdPreset,
+  type HistoricalResearchExportThresholdPresetValidationResult,
+  HISTORICAL_RESEARCH_EXPORT_THRESHOLDS_VERSION,
 } from '@/lib/backtesting/historical-research-export';
 
 function getReadFileErrorMessage(error: unknown): string {
@@ -87,6 +90,7 @@ export interface MLBBacktestCLIOptions {
   readonly requireConstructions?: readonly ('FULL' | 'TEAM_ONLY' | 'BOTH')[];
   readonly requireEvidenceDomains?: readonly string[];
   readonly forbidWarnings?: readonly string[];
+  readonly reviewThresholdsJsonPath?: string;
 }
 
 export interface CLIBacktestCLIError {
@@ -146,6 +150,7 @@ const KNOWN_OPTIONS = new Set([
   'require-construction',
   'require-evidence-domain',
   'forbid-warning',
+  'review-thresholds-json',
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -578,6 +583,19 @@ export function parseMLBBacktestCLIArgs(
       ];
       continue;
     }
+
+    if (key === 'review-thresholds-json') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --review-thresholds-json. Expected a non-empty path.',
+        };
+      }
+      state.reviewThresholdsJsonPath = value.trim();
+      continue;
+    }
   }
 
   if (state.date !== undefined && (state.startDate || state.endDate)) {
@@ -629,6 +647,7 @@ export function parseMLBBacktestCLIArgs(
     ...(state.requireConstructions !== undefined ? { requireConstructions: Object.freeze([...(state.requireConstructions as string[])]) as readonly ('FULL' | 'TEAM_ONLY' | 'BOTH')[] } : {}),
     ...(state.requireEvidenceDomains !== undefined ? { requireEvidenceDomains: Object.freeze([...(state.requireEvidenceDomains as string[])]) as readonly string[] } : {}),
     ...(state.forbidWarnings !== undefined ? { forbidWarnings: Object.freeze([...(state.forbidWarnings as string[])]) as readonly string[] } : {}),
+    ...(state.reviewThresholdsJsonPath !== undefined ? { reviewThresholdsJsonPath: state.reviewThresholdsJsonPath as string } : {}),
   } satisfies MLBBacktestCLIOptions;
 }
 
@@ -667,6 +686,7 @@ function printHelp(stdout: (message: string) => void): void {
     '  --require-construction <mode>  Require construction mode in batch review',
     '  --require-evidence-domain <domain>  Require evidence domain in batch review',
     '  --forbid-warning <warning>  Forbid warning code in batch review',
+    '  --review-thresholds-json <path>  Load threshold checks from a local JSON preset file',
     '  --help, -h                Show this help',
     '',
     'Live mode requires --date or --start and --end.',
@@ -1202,9 +1222,15 @@ export async function runMLBBacktestCLI(
       parsed.maxTotalWarnings !== undefined ||
       parsed.requireConstructions !== undefined ||
       parsed.requireEvidenceDomains !== undefined ||
-      parsed.forbidWarnings !== undefined)
+      parsed.forbidWarnings !== undefined ||
+      parsed.reviewThresholdsJsonPath !== undefined)
   ) {
     stderr('Threshold checks are only valid with --review-export-json.');
+    return 1;
+  }
+
+  if (parsed.reviewThresholdsJsonPath && !parsed.reviewExportJsonPaths?.length) {
+    stderr('--review-thresholds-json is only valid with --review-export-json.');
     return 1;
   }
 
@@ -1234,30 +1260,25 @@ export async function runMLBBacktestCLI(
       return 1;
     }
 
+    if (
+      parsed.reviewThresholdsJsonPath !== undefined &&
+      (parsed.minValidFiles !== undefined ||
+        parsed.maxInvalidFiles !== undefined ||
+        parsed.minTotalPredictions !== undefined ||
+        parsed.maxTotalAbstentions !== undefined ||
+        parsed.maxTotalWarnings !== undefined ||
+        parsed.requireConstructions !== undefined ||
+        parsed.requireEvidenceDomains !== undefined ||
+        parsed.forbidWarnings !== undefined)
+    ) {
+      stderr('Cannot combine --review-thresholds-json with direct threshold flags.');
+      return 1;
+    }
+
     const paths = parsed.reviewExportJsonPaths;
     const singleFile = paths.length === 1;
     let anyInvalid = false;
     const items: HistoricalResearchExportBatchReviewItem[] = [];
-    const thresholds: HistoricalResearchExportReviewThresholds | undefined =
-      parsed.minValidFiles !== undefined ||
-      parsed.maxInvalidFiles !== undefined ||
-      parsed.minTotalPredictions !== undefined ||
-      parsed.maxTotalAbstentions !== undefined ||
-      parsed.maxTotalWarnings !== undefined ||
-      parsed.requireConstructions !== undefined ||
-      parsed.requireEvidenceDomains !== undefined ||
-      parsed.forbidWarnings !== undefined
-        ? {
-            ...(parsed.minValidFiles !== undefined ? { minValidFiles: parsed.minValidFiles } : {}),
-            ...(parsed.maxInvalidFiles !== undefined ? { maxInvalidFiles: parsed.maxInvalidFiles } : {}),
-            ...(parsed.minTotalPredictions !== undefined ? { minTotalPredictions: parsed.minTotalPredictions } : {}),
-            ...(parsed.maxTotalAbstentions !== undefined ? { maxTotalAbstentions: parsed.maxTotalAbstentions } : {}),
-            ...(parsed.maxTotalWarnings !== undefined ? { maxTotalWarnings: parsed.maxTotalWarnings } : {}),
-            ...(parsed.requireConstructions !== undefined ? { requireConstructions: parsed.requireConstructions } : {}),
-            ...(parsed.requireEvidenceDomains !== undefined ? { requireEvidenceDomains: parsed.requireEvidenceDomains } : {}),
-            ...(parsed.forbidWarnings !== undefined ? { forbidWarnings: parsed.forbidWarnings } : {}),
-          }
-        : undefined;
 
     for (const rawPath of paths) {
       let validation: HistoricalResearchExportValidationResult;
@@ -1316,6 +1337,66 @@ export async function runMLBBacktestCLI(
       if (!review.valid) {
         anyInvalid = true;
       }
+    }
+
+    let thresholds: HistoricalResearchExportReviewThresholds | undefined;
+
+    if (parsed.reviewThresholdsJsonPath !== undefined) {
+      try {
+        const presetContent = await fs.readFile(parsed.reviewThresholdsJsonPath, 'utf-8');
+        const presetRaw: unknown = JSON.parse(presetContent);
+        const presetValidation = validateHistoricalResearchExportThresholdPreset(presetRaw);
+        if (!presetValidation.valid) {
+          const first = presetValidation.issues[0];
+          const issueMessage = first
+            ? `Invalid threshold preset: ${first.code} at ${first.path} - ${first.message}`
+            : 'Invalid threshold preset';
+          stderr(issueMessage);
+          return 1;
+        }
+        thresholds = presetValidation.thresholds ?? undefined;
+        if (!thresholds) {
+          stderr('Invalid threshold preset');
+          return 1;
+        }
+      } catch (error) {
+        const caught = error as unknown;
+        let issueMessage = 'Unknown error reading threshold preset';
+        if (
+          typeof caught === 'object' &&
+          caught !== null &&
+          typeof (caught as { code?: unknown }).code === 'string' &&
+          (caught as { code: string }).code === 'ENOENT'
+        ) {
+          issueMessage = `Threshold preset file not found: ${parsed.reviewThresholdsJsonPath}`;
+        } else if (error instanceof SyntaxError) {
+          issueMessage = 'Invalid JSON in threshold preset';
+        } else {
+          issueMessage = `Failed to read threshold preset: ${getReadFileErrorMessage(caught)}`;
+        }
+        stderr(error instanceof Error && !(error instanceof SyntaxError) ? `${issueMessage}: ${error.message}` : issueMessage);
+        return 1;
+      }
+    } else if (
+      parsed.minValidFiles !== undefined ||
+      parsed.maxInvalidFiles !== undefined ||
+      parsed.minTotalPredictions !== undefined ||
+      parsed.maxTotalAbstentions !== undefined ||
+      parsed.maxTotalWarnings !== undefined ||
+      parsed.requireConstructions !== undefined ||
+      parsed.requireEvidenceDomains !== undefined ||
+      parsed.forbidWarnings !== undefined
+    ) {
+      thresholds = {
+        ...(parsed.minValidFiles !== undefined ? { minValidFiles: parsed.minValidFiles } : {}),
+        ...(parsed.maxInvalidFiles !== undefined ? { maxInvalidFiles: parsed.maxInvalidFiles } : {}),
+        ...(parsed.minTotalPredictions !== undefined ? { minTotalPredictions: parsed.minTotalPredictions } : {}),
+        ...(parsed.maxTotalAbstentions !== undefined ? { maxTotalAbstentions: parsed.maxTotalAbstentions } : {}),
+        ...(parsed.maxTotalWarnings !== undefined ? { maxTotalWarnings: parsed.maxTotalWarnings } : {}),
+        ...(parsed.requireConstructions !== undefined ? { requireConstructions: parsed.requireConstructions } : {}),
+        ...(parsed.requireEvidenceDomains !== undefined ? { requireEvidenceDomains: parsed.requireEvidenceDomains } : {}),
+        ...(parsed.forbidWarnings !== undefined ? { forbidWarnings: parsed.forbidWarnings } : {}),
+      };
     }
 
     if (thresholds) {

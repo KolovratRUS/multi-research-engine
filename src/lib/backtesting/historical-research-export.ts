@@ -209,6 +209,223 @@ export interface HistoricalResearchExportReviewThresholds {
   readonly forbidWarnings?: readonly string[];
 }
 
+export const HISTORICAL_RESEARCH_EXPORT_THRESHOLDS_VERSION = 'historical-research-export-thresholds-v1';
+
+export interface HistoricalResearchExportThresholdPreset {
+  readonly thresholdVersion: typeof HISTORICAL_RESEARCH_EXPORT_THRESHOLDS_VERSION;
+  readonly minValidFiles?: number;
+  readonly maxInvalidFiles?: number;
+  readonly minTotalPredictions?: number;
+  readonly maxTotalAbstentions?: number;
+  readonly maxTotalWarnings?: number;
+  readonly requireConstructions?: readonly ('FULL' | 'TEAM_ONLY' | 'BOTH')[];
+  readonly requireEvidenceDomains?: readonly string[];
+  readonly forbidWarnings?: readonly string[];
+}
+
+export type HistoricalResearchExportThresholdPresetCode =
+  | 'THRESHOLD_PRESET_NOT_OBJECT'
+  | 'THRESHOLD_PRESET_VERSION_MISSING'
+  | 'THRESHOLD_PRESET_VERSION_UNSUPPORTED'
+  | 'THRESHOLD_PRESET_UNKNOWN_FIELD'
+  | 'THRESHOLD_PRESET_INVALID_INTEGER'
+  | 'THRESHOLD_PRESET_INVALID_CONSTRUCTION'
+  | 'THRESHOLD_PRESET_INVALID_STRING_ARRAY';
+
+export interface HistoricalResearchExportThresholdPresetValidationIssue {
+  readonly code: HistoricalResearchExportThresholdPresetCode;
+  readonly path: string;
+  readonly message: string;
+  readonly expected?: string | number;
+  readonly actual?: string | number;
+}
+
+export interface HistoricalResearchExportThresholdPresetValidationResult {
+  readonly valid: boolean;
+  readonly thresholds: HistoricalResearchExportReviewThresholds | null;
+  readonly issues: readonly HistoricalResearchExportThresholdPresetValidationIssue[];
+}
+
+const PRESET_NUMERIC_KEYS = [
+  'minValidFiles',
+  'maxInvalidFiles',
+  'minTotalPredictions',
+  'maxTotalAbstentions',
+  'maxTotalWarnings',
+] as const;
+
+const PRESET_KNOWN_FIELDS = new Set<string>([
+  'thresholdVersion',
+  'minValidFiles',
+  'maxInvalidFiles',
+  'minTotalPredictions',
+  'maxTotalAbstentions',
+  'maxTotalWarnings',
+  'requireConstructions',
+  'requireEvidenceDomains',
+  'forbidWarnings',
+]);
+
+function pushPresetIssue(
+  issues: HistoricalResearchExportThresholdPresetValidationIssue[],
+  code: HistoricalResearchExportThresholdPresetCode,
+  path: string,
+  message: string,
+  expected?: string | number,
+  actual?: string | number,
+): void {
+  issues.push({ code, path, message, expected, actual });
+}
+
+export function validateHistoricalResearchExportThresholdPreset(
+  value: unknown,
+): HistoricalResearchExportThresholdPresetValidationResult {
+  const issues: HistoricalResearchExportThresholdPresetValidationIssue[] = [];
+
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    pushPresetIssue(issues, 'THRESHOLD_PRESET_NOT_OBJECT', '', 'Preset must be a JSON object');
+    return Object.freeze({ valid: false, thresholds: null, issues: Object.freeze([...issues]) });
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if (!('thresholdVersion' in record)) {
+    pushPresetIssue(
+      issues,
+      'THRESHOLD_PRESET_VERSION_MISSING',
+      'thresholdVersion',
+      'Missing required field: thresholdVersion',
+    );
+  } else if (record.thresholdVersion !== HISTORICAL_RESEARCH_EXPORT_THRESHOLDS_VERSION) {
+    pushPresetIssue(
+      issues,
+      'THRESHOLD_PRESET_VERSION_UNSUPPORTED',
+      'thresholdVersion',
+      'Unsupported threshold preset version',
+      HISTORICAL_RESEARCH_EXPORT_THRESHOLDS_VERSION,
+      typeof record.thresholdVersion === 'string' ? record.thresholdVersion : '',
+    );
+  }
+
+  const unknownFields = Object.keys(record)
+    .filter((key) => !PRESET_KNOWN_FIELDS.has(key))
+    .sort();
+  for (const field of unknownFields) {
+    pushPresetIssue(
+      issues,
+      'THRESHOLD_PRESET_UNKNOWN_FIELD',
+      field,
+      `Unknown preset field: ${field}`,
+    );
+  }
+
+  for (const key of PRESET_NUMERIC_KEYS) {
+    if (!(key in record)) {
+      continue;
+    }
+    const raw = record[key];
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0) {
+      pushPresetIssue(
+        issues,
+        'THRESHOLD_PRESET_INVALID_INTEGER',
+        key,
+        `Invalid integer preset field: ${key}`,
+        'non-negative integer',
+        typeof raw === 'number' ? raw : (raw as string | undefined),
+      );
+    }
+  }
+
+  if ('requireConstructions' in record) {
+    const raw = record.requireConstructions;
+    if (
+      !Array.isArray(raw) ||
+      raw.length > 0 && (
+        !raw.every(
+          (item) =>
+            item === 'FULL' || item === 'TEAM_ONLY' || item === 'BOTH',
+        )
+      )
+    ) {
+      pushPresetIssue(
+        issues,
+        'THRESHOLD_PRESET_INVALID_CONSTRUCTION',
+        'requireConstructions',
+        'Invalid requireConstructions array value',
+        'FULL, TEAM_ONLY, or BOTH',
+        Array.isArray(raw) ? JSON.stringify(raw) : (raw as string | undefined),
+      );
+    }
+  }
+
+  if ('requireEvidenceDomains' in record) {
+    const raw = record.requireEvidenceDomains;
+    if (
+      !Array.isArray(raw) ||
+      raw.some((item) => typeof item !== 'string' || item.trim() === '')
+    ) {
+      pushPresetIssue(
+        issues,
+        'THRESHOLD_PRESET_INVALID_STRING_ARRAY',
+        'requireEvidenceDomains',
+        'Invalid requireEvidenceDomains array value',
+        'non-empty strings',
+        Array.isArray(raw) ? JSON.stringify(raw) : (raw as string | undefined),
+      );
+    }
+  }
+
+  if ('forbidWarnings' in record) {
+    const raw = record.forbidWarnings;
+    if (
+      !Array.isArray(raw) ||
+      raw.some((item) => typeof item !== 'string' || item.trim() === '')
+    ) {
+      pushPresetIssue(
+        issues,
+        'THRESHOLD_PRESET_INVALID_STRING_ARRAY',
+        'forbidWarnings',
+        'Invalid forbidWarnings array value',
+        'non-empty strings',
+        Array.isArray(raw) ? JSON.stringify(raw) : (raw as string | undefined),
+      );
+    }
+  }
+
+  if (issues.length > 0) {
+    return Object.freeze({ valid: false, thresholds: null, issues: Object.freeze([...issues]) });
+  }
+
+  const thresholds: Record<string, unknown> = {};
+
+  if (typeof record.minValidFiles === 'number' && Number.isInteger(record.minValidFiles) && record.minValidFiles >= 0) {
+    thresholds.minValidFiles = record.minValidFiles;
+  }
+  if (typeof record.maxInvalidFiles === 'number' && Number.isInteger(record.maxInvalidFiles) && record.maxInvalidFiles >= 0) {
+    thresholds.maxInvalidFiles = record.maxInvalidFiles;
+  }
+  if (typeof record.minTotalPredictions === 'number' && Number.isInteger(record.minTotalPredictions) && record.minTotalPredictions >= 0) {
+    thresholds.minTotalPredictions = record.minTotalPredictions;
+  }
+  if (typeof record.maxTotalAbstentions === 'number' && Number.isInteger(record.maxTotalAbstentions) && record.maxTotalAbstentions >= 0) {
+    thresholds.maxTotalAbstentions = record.maxTotalAbstentions;
+  }
+  if (typeof record.maxTotalWarnings === 'number' && Number.isInteger(record.maxTotalWarnings) && record.maxTotalWarnings >= 0) {
+    thresholds.maxTotalWarnings = record.maxTotalWarnings;
+  }
+  if (Array.isArray(record.requireConstructions) && record.requireConstructions.length > 0) {
+    thresholds.requireConstructions = Object.freeze([...record.requireConstructions] as readonly ('FULL' | 'TEAM_ONLY' | 'BOTH')[]);
+  }
+  if (Array.isArray(record.requireEvidenceDomains) && record.requireEvidenceDomains.length > 0) {
+    thresholds.requireEvidenceDomains = Object.freeze([...record.requireEvidenceDomains]);
+  }
+  if (Array.isArray(record.forbidWarnings) && record.forbidWarnings.length > 0) {
+    thresholds.forbidWarnings = Object.freeze([...record.forbidWarnings]);
+  }
+
+  return Object.freeze({ valid: true, thresholds: Object.freeze(thresholds) as HistoricalResearchExportReviewThresholds, issues: [] });
+}
+
 const THRESHOLD_PATH_LOOKUP: Record<keyof HistoricalResearchExportReviewThresholds, string> = {
   minValidFiles: 'summary.validFiles',
   maxInvalidFiles: 'summary.invalidFiles',

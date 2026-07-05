@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 const TEXT_FIXTURE_DIR = 'tests/backtesting/fixtures/historical-research-export-review';
 const JSON_FIXTURE_DIR = 'tests/backtesting/fixtures/historical-research-export-review-json';
 const REVIEW_DIR = 'tests/backtesting/fixtures/historical-research-export';
+const PRESET_DIR = 'tests/backtesting/fixtures/historical-research-threshold-presets';
 
 async function runReview(
   args: readonly string[],
