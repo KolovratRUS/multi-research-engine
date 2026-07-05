@@ -88,6 +88,27 @@ export interface HistoricalResearchExport {
   readonly abstentions: readonly ExportedResearchResult[];
 }
 
+export interface HistoricalResearchExportReviewSummary {
+  readonly exportId: string;
+  readonly exportVersion: string;
+  readonly generatedAt: string;
+  readonly source: string;
+  readonly researchConstruction: string;
+  readonly dateRange: { readonly startDate: string; readonly endDate: string };
+  readonly requestedDateCount: number;
+  readonly resultCounts: {
+    readonly predictions: number;
+    readonly abstentions: number;
+    readonly warnings: number;
+  };
+  readonly comparisonIncluded: boolean;
+  readonly evidenceDomainSummary: {
+    readonly included: readonly string[];
+    readonly excluded: readonly string[];
+  };
+  readonly warningSummary: readonly string[];
+}
+
 export interface HistoricalResearchExportValidationIssue {
   readonly code: string;
   readonly path: string;
@@ -582,4 +603,121 @@ export function buildHistoricalResearchExport(params: {
   };
 
   return Object.freeze(exportObj);
+}
+
+function toStringArray(value: unknown): readonly string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+  return [];
+}
+
+export function buildHistoricalResearchExportReviewSummary(
+  exportObj: unknown,
+): HistoricalResearchExportReviewSummary | null {
+  if (typeof exportObj !== 'object' || exportObj === null) {
+    return null;
+  }
+
+  const record = exportObj as Record<string, unknown>;
+  const dateRange =
+    typeof record.dateRange === 'object' && record.dateRange !== null
+      ? (record.dateRange as { startDate: unknown; endDate: unknown })
+      : { startDate: '', endDate: '' };
+  const manifest =
+    typeof (record.manifest as Record<string, unknown> | undefined)?.exportId === 'string'
+      ? (record.manifest as Record<string, unknown> | undefined)
+      : {};
+  const evidence =
+    typeof manifest?.evidenceDomainSummary === 'object' && manifest?.evidenceDomainSummary !== null
+      ? (manifest.evidenceDomainSummary as Record<string, unknown>)
+      : { included: [], excluded: [] };
+
+  return {
+    exportId: typeof manifest?.exportId === 'string' ? (manifest.exportId as string) : '',
+    exportVersion: typeof record.exportVersion === 'string'
+      ? record.exportVersion
+      : typeof manifest?.exportVersion === 'string'
+        ? (manifest.exportVersion as string)
+        : '',
+    generatedAt: typeof record.generatedAt === 'string'
+      ? record.generatedAt
+      : typeof manifest?.generatedAt === 'string'
+        ? (manifest.generatedAt as string)
+        : '',
+    source: typeof record.source === 'string'
+      ? record.source
+      : typeof manifest?.source === 'string'
+        ? (manifest.source as string)
+        : '',
+    researchConstruction: typeof record.researchConstruction === 'string'
+      ? record.researchConstruction
+      : typeof manifest?.researchConstruction === 'string'
+        ? (manifest.researchConstruction as string)
+        : '',
+    dateRange: {
+      startDate: typeof dateRange.startDate === 'string' ? dateRange.startDate : '',
+      endDate: typeof dateRange.endDate === 'string' ? dateRange.endDate : '',
+    },
+    requestedDateCount: Array.isArray((record as { requestedDates?: unknown }).requestedDates)
+      ? ((record as { requestedDates: unknown[] }).requestedDates as readonly string[]).length
+      : 0,
+    resultCounts: {
+      predictions: Array.isArray((record as { predictions?: unknown }).predictions)
+        ? ((record as { predictions: unknown[] }).predictions as readonly Record<string, unknown>[]).length
+        : 0,
+      abstentions: Array.isArray((record as { abstentions?: unknown }).abstentions)
+        ? ((record as { abstentions: unknown[] }).abstentions as readonly Record<string, unknown>[]).length
+        : 0,
+      warnings:
+        typeof manifest?.resultCounts === 'object' && manifest?.resultCounts !== null
+          ? Number((manifest.resultCounts as { warnings: unknown }).warnings ?? 0)
+          : 0,
+    },
+    comparisonIncluded:
+      typeof (record as { comparison?: unknown }).comparison === 'object' &&
+      (record as { comparison?: unknown }).comparison !== null,
+    evidenceDomainSummary: {
+      included: toStringArray(evidence?.included),
+      excluded: toStringArray(evidence?.excluded),
+    },
+    warningSummary: toStringArray(manifest?.warningSummary),
+  };
+}
+
+export function formatHistoricalResearchExportReview(
+  summary: HistoricalResearchExportReviewSummary,
+): string {
+  const domains = (items: readonly string[]): string => (items.length > 0 ? items.join(', ') : 'none');
+
+  return [
+    'Historical Research Export Review',
+    'Manifest Valid: yes',
+    `Export ID: ${summary.exportId}`,
+    `Export Version: ${summary.exportVersion}`,
+    `Generated At: ${summary.generatedAt}`,
+    `Source: ${summary.source}`,
+    `Research Construction: ${summary.researchConstruction}`,
+    `Date Range: ${summary.dateRange.startDate} to ${summary.dateRange.endDate}`,
+    `Requested Dates: ${summary.requestedDateCount}`,
+    `Predictions: ${summary.resultCounts.predictions}`,
+    `Abstentions: ${summary.resultCounts.abstentions}`,
+    `Warnings: ${summary.resultCounts.warnings}`,
+    `Comparison Included: ${summary.comparisonIncluded ? 'yes' : 'no'}`,
+    `Included Evidence Domains: ${domains(summary.evidenceDomainSummary.included)}`,
+    `Excluded Evidence Domains: ${domains(summary.evidenceDomainSummary.excluded)}`,
+    `Warning Summary: ${domains(summary.warningSummary)}`,
+  ].join('\n');
+}
+
+export function formatHistoricalResearchExportValidationIssues(
+  issues: readonly HistoricalResearchExportValidationIssue[],
+): string {
+  const lines = ['Historical Research Export Review Failed'];
+  for (const issue of issues) {
+    const expected = issue.expected !== undefined ? `, expected ${JSON.stringify(issue.expected)}` : '';
+    const actual = issue.actual !== undefined ? `, actual ${JSON.stringify(issue.actual)}` : '';
+    lines.push(`- ${issue.code}: ${issue.path} - ${issue.message}${expected}${actual}`);
+  }
+  return lines.join('\n');
 }

@@ -25,7 +25,26 @@ import type {
 import type { RunnerContext } from '@/lib/backtesting/runner';
 import type { ConstructionComparison, ModeMetrics, ResearchConstructionReport } from '@/lib/backtesting/types';
 import { computeResearchConstructionReport } from '@/lib/backtesting/metrics';
-import { buildHistoricalResearchExport } from '@/lib/backtesting/historical-research-export';
+import {
+  buildHistoricalResearchExport,
+  buildHistoricalResearchExportReviewSummary,
+  formatHistoricalResearchExportReview,
+  formatHistoricalResearchExportValidationIssues,
+  validateHistoricalResearchExportManifest,
+} from '@/lib/backtesting/historical-research-export';
+
+function getReadFileErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const message = (error as Record<string, unknown>).message;
+    if (typeof message === 'string') {
+      return message;
+    }
+  }
+  return 'Unknown error';
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -46,6 +65,7 @@ export interface MLBBacktestCLIOptions {
   readonly capturePregamePitchers?: boolean;
   readonly researchConstruction?: 'FULL' | 'TEAM_ONLY' | 'BOTH';
   readonly exportJson?: string;
+  readonly reviewExportJson?: string;
 }
 
 export interface CLIBacktestCLIError {
@@ -96,6 +116,7 @@ const KNOWN_OPTIONS = new Set([
   'capture-pregame-pitchers',
   'research-construction',
   'export-json',
+  'review-export-json',
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -351,6 +372,19 @@ export function parseMLBBacktestCLIArgs(
       state.exportJson = value.trim();
       continue;
     }
+
+    if (key === 'review-export-json') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --review-export-json. Expected a non-empty path.',
+        };
+      }
+      state.reviewExportJson = value.trim();
+      continue;
+    }
   }
 
   if (state.date !== undefined && (state.startDate || state.endDate)) {
@@ -392,6 +426,8 @@ export function parseMLBBacktestCLIArgs(
     ...(state.maxRetries !== undefined ? { maxRetries: state.maxRetries as number } : {}),
     ...(state.capturePregamePitchers !== undefined ? { capturePregamePitchers: state.capturePregamePitchers as boolean } : {}),
     ...(state.researchConstruction !== undefined ? { researchConstruction: state.researchConstruction as 'FULL' | 'TEAM_ONLY' | 'BOTH' } : {}),
+    ...(state.exportJson !== undefined ? { exportJson: state.exportJson as string } : {}),
+    ...(state.reviewExportJson !== undefined ? { reviewExportJson: state.reviewExportJson as string } : {}),
   } satisfies MLBBacktestCLIOptions;
 }
 
@@ -419,6 +455,7 @@ function printHelp(stdout: (message: string) => void): void {
     '  --capture-pregame-pitchers  Record MLB probable-pitcher observations (live only)',
     '  --research-construction <mode>  full (default), team-only, or both',
     '  --export-json <path>      Write stable historical research export to file',
+    '  --review-export-json <path>  Review a saved historical research export file',
     '  --output text             Human-readable output (default)',
     '  --output json             Machine-readable JSON output',
     '  --help, -h                Show this help',
@@ -944,6 +981,69 @@ export async function runMLBBacktestCLI(
   if (parsed.capturePregamePitchers && parsed.source !== 'live') {
     stderr('--capture-pregame-pitchers requires --source live.');
     return 1;
+  }
+
+  if (parsed.reviewExportJson) {
+    if (parsed.exportJson) {
+      stderr('Cannot combine --review-export-json with --export-json.');
+      return 1;
+    }
+    if (parsed.source === 'live') {
+      stderr('Review mode does not support --source live.');
+      return 1;
+    }
+    if (parsed.date || parsed.startDate || parsed.endDate) {
+      stderr('Review mode does not accept date options.');
+      return 1;
+    }
+    if (
+      parsed.cacheRoot ||
+      parsed.cacheVersion ||
+      parsed.forceRefresh ||
+      parsed.timeoutMs ||
+      parsed.maxRetries ||
+      parsed.capturePregamePitchers ||
+      parsed.researchConstruction
+    ) {
+      stderr('Review mode does not accept backtest options.');
+      return 1;
+    }
+
+    try {
+      const content = await fs.readFile(parsed.reviewExportJson, 'utf-8');
+      const parsedFile = JSON.parse(content);
+      const validation = validateHistoricalResearchExportManifest(parsedFile);
+      if (!validation.valid) {
+        stderr(formatHistoricalResearchExportValidationIssues(validation.issues));
+        return 1;
+      }
+
+      const summary = buildHistoricalResearchExportReviewSummary(parsedFile);
+      if (!summary) {
+        stderr('Historical Research Export Review Failed\nExport object is structurally invalid.');
+        return 1;
+      }
+
+      stdout(formatHistoricalResearchExportReview(summary));
+      return 0;
+    } catch (error) {
+      const caught = error as unknown;
+      if (caught instanceof SyntaxError) {
+        stderr(`Invalid JSON in export file: ${caught.message}`);
+      } else if (typeof caught === 'object' && caught !== null && typeof (caught as { code?: unknown }).code === 'string') {
+        const code = (caught as { code: string }).code;
+        if (code === 'ENOENT') {
+          stderr(`Export file not found: ${parsed.reviewExportJson}`);
+        } else {
+          stderr(`Failed to read export file: ${getReadFileErrorMessage(caught)}`);
+        }
+      } else if (caught instanceof Error) {
+        stderr(`Historical Research Export Review Failed: ${caught.message}`);
+      } else {
+        stderr('Historical Research Export Review Failed');
+      }
+      return 1;
+    }
   }
 
   let provider: MLBHistoricalDataProvider;
