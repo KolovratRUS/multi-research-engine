@@ -27,15 +27,20 @@ import type { ConstructionComparison, ModeMetrics, ResearchConstructionReport } 
 import { computeResearchConstructionReport } from '@/lib/backtesting/metrics';
 import {
   buildHistoricalResearchExport,
+  buildHistoricalResearchExportBatchAggregateSummary,
   buildHistoricalResearchExportBatchReviewJson,
   buildHistoricalResearchExportReviewJson,
   buildHistoricalResearchExportReviewSummary,
+  evaluateHistoricalResearchExportBatchThresholds,
   formatHistoricalResearchExportBatchReview,
   formatHistoricalResearchExportReview,
   formatHistoricalResearchExportValidationIssues,
+  type HistoricalResearchExportBatchAggregateSummary,
   type HistoricalResearchExportBatchReviewItem,
   type HistoricalResearchExportReviewJson,
   type HistoricalResearchExportReviewSummary,
+  type HistoricalResearchExportReviewThresholds,
+  type HistoricalResearchExportThresholdCheckIssue,
   type HistoricalResearchExportValidationResult,
   HISTORICAL_RESEARCH_EXPORT_REVIEW_VERSION,
   validateHistoricalResearchExportManifest,
@@ -74,6 +79,14 @@ export interface MLBBacktestCLIOptions {
   readonly researchConstruction?: 'FULL' | 'TEAM_ONLY' | 'BOTH';
   readonly exportJson?: string;
   readonly reviewExportJsonPaths?: readonly string[];
+  readonly minValidFiles?: number;
+  readonly maxInvalidFiles?: number;
+  readonly minTotalPredictions?: number;
+  readonly maxTotalAbstentions?: number;
+  readonly maxTotalWarnings?: number;
+  readonly requireConstructions?: readonly ('FULL' | 'TEAM_ONLY' | 'BOTH')[];
+  readonly requireEvidenceDomains?: readonly string[];
+  readonly forbidWarnings?: readonly string[];
 }
 
 export interface CLIBacktestCLIError {
@@ -125,6 +138,14 @@ const KNOWN_OPTIONS = new Set([
   'research-construction',
   'export-json',
   'review-export-json',
+  'min-valid-files',
+  'max-invalid-files',
+  'min-total-predictions',
+  'max-total-abstentions',
+  'max-total-warnings',
+  'require-construction',
+  'require-evidence-domain',
+  'forbid-warning',
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -181,7 +202,7 @@ export function parseMLBBacktestCLIArgs(
       };
     }
 
-    if (seen.has(key) && key !== 'review-export-json') {
+    if (seen.has(key) && key !== 'review-export-json' && key !== 'require-construction' && key !== 'require-evidence-domain' && key !== 'forbid-warning') {
       return {
         code: 'DUPLICATE_OPTION',
         option: key,
@@ -189,7 +210,7 @@ export function parseMLBBacktestCLIArgs(
       };
     }
 
-    if (key !== 'review-export-json') {
+    if (key !== 'review-export-json' && key !== 'require-construction' && key !== 'require-evidence-domain' && key !== 'forbid-warning') {
       seen.add(key);
     }
 
@@ -399,6 +420,164 @@ export function parseMLBBacktestCLIArgs(
       ];
       continue;
     }
+
+    if (key === 'min-valid-files') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --min-valid-files. Expected a non-negative integer.',
+        };
+      }
+      const num = Number(value);
+      if (!Number.isInteger(num) || num < 0) {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --min-valid-files. Expected a non-negative integer.',
+        };
+      }
+      state.minValidFiles = num;
+      continue;
+    }
+
+    if (key === 'max-invalid-files') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --max-invalid-files. Expected a non-negative integer.',
+        };
+      }
+      const num = Number(value);
+      if (!Number.isInteger(num) || num < 0) {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --max-invalid-files. Expected a non-negative integer.',
+        };
+      }
+      state.maxInvalidFiles = num;
+      continue;
+    }
+
+    if (key === 'min-total-predictions') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --min-total-predictions. Expected a non-negative integer.',
+        };
+      }
+      const num = Number(value);
+      if (!Number.isInteger(num) || num < 0) {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --min-total-predictions. Expected a non-negative integer.',
+        };
+      }
+      state.minTotalPredictions = num;
+      continue;
+    }
+
+    if (key === 'max-total-abstentions') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --max-total-abstentions. Expected a non-negative integer.',
+        };
+      }
+      const num = Number(value);
+      if (!Number.isInteger(num) || num < 0) {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --max-total-abstentions. Expected a non-negative integer.',
+        };
+      }
+      state.maxTotalAbstentions = num;
+      continue;
+    }
+
+    if (key === 'max-total-warnings') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --max-total-warnings. Expected a non-negative integer.',
+        };
+      }
+      const num = Number(value);
+      if (!Number.isInteger(num) || num < 0) {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --max-total-warnings. Expected a non-negative integer.',
+        };
+      }
+      state.maxTotalWarnings = num;
+      continue;
+    }
+
+    if (key === 'require-construction') {
+      if (value !== 'FULL' && value !== 'TEAM_ONLY' && value !== 'BOTH') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: "Invalid --require-construction. Expected 'FULL', 'TEAM_ONLY', or 'BOTH'.",
+        };
+      }
+      state.requireConstructions = [
+        ...((state.requireConstructions as string[]) ?? []),
+        value,
+      ];
+      continue;
+    }
+
+    if (key === 'require-evidence-domain') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --require-evidence-domain. Expected a non-empty domain.',
+        };
+      }
+      state.requireEvidenceDomains = [
+        ...((state.requireEvidenceDomains as string[]) ?? []),
+        value.trim(),
+      ];
+      continue;
+    }
+
+    if (key === 'forbid-warning') {
+      if (!value || value.trim() === '') {
+        return {
+          code: 'INVALID_OPTION',
+          option: key,
+          value,
+          message: 'Invalid --forbid-warning. Expected a non-empty warning code.',
+        };
+      }
+      state.forbidWarnings = [
+        ...((state.forbidWarnings as string[]) ?? []),
+        value.trim(),
+      ];
+      continue;
+    }
   }
 
   if (state.date !== undefined && (state.startDate || state.endDate)) {
@@ -442,6 +621,14 @@ export function parseMLBBacktestCLIArgs(
     ...(state.researchConstruction !== undefined ? { researchConstruction: state.researchConstruction as 'FULL' | 'TEAM_ONLY' | 'BOTH' } : {}),
     ...(state.exportJson !== undefined ? { exportJson: state.exportJson as string } : {}),
     ...(state.reviewExportJsonPaths !== undefined ? { reviewExportJsonPaths: Object.freeze([...(state.reviewExportJsonPaths as string[])]) as readonly string[] } : {}),
+    ...(state.minValidFiles !== undefined ? { minValidFiles: state.minValidFiles as number } : {}),
+    ...(state.maxInvalidFiles !== undefined ? { maxInvalidFiles: state.maxInvalidFiles as number } : {}),
+    ...(state.minTotalPredictions !== undefined ? { minTotalPredictions: state.minTotalPredictions as number } : {}),
+    ...(state.maxTotalAbstentions !== undefined ? { maxTotalAbstentions: state.maxTotalAbstentions as number } : {}),
+    ...(state.maxTotalWarnings !== undefined ? { maxTotalWarnings: state.maxTotalWarnings as number } : {}),
+    ...(state.requireConstructions !== undefined ? { requireConstructions: Object.freeze([...(state.requireConstructions as string[])]) as readonly ('FULL' | 'TEAM_ONLY' | 'BOTH')[] } : {}),
+    ...(state.requireEvidenceDomains !== undefined ? { requireEvidenceDomains: Object.freeze([...(state.requireEvidenceDomains as string[])]) as readonly string[] } : {}),
+    ...(state.forbidWarnings !== undefined ? { forbidWarnings: Object.freeze([...(state.forbidWarnings as string[])]) as readonly string[] } : {}),
   } satisfies MLBBacktestCLIOptions;
 }
 
@@ -472,6 +659,14 @@ function printHelp(stdout: (message: string) => void): void {
     '  --review-export-json <path>  Review a saved historical research export file',
     '  --output text             Human-readable output (default)',
     '  --output json             Machine-readable JSON output',
+    '  --min-valid-files <n>     Minimum valid files required in batch review',
+    '  --max-invalid-files <n>   Maximum invalid files allowed in batch review',
+    '  --min-total-predictions <n> Minimum total predictions in batch review',
+    '  --max-total-abstentions <n> Maximum total abstentions in batch review',
+    '  --max-total-warnings <n>  Maximum total warnings in batch review',
+    '  --require-construction <mode>  Require construction mode in batch review',
+    '  --require-evidence-domain <domain>  Require evidence domain in batch review',
+    '  --forbid-warning <warning>  Forbid warning code in batch review',
     '  --help, -h                Show this help',
     '',
     'Live mode requires --date or --start and --end.',
@@ -484,6 +679,7 @@ function printHelp(stdout: (message: string) => void): void {
     '  npm run backtest:mlb -- --start 2024-06-01 --end 2024-06-03',
     '  npm run backtest:mlb -- --date 2024-06-01 --output json',
     '  npm run backtest:mlb -- --source live --date 2024-06-01 --cache-root /tmp/mlb-cache',
+    '  npm run backtest:mlb -- --review-export-json exports/full.json --review-export-json exports/team-only.json --min-valid-files 2',
   ];
 
   for (const line of lines) {
@@ -997,6 +1193,21 @@ export async function runMLBBacktestCLI(
     return 1;
   }
 
+  if (
+    !parsed.reviewExportJsonPaths?.length &&
+    (parsed.minValidFiles !== undefined ||
+      parsed.maxInvalidFiles !== undefined ||
+      parsed.minTotalPredictions !== undefined ||
+      parsed.maxTotalAbstentions !== undefined ||
+      parsed.maxTotalWarnings !== undefined ||
+      parsed.requireConstructions !== undefined ||
+      parsed.requireEvidenceDomains !== undefined ||
+      parsed.forbidWarnings !== undefined)
+  ) {
+    stderr('Threshold checks are only valid with --review-export-json.');
+    return 1;
+  }
+
   if (parsed.reviewExportJsonPaths?.length) {
     if (parsed.exportJson) {
       stderr('Cannot combine --review-export-json with --export-json.');
@@ -1027,6 +1238,26 @@ export async function runMLBBacktestCLI(
     const singleFile = paths.length === 1;
     let anyInvalid = false;
     const items: HistoricalResearchExportBatchReviewItem[] = [];
+    const thresholds: HistoricalResearchExportReviewThresholds | undefined =
+      parsed.minValidFiles !== undefined ||
+      parsed.maxInvalidFiles !== undefined ||
+      parsed.minTotalPredictions !== undefined ||
+      parsed.maxTotalAbstentions !== undefined ||
+      parsed.maxTotalWarnings !== undefined ||
+      parsed.requireConstructions !== undefined ||
+      parsed.requireEvidenceDomains !== undefined ||
+      parsed.forbidWarnings !== undefined
+        ? {
+            ...(parsed.minValidFiles !== undefined ? { minValidFiles: parsed.minValidFiles } : {}),
+            ...(parsed.maxInvalidFiles !== undefined ? { maxInvalidFiles: parsed.maxInvalidFiles } : {}),
+            ...(parsed.minTotalPredictions !== undefined ? { minTotalPredictions: parsed.minTotalPredictions } : {}),
+            ...(parsed.maxTotalAbstentions !== undefined ? { maxTotalAbstentions: parsed.maxTotalAbstentions } : {}),
+            ...(parsed.maxTotalWarnings !== undefined ? { maxTotalWarnings: parsed.maxTotalWarnings } : {}),
+            ...(parsed.requireConstructions !== undefined ? { requireConstructions: parsed.requireConstructions } : {}),
+            ...(parsed.requireEvidenceDomains !== undefined ? { requireEvidenceDomains: parsed.requireEvidenceDomains } : {}),
+            ...(parsed.forbidWarnings !== undefined ? { forbidWarnings: parsed.forbidWarnings } : {}),
+          }
+        : undefined;
 
     for (const rawPath of paths) {
       let validation: HistoricalResearchExportValidationResult;
@@ -1085,6 +1316,22 @@ export async function runMLBBacktestCLI(
       if (!review.valid) {
         anyInvalid = true;
       }
+    }
+
+    if (thresholds) {
+      const aggregate = buildHistoricalResearchExportBatchAggregateSummary(items);
+      const thresholdIssues = evaluateHistoricalResearchExportBatchThresholds(aggregate, thresholds);
+      const thresholdsPassed = thresholdIssues.length === 0;
+
+      if (parsed.output === 'json') {
+        const payload = buildHistoricalResearchExportBatchReviewJson(items, thresholds);
+        stdout(`${JSON.stringify(payload, null, 2)}\n`);
+        return anyInvalid || !thresholdsPassed ? 1 : 0;
+      }
+
+      stdout(formatHistoricalResearchExportBatchReview(items, thresholdIssues));
+      stderr('');
+      return anyInvalid || !thresholdsPassed ? 1 : 0;
     }
 
     if (singleFile) {

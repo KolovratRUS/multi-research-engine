@@ -533,6 +533,374 @@ it('AB: batch produces no stderr when some files are invalid', async () => {
   expect(stderr).toBe('');
 });
 
+it('AC: passing thresholds in text mode outputs Threshold Checks: passed', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--min-valid-files=2',
+    '--max-invalid-files=0',
+    '--min-total-predictions=2',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Threshold Checks: passed');
+});
+
+it('AD: passing thresholds in JSON mode adds thresholdsPassed true and empty thresholdIssues', async () => {
+  const args = [
+    '--output=json',
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--min-valid-files=2',
+    '--max-invalid-files=0',
+    '--min-total-predictions=2',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  const payload = JSON.parse(stdout);
+  expect(payload.thresholdsPassed).toBe(true);
+  expect(payload.thresholdIssues).toEqual([]);
+});
+
+it('AE: failing min valid files exits 1 with MIN_VALID_FILES_NOT_MET', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--min-valid-files=2',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('MIN_VALID_FILES_NOT_MET');
+});
+
+it('AF: failing max invalid files exits 1 with MAX_INVALID_FILES_EXCEEDED', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/invalid-export-v1.json`,
+    '--max-invalid-files=0',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('MAX_INVALID_FILES_EXCEEDED');
+});
+
+it('AG: failing min total predictions exits 1 with MIN_TOTAL_PREDICTIONS_NOT_MET', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/abstention-export-v1.json`,
+    '--min-total-predictions=1',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('MIN_TOTAL_PREDICTIONS_NOT_MET');
+});
+
+it('AH: failing max total abstentions exits 1 with MAX_TOTAL_ABSTENTIONS_EXCEEDED', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/abstention-export-v1.json`,
+    '--max-total-abstentions=0',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('MAX_TOTAL_ABSTENTIONS_EXCEEDED');
+});
+
+it('AI: failing max total warnings exits 1 with MAX_TOTAL_WARNINGS_EXCEEDED', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--max-total-warnings=0',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('MAX_TOTAL_WARNINGS_EXCEEDED');
+});
+
+it('AJ: passing required construction FULL and TEAM_ONLY', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--require-construction=FULL',
+    '--require-construction=TEAM_ONLY',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Threshold Checks: passed');
+});
+
+it('AK: failing required construction BOTH exits 1 with REQUIRED_CONSTRUCTION_MISSING', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--require-construction=BOTH',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('REQUIRED_CONSTRUCTION_MISSING');
+});
+
+it('AL: passing required evidence domain team-offense', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--require-evidence-domain=team-offense',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Threshold Checks: passed');
+});
+
+it('AM: failing required evidence domain exits 1 with REQUIRED_EVIDENCE_DOMAIN_MISSING', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--require-evidence-domain=unavailable-domain',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('REQUIRED_EVIDENCE_DOMAIN_MISSING');
+});
+
+it('AN: forbidden warning absent passes', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--forbid-warning=full-warn',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Threshold Checks: passed');
+});
+
+it('AO: forbidden warning present exits 1 with FORBIDDEN_WARNING_PRESENT', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--forbid-warning=full-warn',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('FORBIDDEN_WARNING_PRESENT');
+});
+
+it('AP: multiple threshold failures preserve deterministic order', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/invalid-export-v1.json`,
+    '--min-valid-files=2',
+    '--min-total-predictions=1',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  const thresholdIndex = stdout.lastIndexOf('Threshold Issues:');
+  expect(thresholdIndex).toBeGreaterThanOrEqual(0);
+  const nextSectionIndex = stdout.indexOf('\nFile 1:', thresholdIndex);
+  const thresholdBlock = nextSectionIndex >= 0
+    ? stdout.slice(thresholdIndex + 'Threshold Issues:'.length, nextSectionIndex)
+    : stdout.slice(thresholdIndex + 'Threshold Issues:'.length);
+  const issueLines = thresholdBlock
+    .split('\n')
+    .filter((line: string) => line.startsWith('- '))
+    .map((line: string) => line.split(':')[0].replace('- ', ''));
+
+  expect(issueLines).toEqual(['MIN_VALID_FILES_NOT_MET', 'MIN_TOTAL_PREDICTIONS_NOT_MET']);
+});
+
+it('AQ: threshold flags without --review-export-json are rejected', async () => {
+  const args = [
+    '--min-valid-files=1',
+  ];
+  const { stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stderr).toBe('Threshold checks are only valid with --review-export-json.');
+});
+
+it('AR: negative numeric threshold value is rejected', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--min-valid-files=-1',
+  ];
+  const { stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stderr).toBe('Invalid --min-valid-files. Expected a non-negative integer.');
+});
+
+it('AS: decimal numeric threshold value is rejected', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--min-valid-files=1.5',
+  ];
+  const { stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stderr).toBe('Invalid --min-valid-files. Expected a non-negative integer.');
+});
+
+it('AT: non-numeric threshold value is rejected', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--min-valid-files=abc',
+  ];
+  const { stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stderr).toBe('Invalid --min-valid-files. Expected a non-negative integer.');
+});
+
+it('AU: empty threshold value is rejected', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--min-valid-files',
+    '',
+  ];
+  const { stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stderr).toBe('Invalid --min-valid-files. Expected a non-negative integer.');
+});
+
+it('AV: repeated --require-construction is accepted', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--require-construction=FULL',
+    '--require-construction=TEAM_ONLY',
+  ];
+  const { stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  expect(stderr).toBe('');
+});
+
+it('AW: repeated --require-evidence-domain is accepted', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--require-evidence-domain=team-offense',
+    '--require-evidence-domain=starting-pitcher',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Threshold Checks: passed');
+});
+
+it('AX: repeated --forbid-warning is accepted', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--forbid-warning=full-warn',
+    '--forbid-warning=missing-warn',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain('Threshold Checks: passed');
+});
+
+it('AY: other duplicate options are still rejected', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--cache-root=/tmp',
+    '--cache-root=/tmp2',
+  ];
+  const { stderr, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stderr).toBe('Duplicate option: --cache-root');
+});
+
+it('AZ: single-file text output without thresholds remains byte-identical', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+  ];
+  const { stdout } = await runReview(args);
+  expect(stdout).toBe(
+    readFileSync(`${TEXT_FIXTURE_DIR}/full-review-v1.txt`, 'utf-8').replace(/\n$/, ''),
+  );
+});
+
+it('BA: single-file JSON output without thresholds remains byte-identical', async () => {
+  const args = [
+    '--output=json',
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+  ];
+  const { stdout } = await runReview(args);
+  expect(stdout).toBe(readFileSync(`${JSON_FIXTURE_DIR}/full-review-json-v1.json`, 'utf-8'));
+});
+
+it('BB: review invalidity plus threshold failures exits 1 and reports both', async () => {
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/invalid-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--min-valid-files=2',
+  ];
+  const { stdout, exitCode } = await runReview(args);
+  expect(exitCode).toBe(1);
+  expect(stdout).toContain('MANIFEST_PREDICTION_COUNT_MISMATCH');
+  expect(stdout).toContain('MIN_VALID_FILES_NOT_MET');
+});
+
+it('BC: threshold checks do not call orchestrate', async () => {
+  const deps: Parameters<typeof runMLBBacktestCLI>[2] = {
+    orchestrate: async () => {
+      throw new Error('orchestrate should not be called in review mode');
+    },
+  };
+  const args = [
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--min-valid-files=1',
+  ];
+  const exitCode = await runMLBBacktestCLI(args, undefined, deps);
+  expect(exitCode).toBe(0);
+});
+
+it('BD: output contains no modelProbability with thresholds', async () => {
+  const args = [
+    '--output=json',
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--min-total-predictions=2',
+  ];
+  const { stdout } = await runReview(args);
+  expect(stdout).not.toContain('modelProbability');
+});
+
+it('BE: output contains no odds/probability/betting concepts with thresholds', async () => {
+  const args = [
+    '--output=json',
+    '--review-export-json',
+    `${REVIEW_DIR}/full-export-v1.json`,
+    '--review-export-json',
+    `${REVIEW_DIR}/team-only-export-v1.json`,
+    '--max-total-warnings=10',
+  ];
+  const { stdout } = await runReview(args);
+  expect(stdout).not.toContain('odds');
+  expect(stdout).not.toContain('sportsbook');
+  expect(stdout).not.toContain('implied probability');
+  expect(stdout).not.toContain('expected value');
+  expect(stdout).not.toContain('EV');
+  expect(stdout).not.toContain('ROI');
+  expect(stdout).not.toContain('edge');
+});
+
 function fakeSummary(): HistoricalResearchExportReviewSummary {
   return {
     exportId: 'test-export-id',

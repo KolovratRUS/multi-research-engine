@@ -155,6 +155,8 @@ export interface HistoricalResearchExportBatchReviewJson {
   readonly valid: boolean;
   readonly summary: HistoricalResearchExportBatchAggregateSummary;
   readonly reviews: readonly HistoricalResearchExportBatchReviewItem[];
+  readonly thresholdsPassed?: boolean;
+  readonly thresholdIssues?: readonly HistoricalResearchExportThresholdCheckIssue[];
 }
 
 export interface HistoricalResearchExportBatchAggregateSummary {
@@ -176,6 +178,168 @@ export interface HistoricalResearchExportBatchAggregateSummary {
     readonly excluded: readonly string[];
   };
   readonly warningSummary: readonly string[];
+}
+
+export type HistoricalResearchExportThresholdCheckCode =
+  | 'MIN_VALID_FILES_NOT_MET'
+  | 'MAX_INVALID_FILES_EXCEEDED'
+  | 'MIN_TOTAL_PREDICTIONS_NOT_MET'
+  | 'MAX_TOTAL_ABSTENTIONS_EXCEEDED'
+  | 'MAX_TOTAL_WARNINGS_EXCEEDED'
+  | 'REQUIRED_CONSTRUCTION_MISSING'
+  | 'REQUIRED_EVIDENCE_DOMAIN_MISSING'
+  | 'FORBIDDEN_WARNING_PRESENT';
+
+export interface HistoricalResearchExportThresholdCheckIssue {
+  readonly code: HistoricalResearchExportThresholdCheckCode;
+  readonly path: string;
+  readonly message: string;
+  readonly expected: number | string;
+  readonly actual: number | string;
+}
+
+export interface HistoricalResearchExportReviewThresholds {
+  readonly minValidFiles?: number;
+  readonly maxInvalidFiles?: number;
+  readonly minTotalPredictions?: number;
+  readonly maxTotalAbstentions?: number;
+  readonly maxTotalWarnings?: number;
+  readonly requireConstructions?: readonly ('FULL' | 'TEAM_ONLY' | 'BOTH')[];
+  readonly requireEvidenceDomains?: readonly string[];
+  readonly forbidWarnings?: readonly string[];
+}
+
+const THRESHOLD_PATH_LOOKUP: Record<keyof HistoricalResearchExportReviewThresholds, string> = {
+  minValidFiles: 'summary.validFiles',
+  maxInvalidFiles: 'summary.invalidFiles',
+  minTotalPredictions: 'summary.totalPredictions',
+  maxTotalAbstentions: 'summary.totalAbstentions',
+  maxTotalWarnings: 'summary.totalWarnings',
+  requireConstructions: 'summary.constructionCounts',
+  requireEvidenceDomains: 'summary.evidenceDomainSummary.included',
+  forbidWarnings: 'summary.warningSummary',
+};
+
+export function evaluateHistoricalResearchExportBatchThresholds(
+  summary: HistoricalResearchExportBatchAggregateSummary,
+  thresholds: HistoricalResearchExportReviewThresholds,
+): readonly HistoricalResearchExportThresholdCheckIssue[] {
+  const issues: HistoricalResearchExportThresholdCheckIssue[] = [];
+  const push = (
+    code: HistoricalResearchExportThresholdCheckCode,
+    path: string,
+    expected: number | string,
+    actual: number | string,
+    message: string,
+  ) => {
+    issues.push({ code, path, message, expected, actual });
+  };
+
+  if (thresholds.minValidFiles !== undefined) {
+    if (summary.validFiles < thresholds.minValidFiles) {
+      push(
+        'MIN_VALID_FILES_NOT_MET',
+        THRESHOLD_PATH_LOOKUP.minValidFiles,
+        `>= ${thresholds.minValidFiles}`,
+        summary.validFiles,
+        'valid files count is below minimum',
+      );
+    }
+  }
+
+  if (thresholds.maxInvalidFiles !== undefined) {
+    if (summary.invalidFiles > thresholds.maxInvalidFiles) {
+      push(
+        'MAX_INVALID_FILES_EXCEEDED',
+        THRESHOLD_PATH_LOOKUP.maxInvalidFiles,
+        `<= ${thresholds.maxInvalidFiles}`,
+        summary.invalidFiles,
+        'invalid files count exceeds maximum',
+      );
+    }
+  }
+
+  if (thresholds.minTotalPredictions !== undefined) {
+    if (summary.totalPredictions < thresholds.minTotalPredictions) {
+      push(
+        'MIN_TOTAL_PREDICTIONS_NOT_MET',
+        THRESHOLD_PATH_LOOKUP.minTotalPredictions,
+        `>= ${thresholds.minTotalPredictions}`,
+        summary.totalPredictions,
+        'total predictions count is below minimum',
+      );
+    }
+  }
+
+  if (thresholds.maxTotalAbstentions !== undefined) {
+    if (summary.totalAbstentions > thresholds.maxTotalAbstentions) {
+      push(
+        'MAX_TOTAL_ABSTENTIONS_EXCEEDED',
+        THRESHOLD_PATH_LOOKUP.maxTotalAbstentions,
+        `<= ${thresholds.maxTotalAbstentions}`,
+        summary.totalAbstentions,
+        'total abstentions count exceeds maximum',
+      );
+    }
+  }
+
+  if (thresholds.maxTotalWarnings !== undefined) {
+    if (summary.totalWarnings > thresholds.maxTotalWarnings) {
+      push(
+        'MAX_TOTAL_WARNINGS_EXCEEDED',
+        THRESHOLD_PATH_LOOKUP.maxTotalWarnings,
+        `<= ${thresholds.maxTotalWarnings}`,
+        summary.totalWarnings,
+        'total warnings count exceeds maximum',
+      );
+    }
+  }
+
+  if (thresholds.requireConstructions !== undefined) {
+    for (const construction of thresholds.requireConstructions) {
+      if (summary.constructionCounts[construction] <= 0) {
+        push(
+          'REQUIRED_CONSTRUCTION_MISSING',
+          THRESHOLD_PATH_LOOKUP.requireConstructions,
+          `> 0 ${construction}`,
+          summary.constructionCounts[construction],
+          `required construction ${construction} is missing`,
+        );
+      }
+    }
+  }
+
+  if (thresholds.requireEvidenceDomains !== undefined) {
+    for (const domain of thresholds.requireEvidenceDomains) {
+      const included = summary.evidenceDomainSummary.included.includes(domain);
+      const excluded = summary.evidenceDomainSummary.excluded.includes(domain);
+      if (!included && !excluded) {
+        push(
+          'REQUIRED_EVIDENCE_DOMAIN_MISSING',
+          THRESHOLD_PATH_LOOKUP.requireEvidenceDomains,
+          `include ${domain}`,
+          'absent',
+          `required evidence domain ${domain} is missing`,
+        );
+      }
+    }
+  }
+
+  if (thresholds.forbidWarnings !== undefined) {
+    for (const warning of thresholds.forbidWarnings) {
+      if (summary.warningSummary.includes(warning)) {
+        push(
+          'FORBIDDEN_WARNING_PRESENT',
+          THRESHOLD_PATH_LOOKUP.forbidWarnings,
+          `exclude ${warning}`,
+          warning,
+          `forbidden warning ${warning} is present`,
+        );
+      }
+    }
+  }
+
+  return Object.freeze([...issues]);
 }
 
 export function buildHistoricalResearchExportBatchAggregateSummary(
@@ -251,20 +415,28 @@ export function buildHistoricalResearchExportBatchAggregateSummary(
 
 export function buildHistoricalResearchExportBatchReviewJson(
   items: readonly HistoricalResearchExportBatchReviewItem[],
+  thresholds?: HistoricalResearchExportReviewThresholds,
 ): HistoricalResearchExportBatchReviewJson {
   const valid = items.every((item) => item.review.valid);
   const aggregate = buildHistoricalResearchExportBatchAggregateSummary(items);
+  const thresholdIssues = thresholds
+    ? evaluateHistoricalResearchExportBatchThresholds(aggregate, thresholds)
+    : undefined;
+  const thresholdsPassed = thresholdIssues === undefined ? undefined : thresholdIssues.length === 0;
 
   return {
     reviewVersion: HISTORICAL_RESEARCH_EXPORT_REVIEW_BATCH_VERSION,
     valid,
     summary: aggregate,
     reviews: Object.freeze([...items]),
+    ...(thresholdsPassed !== undefined ? { thresholdsPassed } : {}),
+    ...(thresholdIssues !== undefined ? { thresholdIssues } : {}),
   };
 }
 
 export function formatHistoricalResearchExportBatchReview(
   items: readonly HistoricalResearchExportBatchReviewItem[],
+  thresholdIssues?: readonly HistoricalResearchExportThresholdCheckIssue[],
 ): string {
   const aggregate = buildHistoricalResearchExportBatchAggregateSummary(items);
   const aggregateLines = [
@@ -279,13 +451,27 @@ export function formatHistoricalResearchExportBatchReview(
     `Warning Summary: ${aggregate.warningSummary.length > 0 ? aggregate.warningSummary.join(', ') : 'none'}`,
   ];
 
-  const lines = [
+  const lines: string[] = [
     'Historical Research Export Batch Review',
     `Files Reviewed: ${aggregate.filesReviewed}`,
     `Valid Files: ${aggregate.validFiles}`,
     `Invalid Files: ${aggregate.invalidFiles}`,
     ...aggregateLines,
   ];
+
+  if (thresholdIssues !== undefined) {
+    if (thresholdIssues.length === 0) {
+      lines.push('Threshold Checks: passed');
+    } else {
+      lines.push('Threshold Checks: failed');
+      lines.push('Threshold Issues:');
+      for (const issue of thresholdIssues) {
+        const expected = issue.expected !== undefined ? `, expected ${JSON.stringify(issue.expected)}` : '';
+        const actual = issue.actual !== undefined ? `, actual ${JSON.stringify(issue.actual)}` : '';
+        lines.push(`- ${issue.code}: ${issue.path} - ${issue.message}${expected}${actual}`);
+      }
+    }
+  }
 
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
