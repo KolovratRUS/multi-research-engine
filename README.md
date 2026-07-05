@@ -151,6 +151,8 @@ A release checklist for the offline review subsystem is documented in `docs/hist
 
 The rollout plan for this subsystem is documented in `docs/historical-export-review-rollout.md`.
 
+The larger coverage planning doc is `docs/historical-dataset-coverage-plan.md`.
+
 ## Architecture
 
 The application enforces a strict two-stage separation:

@@ -14,11 +14,13 @@ Use `--export-json` with an existing backtest run to write an export file.
 
 ```bash
 # FULL research export, single date
-npm run backtest:mlb -- --source cached --date 2024-06-01 --research-construction full --export-json tmp/full-export.json
+npm run backtest:mlb -- --source fixture --date 2024-06-01 --research-construction full --export-json tmp/full-export.json
 
 # BOTH research export, date range
-npm run backtest:mlb -- --source cached --start 2024-06-01 --end 2024-06-03 --research-construction both --export-json tmp/both-export.json
+npm run backtest:mlb -- --source fixture --start 2024-06-01 --end 2024-06-03 --research-construction both --export-json tmp/both-export.json
 ```
+
+The supported offline source value is `fixture`. Never use `--source live` for this workflow.
 
 Treat exported files as stable audit artifacts. Do not edit them by hand.
 
@@ -120,6 +122,8 @@ JSON output includes `valid`, `thresholdsPassed`, and `thresholdIssues` when thr
 A release checklist for this subsystem is documented in `docs/historical-export-review-release-checklist.md`.
 
 The rollout plan is documented in `docs/historical-export-review-rollout.md`.
+
+The larger coverage planning doc is `docs/historical-dataset-coverage-plan.md`.
 
 ## Safety and leakage notes
 
