@@ -115,6 +115,10 @@ Exit codes:
 
 JSON output includes `valid`, `thresholdsPassed`, and `thresholdIssues` when thresholds are active. Text output includes a `Threshold Checks:` section.
 
+## Historical export review release checklist
+
+A release checklist for this subsystem is documented in `docs/historical-export-review-release-checklist.md`.
+
 ## Safety and leakage notes
 
 - Review mode reads saved export files only.

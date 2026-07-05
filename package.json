@@ -20,7 +20,8 @@
     "review:historical-export:full": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json",
     "review:historical-export:batch": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json",
     "review:historical-export:ci": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json --review-thresholds-json tests/backtesting/fixtures/historical-research-threshold-presets/passing-ci-thresholds-v1.json",
-    "review:historical-export:ci:json": "npm run backtest:mlb -- --output json --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json --review-thresholds-json tests/backtesting/fixtures/historical-research-threshold-presets/passing-ci-thresholds-v1.json"
+    "review:historical-export:ci:json": "npm run backtest:mlb -- --output json --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json --review-thresholds-json tests/backtesting/fixtures/historical-research-threshold-presets/passing-ci-thresholds-v1.json",
+    "review:historical-export:release-check": "npm run review:historical-export:full && npm run review:historical-export:batch && npm run review:historical-export:ci && npm run review:historical-export:ci:json"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
