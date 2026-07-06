@@ -236,3 +236,4 @@ Use the Phase 2G conservative comparison checklist `docs/historical-coverage-com
 Use the Phase 2H medium01 planning document `docs/historical-coverage-run-plan-medium01.md` to prepare the next conservative fixture-only run as a planning step, not a completed run log.
 The Phase 2I completed medium01 run log is `docs/historical-coverage-run-log-medium01.md`, recording observer-note results for the executed fixture-only coverage run.
 The Phase 2J small01 to medium01 observer comparison is `docs/historical-coverage-observer-comparison-small01-medium01.md`, documenting conservative coverage comparisons between small01 and medium01 without creating new exports.
+The Phase 2K large01 planning document is `docs/historical-coverage-run-plan-large01.md`, preparing the next conservative fixture-only coverage expansion plan.
