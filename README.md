@@ -161,6 +161,7 @@ The Phase 2F observer-comparison document is `docs/historical-coverage-observer-
 The Phase 2G conservative comparison checklist is `docs/historical-coverage-comparison-checklist.md`.
 The Phase 2H medium01 planning document is `docs/historical-coverage-run-plan-medium01.md`.
 The Phase 2I completed medium01 run log is `docs/historical-coverage-run-log-medium01.md`.
+The Phase 2J small01 to medium01 observer comparison is `docs/historical-coverage-observer-comparison-small01-medium01.md`.
 
 ## Architecture
 
