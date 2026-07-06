@@ -158,6 +158,7 @@ Coverage-run logging and artifact naming templates are documented in `docs/histo
 The first Phase 2C observer-note example is `docs/historical-coverage-run-log-smoke01.md`.
 The expanded Phase 2E observer-note example is `docs/historical-coverage-run-log-small01.md`.
 The Phase 2F observer-comparison document is `docs/historical-coverage-observer-comparison-smoke01-small01.md`.
+The Phase 2G conservative comparison checklist is `docs/historical-coverage-comparison-checklist.md`.
 
 ## Architecture
 
