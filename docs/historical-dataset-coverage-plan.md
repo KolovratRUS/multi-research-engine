@@ -233,3 +233,4 @@ The first Phase 2C observer-note example is `docs/historical-coverage-run-log-sm
 The expanded Phase 2E observer-note example is `docs/historical-coverage-run-log-small01.md`.
 The Phase 2F observer-comparison document is `docs/historical-coverage-observer-comparison-smoke01-small01.md`.
 Use the Phase 2G conservative comparison checklist `docs/historical-coverage-comparison-checklist.md` before promoting to larger fixture-only windows.
+Use the Phase 2H medium01 planning document `docs/historical-coverage-run-plan-medium01.md` to prepare the next conservative fixture-only run as a planning step, not a completed run log.
