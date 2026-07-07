@@ -168,6 +168,7 @@ The Phase 2M medium01 to large01 observer comparison is `docs/historical-coverag
 The Phase 2N fixture-shape investigation note is `docs/historical-coverage-fixture-shape-investigation-large01.md`.
 The Phase 2O targeted fixture update plan is `docs/historical-coverage-targeted-fixture-update-plan.md`.
 The Phase 2P july-slice01 implementation note is `docs/historical-coverage-july-slice01-implementation.md`.
+The Phase 2Q july-slice01 comparison note is `docs/historical-coverage-july-slice01-comparison.md`.
 
 ## Architecture
 

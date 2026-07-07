@@ -241,4 +241,5 @@ The Phase 2L completed large01 run log is `docs/historical-coverage-run-log-larg
 The Phase 2M medium01 to large01 observer comparison is `docs/historical-coverage-observer-comparison-medium01-large01.md`, documenting fixture-only coverage comparisons between medium01 and large01 without creating new exports.
 The Phase 2N fixture-shape investigation note is `docs/historical-coverage-fixture-shape-investigation-large01.md`, documenting the large01 flat-count observation and confirming it is expected from current fixture coverage shape.
 The Phase 2P july-slice01 implementation note is `docs/historical-coverage-july-slice01-implementation.md`, documenting the small deterministic July fixture slice added to prove downstream fixture-discovered count changes.
+The Phase 2Q july-slice01 comparison note is `docs/historical-coverage-july-slice01-comparison.md`, documenting the fixture-only comparison of pre-update fixture shape versus the july-slice01 surface.
 The Phase 2O targeted fixture update plan is `docs/historical-coverage-targeted-fixture-update-plan.md`, documenting how to safely add a small July fixture slice in a future implementation phase.
