@@ -3,7 +3,7 @@ import { buildHistoricalSnapshot } from '@/lib/backtesting/mlb/snapshot-builder'
 import { computeExploratoryScore } from '@/lib/backtesting/mlb/exploratory-scorer';
 import { runHistoricalBacktest } from '@/lib/backtesting/runner';
 import type { BacktestSnapshot, BacktestPrediction, HistoricalMLBGame } from '@/lib/backtesting/types';
-import { buildMLBFixtures } from '@/fixtures/backtesting/mlb/fixture-games';
+import { buildMLBFixtures, createMLBFixtureProvider } from '@/fixtures/backtesting/mlb/fixture-games';
 import { assertAvailableByCutoff, assertCompletedBeforeCutoff, assertNotFutureLeakage } from '@/lib/backtesting/leakage-guards';
 
 describe('Phase 1B MLB backtest: fixture cutoff', () => {
@@ -1113,5 +1113,29 @@ describe('Phase 1C MLB backtest: pitcher abstention semantics', () => {
     expect(abstention.abstentionReason).not.toBe('BOTH_PITCHERS_UNAVAILABLE');
     expect(abstention.warnings).not.toContain('Both starting pitchers unavailable');
     expect(abstention.warnings).toContain('Missing away team profile');
+  });
+});
+
+describe('Phase 2P MLB backtest: july-slice01 fixture inventory', () => {
+  it('includes July july-slice01 games in fixture inventory', () => {
+    const fixture = buildMLBFixtures();
+    const julyGames = fixture.games.filter((g) => g.officialDate.startsWith('2024-07'));
+    expect(julyGames.length).toBeGreaterThanOrEqual(1);
+    const julyDates = [...new Set(julyGames.map((g) => g.officialDate))].sort();
+    expect(julyDates.some((d) => d >= '2024-07-01' && d <= '2024-07-07')).toBe(true);
+  });
+
+  it('preserves existing June fixture count unless documented otherwise', () => {
+    const fixture = buildMLBFixtures();
+    const juneGames = fixture.games.filter((g) => g.officialDate.startsWith('2024-06'));
+    expect(juneGames.length).toBe(17);
+  });
+
+  it('discovers July games by officialDate without source=live', async () => {
+    const fixture = buildMLBFixtures();
+    const provider = createMLBFixtureProvider(fixture);
+    const july1Games = await provider.fetchGamesForDate('2024-07-01');
+    expect(july1Games.length).toBeGreaterThanOrEqual(1);
+    expect(july1Games.every((g) => g.officialDate === '2024-07-01')).toBe(true);
   });
 });
