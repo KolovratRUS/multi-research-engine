@@ -17,6 +17,7 @@
     "smoke:mlb-live": "tsx scripts/smoke-mlb-live.ts",
     "smoke:backtest:mlb:live": "tsx scripts/smoke-mlb-backtest-live.ts",
     "backtest:mlb": "tsx scripts/backtest-mlb.ts",
+    "inventory:mlb-fixtures": "tsx scripts/mlb-fixture-inventory.ts",
     "review:historical-export:full": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json",
     "review:historical-export:batch": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json",
     "review:historical-export:ci": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json --review-thresholds-json tests/backtesting/fixtures/historical-research-threshold-presets/passing-ci-thresholds-v1.json",

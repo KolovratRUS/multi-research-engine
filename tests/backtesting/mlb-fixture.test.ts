@@ -1139,3 +1139,16 @@ describe('Phase 2P MLB backtest: july-slice01 fixture inventory', () => {
     expect(july1Games.every((g) => g.officialDate === '2024-07-01')).toBe(true);
   });
 });
+
+describe('Phase 2R MLB backtest: fixture inventory guard', () => {
+  it('matches expected fixture inventory baseline', () => {
+    const fixture = buildMLBFixtures();
+    const dates = fixture.games.map((g) => g.officialDate);
+    const julyDates = [...new Set(dates.filter((d) => d.startsWith('2024-07')))].sort();
+
+    expect(fixture.games.length).toBe(21);
+    expect(dates.filter((d) => d.startsWith('2024-06')).length).toBe(17);
+    expect(dates.filter((d) => d.startsWith('2024-07')).length).toBe(4);
+    expect(julyDates).toEqual(['2024-07-01', '2024-07-03', '2024-07-05', '2024-07-07']);
+  });
+});

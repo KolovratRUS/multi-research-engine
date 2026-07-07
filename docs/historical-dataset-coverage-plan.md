@@ -243,3 +243,4 @@ The Phase 2N fixture-shape investigation note is `docs/historical-coverage-fixtu
 The Phase 2P july-slice01 implementation note is `docs/historical-coverage-july-slice01-implementation.md`, documenting the small deterministic July fixture slice added to prove downstream fixture-discovered count changes.
 The Phase 2Q july-slice01 comparison note is `docs/historical-coverage-july-slice01-comparison.md`, documenting the fixture-only comparison of pre-update fixture shape versus the july-slice01 surface.
 The Phase 2O targeted fixture update plan is `docs/historical-coverage-targeted-fixture-update-plan.md`, documenting how to safely add a small July fixture slice in a future implementation phase.
+The Phase 2R fixture inventory guard is `docs/historical-coverage-fixture-inventory-guard.md`, documenting the local fixture inventory guard used before further fixture expansion.
