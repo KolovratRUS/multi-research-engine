@@ -170,6 +170,7 @@ The Phase 2O targeted fixture update plan is `docs/historical-coverage-targeted-
 The Phase 2P july-slice01 implementation note is `docs/historical-coverage-july-slice01-implementation.md`.
 The Phase 2Q july-slice01 comparison note is `docs/historical-coverage-july-slice01-comparison.md`.
 The Phase 2R fixture inventory guard is `docs/historical-coverage-fixture-inventory-guard.md`.
+The Phase 2S next fixture slice plan is `docs/historical-coverage-next-fixture-slice-plan.md`.
 
 ## Architecture
 
