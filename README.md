@@ -172,6 +172,7 @@ The Phase 2Q july-slice01 comparison note is `docs/historical-coverage-july-slic
 The Phase 2R fixture inventory guard is `docs/historical-coverage-fixture-inventory-guard.md`.
 The Phase 2S next fixture slice plan is `docs/historical-coverage-next-fixture-slice-plan.md`.
 The Phase 2T july-slice02 implementation note is `docs/historical-coverage-july-slice02-implementation.md`.
+The Phase 2U july-slice01 vs july-slice02 comparison note is `docs/historical-coverage-july-slice01-slice02-comparison.md`.
 
 ## Architecture
 

@@ -246,3 +246,4 @@ The Phase 2O targeted fixture update plan is `docs/historical-coverage-targeted-
 The Phase 2R fixture inventory guard is `docs/historical-coverage-fixture-inventory-guard.md`, documenting the local fixture inventory guard used before further fixture expansion.
 The Phase 2S next fixture slice plan is `docs/historical-coverage-next-fixture-slice-plan.md`, planning the next deterministic fixture slice using the inventory guard.
 The Phase 2T july-slice02 implementation note is `docs/historical-coverage-july-slice02-implementation.md`, documenting the second small deterministic July fixture slice added for coverage-shape testing.
+The Phase 2U july-slice01 vs july-slice02 comparison note is `docs/historical-coverage-july-slice01-slice02-comparison.md`, documenting a fixture-only comparison of the two July slices without creating new exports.
