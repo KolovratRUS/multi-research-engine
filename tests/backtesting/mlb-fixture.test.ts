@@ -1140,15 +1140,54 @@ describe('Phase 2P MLB backtest: july-slice01 fixture inventory', () => {
   });
 });
 
+describe('Phase 2T MLB backtest: july-slice02 fixture inventory', () => {
+  it('includes july-slice02 games in fixture inventory', () => {
+    const fixture = buildMLBFixtures();
+    const julyGames = fixture.games.filter((g) => g.officialDate.startsWith('2024-07'));
+    expect(julyGames.length).toBe(8);
+    const julyDates = [...new Set(julyGames.map((g) => g.officialDate))].sort();
+    expect(julyDates.length).toBe(8);
+    expect(julyDates.some((d) => d >= '2024-07-08' && d <= '2024-07-14')).toBe(true);
+  });
+
+  it('increased total fixture games after july-slice02', () => {
+    const fixture = buildMLBFixtures();
+    expect(fixture.games.length).toBe(25);
+  });
+
+  it('preserves June game count after july-slice02', () => {
+    const fixture = buildMLBFixtures();
+    const juneGames = fixture.games.filter((g) => g.officialDate.startsWith('2024-06'));
+    expect(juneGames.length).toBe(17);
+  });
+
+  it('preserves july-slice01 dates unchanged', () => {
+    const fixture = buildMLBFixtures();
+    const julyDates = [...new Set(fixture.games.filter((g) => g.officialDate.startsWith('2024-07')).map((g) => g.officialDate))].sort();
+    expect(julyDates).toContain('2024-07-01');
+    expect(julyDates).toContain('2024-07-03');
+    expect(julyDates).toContain('2024-07-05');
+    expect(julyDates).toContain('2024-07-07');
+  });
+
+  it('discovers july-slice02 games by officialDate without source=live', async () => {
+    const fixture = buildMLBFixtures();
+    const provider = createMLBFixtureProvider(fixture);
+    const july8Games = await provider.fetchGamesForDate('2024-07-08');
+    expect(july8Games.length).toBeGreaterThanOrEqual(1);
+    expect(july8Games.every((g) => g.officialDate === '2024-07-08')).toBe(true);
+  });
+});
+
 describe('Phase 2R MLB backtest: fixture inventory guard', () => {
   it('matches expected fixture inventory baseline', () => {
     const fixture = buildMLBFixtures();
     const dates = fixture.games.map((g) => g.officialDate);
     const julyDates = [...new Set(dates.filter((d) => d.startsWith('2024-07')))].sort();
 
-    expect(fixture.games.length).toBe(21);
+    expect(fixture.games.length).toBe(25);
     expect(dates.filter((d) => d.startsWith('2024-06')).length).toBe(17);
-    expect(dates.filter((d) => d.startsWith('2024-07')).length).toBe(4);
-    expect(julyDates).toEqual(['2024-07-01', '2024-07-03', '2024-07-05', '2024-07-07']);
+    expect(dates.filter((d) => d.startsWith('2024-07')).length).toBe(8);
+    expect(julyDates).toEqual(['2024-07-01', '2024-07-03', '2024-07-05', '2024-07-07', '2024-07-08', '2024-07-10', '2024-07-12', '2024-07-14']);
   });
 });

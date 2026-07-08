@@ -1,7 +1,7 @@
 # Historical Coverage Fixture Inventory Guard
 
 Documentation-only guard note.
-No new fixture data added.
+No new fixture data added after this baseline update unless explicitly scoped.
 No live source used.
 No real MLB API request made.
 No web lookup used.
@@ -12,14 +12,15 @@ No model-quality or predictive-performance claim.
 
 Local fixture inventory guard added.
 The guard makes fixture coverage shape explicit before any further fixture expansion.
+Phase 2T intentionally updated the guarded baseline after july-slice02.
 
 ## Current guarded fixture baseline
 
-- total fixture games: 21
-- fixture range: 2024-06-01 through 2024-07-07
+- total fixture games: 25
+- fixture range: 2024-06-01 through 2024-07-14
 - June games: 17
-- July games: 4
-- July dates: 2024-07-01, 2024-07-03, 2024-07-05, 2024-07-07
+- July games: 8
+- July dates: 2024-07-01, 2024-07-03, 2024-07-05, 2024-07-07, 2024-07-08, 2024-07-10, 2024-07-12, 2024-07-14
 
 ## Guard implementation
 
@@ -42,20 +43,24 @@ Example output:
 ```json
 {
   "startDate": "2024-06-01",
-  "endDate": "2024-07-07",
-  "totalGames": 21,
+  "endDate": "2024-07-14",
+  "totalGames": 25,
   "gamesByMonth": {
     "2024-06": 17,
-    "2024-07": 4
+    "2024-07": 8
   },
-  "uniqueDateCount": 19,
+  "uniqueDateCount": 23,
   "juneGameCount": 17,
-  "julyGameCount": 4,
+  "julyGameCount": 8,
   "julyDates": [
     "2024-07-01",
     "2024-07-03",
     "2024-07-05",
-    "2024-07-07"
+    "2024-07-07",
+    "2024-07-08",
+    "2024-07-10",
+    "2024-07-12",
+    "2024-07-14"
   ]
 }
 ```
