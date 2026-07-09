@@ -35,7 +35,7 @@ describe('runMLBBacktestCLI integration', () => {
     expect(code).toBe(0);
     expect(capturedStderr()).toBe('');
     expect(capturedStdout()).toContain('2024-06-01');
-    expect(capturedStdout()).toContain('2024-07-14');
+    expect(capturedStdout()).toContain('2024-07-21');
   });
 
   it('valid fixture date completes successfully', async () => {

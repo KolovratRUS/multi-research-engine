@@ -677,7 +677,7 @@ describe('runMLBBacktestCLI', () => {
     expect(code).toBe(0);
     expect(mockOrchestrate).toHaveBeenCalledTimes(1);
     expect(mockOrchestrate).toHaveBeenCalledWith(
-      { startDate: '2024-06-01', endDate: '2024-07-14' },
+      { startDate: '2024-06-01', endDate: '2024-07-21' },
       expect.any(Object),
     );
   });

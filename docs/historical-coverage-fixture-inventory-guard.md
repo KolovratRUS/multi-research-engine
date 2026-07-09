@@ -12,15 +12,15 @@ No model-quality or predictive-performance claim.
 
 Local fixture inventory guard added.
 The guard makes fixture coverage shape explicit before any further fixture expansion.
-Phase 2T intentionally updated the guarded baseline after july-slice02.
+Phase 2X intentionally updated the guarded baseline after july-slice03.
 
 ## Current guarded fixture baseline
 
-- total fixture games: 25
-- fixture range: 2024-06-01 through 2024-07-14
+- total fixture games: 29
+- fixture range: 2024-06-01 through 2024-07-21
 - June games: 17
-- July games: 8
-- July dates: 2024-07-01, 2024-07-03, 2024-07-05, 2024-07-07, 2024-07-08, 2024-07-10, 2024-07-12, 2024-07-14
+- July games: 12
+- July dates: 2024-07-01, 2024-07-03, 2024-07-05, 2024-07-07, 2024-07-08, 2024-07-10, 2024-07-12, 2024-07-14, 2024-07-15, 2024-07-17, 2024-07-19, 2024-07-21
 
 ## Guard implementation
 
@@ -43,15 +43,15 @@ Example output:
 ```json
 {
   "startDate": "2024-06-01",
-  "endDate": "2024-07-14",
-  "totalGames": 25,
+  "endDate": "2024-07-21",
+  "totalGames": 29,
   "gamesByMonth": {
     "2024-06": 17,
-    "2024-07": 8
+    "2024-07": 12
   },
-  "uniqueDateCount": 23,
+  "uniqueDateCount": 27,
   "juneGameCount": 17,
-  "julyGameCount": 8,
+  "julyGameCount": 12,
   "julyDates": [
     "2024-07-01",
     "2024-07-03",
@@ -60,7 +60,11 @@ Example output:
     "2024-07-08",
     "2024-07-10",
     "2024-07-12",
-    "2024-07-14"
+    "2024-07-14",
+    "2024-07-15",
+    "2024-07-17",
+    "2024-07-19",
+    "2024-07-21"
   ]
 }
 ```
@@ -88,5 +92,5 @@ Example output:
 
 ## Recommended next safe phase
 
-Phase 2S — plan next deterministic fixture slice using the inventory guard.
+Phase 2Y — compare july-slice02 and july-slice03 fixture coverage, documentation-only using the Phase 2V checklist.
 Keep it planning-first unless the user explicitly asks to implement.

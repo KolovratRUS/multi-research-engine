@@ -468,6 +468,68 @@ const games = [
     },
   }),
   // july-slice02 end
+  // july-slice03 start: deterministic local fixture coverage extension - Phase 2X
+  makeHistoricalGame({
+    gamePk: 1026,
+    officialDate: '2024-07-15',
+    gameDate: new Date('2024-07-15T18:20:00Z'),
+    homeTeamId: 100101,
+    awayTeamId: 100102,
+    homeTeamName: 'Home Alpha',
+    awayTeamName: 'Away Alpha',
+    status: 'FINAL',
+    venueId: 1,
+    probablePitchers: {
+      home: makeAvailablePitcher({ personId: 2001, teamId: 100101, fullName: 'Starter Alpha', fetchedAt: new Date('2024-07-15T16:00:00Z') }),
+      away: makeAvailablePitcher({ personId: 2002, teamId: 100102, fullName: 'Starter Beta', fetchedAt: new Date('2024-07-15T16:00:00Z') }),
+    },
+  }),
+  makeHistoricalGame({
+    gamePk: 1027,
+    officialDate: '2024-07-17',
+    gameDate: new Date('2024-07-17T19:10:00Z'),
+    homeTeamId: 100101,
+    awayTeamId: 100103,
+    homeTeamName: 'Home Alpha',
+    awayTeamName: 'Home Gamma',
+    status: 'SUSPENDED',
+    venueId: 2,
+    probablePitchers: {
+      home: makeAvailablePitcher({ personId: 2001, teamId: 100101, fullName: 'Starter Alpha', fetchedAt: new Date('2024-07-17T17:00:00Z') }),
+      away: makeUnavailablePitcher({ teamId: 100103, fetchedAt: new Date('2024-07-17T17:00:00Z'), warnings: ['Missing pitcher'] }),
+    },
+  }),
+  makeHistoricalGame({
+    gamePk: 1028,
+    officialDate: '2024-07-19',
+    gameDate: new Date('2024-07-19T17:40:00Z'),
+    homeTeamId: 100104,
+    awayTeamId: 100105,
+    homeTeamName: 'Away Delta',
+    awayTeamName: 'Away Epsilon',
+    status: 'SUSPENDED',
+    venueId: 1,
+    probablePitchers: {
+      home: makeUnavailablePitcher({ teamId: 100104, fetchedAt: new Date('2024-07-19T15:40:00Z'), warnings: ['Missing pitcher'] }),
+      away: makeUnavailablePitcher({ teamId: 100105, fetchedAt: new Date('2024-07-19T15:40:00Z'), warnings: ['Missing pitcher'] }),
+    },
+  }),
+  makeHistoricalGame({
+    gamePk: 1029,
+    officialDate: '2024-07-21',
+    gameDate: new Date('2024-07-21T12:00:00Z'),
+    homeTeamId: 100102,
+    awayTeamId: 100103,
+    homeTeamName: 'Away Alpha',
+    awayTeamName: 'Home Gamma',
+    status: 'FINAL',
+    venueId: 2,
+    probablePitchers: {
+      home: makeAvailablePitcher({ personId: 2003, teamId: 100102, fullName: 'Starter Gamma', fetchedAt: new Date('2024-07-21T10:00:00Z') }),
+      away: makeAvailablePitcher({ personId: 2006, teamId: 100103, fullName: 'Starter Zeta', fetchedAt: new Date('2024-07-21T10:00:00Z') }),
+    },
+  }),
+  // july-slice03 end
 ];
 
 const outcomes = [
@@ -498,6 +560,11 @@ const outcomes = [
   makeOutcome({ gamePk: 1024, status: 'FINAL', homeScore: 2, awayScore: 5, winner: 'AWAY', innings: 9 }),
   makeOutcome({ gamePk: 1025, status: 'FINAL', homeScore: 6, awayScore: 3, winner: 'HOME', innings: 9 }),
   // july-slice02 end
+  makeOutcome({ gamePk: 1026, status: 'FINAL', homeScore: 5, awayScore: 2, winner: 'HOME', innings: 9 }),
+  makeOutcome({ gamePk: 1027, status: 'SUSPENDED' }),
+  makeOutcome({ gamePk: 1028, status: 'SUSPENDED' }),
+  makeOutcome({ gamePk: 1029, status: 'FINAL', homeScore: 8, awayScore: 1, winner: 'HOME', innings: 9 }),
+  // july-slice03 end
 ];
 
 const recentWinRates: Record<number, number> = {
