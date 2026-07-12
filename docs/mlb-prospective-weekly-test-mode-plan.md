@@ -1,0 +1,222 @@
+# MLB Prospective Weekly Test Mode Plan
+
+Documentation-only plan.
+No live source used.
+No real MLB API request made.
+No web lookup used.
+No new fixture data added.
+No fixture game records modified.
+No code implemented.
+No generated artifacts committed.
+No model-quality or predictive-performance claim.
+No modelProbability until calibrated.
+
+## Purpose
+
+This plan defines how to move from local historical fixture testing toward future real MLB weekly testing without leakage, odds, or hindsight.
+It is documentation-only and does not implement live mode or fetch real schedules.
+
+## Current foundation
+
+- local MLB fixture inventory: 29 games
+- fixture range: 2024-06-01 through 2024-07-21
+- fixture inventory reporting fields: monthSummaries, dateSummaries, localSliceSummaries
+- export/review tooling exists
+- threshold/release/rollout validation exists
+- TEAM_ONLY and FULL comparison concepts exist
+- modelProbability remains absent/null/not available until calibrated
+- actual starters remain evaluation-only
+- no live/API authorization exists yet
+
+## Prospective weekly test objective
+
+Later, we want to run the engine on upcoming MLB games before they start.
+The output must be timestamped and locked before first pitch.
+After games complete, outcomes can be attached.
+Weekly reports can compare pre-game research outputs against final results.
+This must remain odds-blind and leakage-safe.
+
+## Core artifacts
+
+1. Weekly run manifest
+   - runId
+   - sport
+   - weekStart
+   - weekEnd
+   - generatedAt
+   - source mode
+   - run status
+   - safety warnings
+
+2. Prospective schedule snapshot
+   - gameId or stable local identifier
+   - officialDate
+   - scheduled start time
+   - teams
+   - snapshot timestamp
+   - source provenance
+   - no final scores
+   - no completed game state
+
+3. Pre-game research snapshot
+   - game identifier
+   - createdAt
+   - research construction mode
+   - evidence included/excluded
+   - researchStrengthScore
+   - confidence/matchConfidence if already part of current architecture
+   - dataQuality
+   - volatility
+   - warnings
+   - modelProbability absent/null/not available
+
+4. Locked weekly output
+   - immutable-ish pre-game record
+   - lock timestamp
+   - lock reason
+   - games included
+   - games skipped/abstained
+   - validation status
+
+5. Outcome attachment
+   - attached only after final completion
+   - result timestamp
+   - final status
+   - final score/result where appropriate
+   - completion provenance
+   - must use existing historical completion safety principles
+
+6. Weekly evaluation report
+   - number of games processed
+   - number of locked outputs
+   - abstentions/skips
+   - warning summary
+   - result attachment status
+   - no modelProbability until calibrated
+   - no predictive-quality claim until enough samples and calibration process exists
+
+## Data-source stages
+
+Stage 0 — local prospective dry-run
+- use deterministic local test fixtures only
+- no live/API/web
+- goal: validate artifact shape and locking flow
+
+Stage 1 — manually supplied real schedule file
+- user provides a static schedule file or manually copied schedule data
+- no agent web/API fetch
+- goal: test real-week workflow with explicit user-provided input
+
+Stage 2 — authorized schedule ingestion
+- only after explicit user authorization
+- source adapter must be documented
+- source provenance must be recorded
+- no final result fields in pre-game snapshot
+
+Stage 3 — outcome attachment
+- attach results only after game completion
+- completion provenance required
+- no retrospective promotion of schedule probable info
+
+Stage 4 — weekly evaluation
+- report outcomes against locked pre-game outputs
+- no calibration claims until enough samples exist
+
+## Leakage prevention rules
+
+- pre-game snapshots must not include final scores/results
+- pre-game snapshots must not include completed game state
+- outcome fields remain absent until after lock and completion
+- actual starters remain evaluation-only
+- schedule probable info must preserve timestamp uncertainty
+- no historical schedule probable retrospective promotion
+- generatedAt/createdAt/lockedAt must be explicit
+- source provenance required for each snapshot
+- no odds/market data
+- no modelProbability until calibrated
+
+## Directory and file conventions
+
+Future local paths, but do not create generated run files now:
+- data/prospective/mlb/<runId>/manifest.json
+- data/prospective/mlb/<runId>/schedule-snapshot.json
+- data/prospective/mlb/<runId>/pregame-research.json
+- data/prospective/mlb/<runId>/locked-output.json
+- data/prospective/mlb/<runId>/outcomes.json
+- data/prospective/mlb/<runId>/weekly-evaluation.json
+
+Note:
+Generated run artifacts should remain ignored or uncommitted unless explicitly promoted as tiny fixtures/goldens.
+
+## Proposed types/schemas for future implementation
+
+Planned TypeScript concepts:
+- MLBProspectiveWeeklyRunManifest
+- MLBProspectiveScheduleSnapshot
+- MLBProspectiveGameSnapshot
+- MLBPregameResearchSnapshot
+- MLBLockedWeeklyOutput
+- MLBOutcomeAttachment
+- MLBWeeklyEvaluationReport
+
+Keep this conceptual; do not implement types in this phase.
+
+## CLI/command plan
+
+Future command names without adding package scripts now:
+- prospective:mlb:plan-week
+- prospective:mlb:create-snapshot
+- prospective:mlb:lock-week
+- prospective:mlb:attach-outcomes
+- prospective:mlb:evaluate-week
+
+Each command at a high level:
+- prospective:mlb:plan-week: define intended week and safety checks without producing research
+- prospective:mlb:create-snapshot: build schedule snapshot and pre-game research snapshots
+- prospective:mlb:lock-week: freeze pre-game outputs before first scheduled start
+- prospective:mlb:attach-outcomes: attach final completion/result data after games finish
+- prospective:mlb:evaluate-week: produce weekly evaluation summary from locked outputs and outcomes
+
+Names can change during implementation.
+
+## Validation plan
+
+Future implementation should test:
+- snapshot shape
+- no final outcome fields before lock
+- lock timestamps exist
+- outcome attachment refuses pre-lock mutation
+- evaluation uses locked pre-game outputs
+- modelProbability remains absent/null
+- no source=live unless explicitly authorized in a future phase
+- no fixture data changes during prospective dry-run planning
+
+## Success criteria for first real-week test
+
+- schedule snapshot created before games start
+- pre-game outputs locked before games start
+- no final scores/results present before lock
+- outcomes attached after completion
+- weekly report generated
+- all warnings and abstentions surfaced
+- no odds/market data used
+- no modelProbability claims
+- all artifacts have timestamps and provenance
+
+## Current readiness assessment
+
+- local historical fixture foundation: strong early foundation
+- prospective weekly testing: not implemented yet
+- estimated MLB real-week testing readiness after Phase 3C: about 40-45%
+- completing Phase 4A only improves architecture clarity, not functional readiness
+- implementing Stage 0/1 later could move readiness toward 50-60%
+
+## Recommended next safe phase
+
+Phase 4B — add local prospective weekly dry-run schemas.
+State:
+- small code/test/docs implementation
+- no live/API/web
+- no real schedule ingestion
+- no fixture data changes
+- no generated run artifacts committed
