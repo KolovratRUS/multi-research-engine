@@ -30,6 +30,10 @@ Phase 2X intentionally updated the guarded baseline after july-slice03.
 - The guard imports only local MLB fixtures
 - It makes no network, API, or web calls
 - It outputs deterministic JSON with inventory fields
+- Phase 3C preserved the baseline fields and added reporting summary fields:
+  - `monthSummaries`
+  - `dateSummaries`
+  - `localSliceSummaries`
 
 ## How to run
 

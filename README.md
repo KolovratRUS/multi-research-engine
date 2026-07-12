@@ -180,6 +180,7 @@ The Phase 2Y july-slice02 vs july-slice03 comparison note is `docs/historical-co
 The Phase 2Z July fixture-slice summary index is `docs/historical-coverage-july-fixture-slice-summary-index.md`.
 The Phase 3A planning-only decision point is `docs/historical-coverage-phase3a-decision-point.md`.
 The Phase 3B planning-only fixture inventory reporting polish plan is `docs/historical-coverage-fixture-inventory-reporting-polish-plan.md`.
+The Phase 3C implementation note is `docs/historical-coverage-fixture-inventory-reporting-polish-implementation.md`.
 
 ## Architecture
 
