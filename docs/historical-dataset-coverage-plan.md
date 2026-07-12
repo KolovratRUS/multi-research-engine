@@ -252,3 +252,4 @@ The Phase 2W next fixture slice plan is `docs/historical-coverage-next-fixture-s
 The Phase 2X july-slice03 implementation note is `docs/historical-coverage-july-slice03-implementation.md`, documenting the deterministic local July fixture slice added for coverage-shape testing.
 The Phase 2Y july-slice02 vs july-slice03 comparison note is `docs/historical-coverage-july-slice02-slice03-comparison.md`, documenting a fixture-only comparison of the two July slices without creating new exports.
 The Phase 2Z July fixture-slice summary index is `docs/historical-coverage-july-fixture-slice-summary-index.md`, documenting a deterministic, local-only, documentation-only summary of the three July fixture slices. It does not add fixture data.
+The Phase 3A planning-only decision point is `docs/historical-coverage-phase3a-decision-point.md`, documenting the planning-only decision after Phase 2 fixture coverage. It does not add fixture data.

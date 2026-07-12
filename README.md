@@ -178,6 +178,7 @@ The Phase 2W next fixture slice plan is `docs/historical-coverage-next-fixture-s
 The Phase 2X july-slice03 implementation note is `docs/historical-coverage-july-slice03-implementation.md`.
 The Phase 2Y july-slice02 vs july-slice03 comparison note is `docs/historical-coverage-july-slice02-slice03-comparison.md`.
 The Phase 2Z July fixture-slice summary index is `docs/historical-coverage-july-fixture-slice-summary-index.md`.
+The Phase 3A planning-only decision point is `docs/historical-coverage-phase3a-decision-point.md`.
 
 ## Architecture
 
