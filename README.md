@@ -176,6 +176,7 @@ The Phase 2U july-slice01 vs july-slice02 comparison note is `docs/historical-co
 The Phase 2V fixture-slice comparison checklist is `docs/historical-coverage-fixture-slice-comparison-checklist.md`.
 The Phase 2W next fixture slice plan is `docs/historical-coverage-next-fixture-slice-plan-02.md`, planning july-slice03 using the fixture inventory guard and fixture-slice comparison checklist before implementation.
 The Phase 2X july-slice03 implementation note is `docs/historical-coverage-july-slice03-implementation.md`.
+The Phase 2Y july-slice02 vs july-slice03 comparison note is `docs/historical-coverage-july-slice02-slice03-comparison.md`.
 
 ## Architecture
 
