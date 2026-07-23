@@ -157,6 +157,9 @@ Behavior:
 - No historical fixture mutation.
 - No generated run artifacts committed by default.
 
+The Phase 4G local-only MLB manual schedule file schema and validator implementation is `src/prospective/mlb/manual-schedule-file.ts`.
+See `docs/mlb-manual-schedule-file-schemas.md`.
+
 ## Implementation staging
 
 Stage 1 — add manual schedule schema/types and validators.

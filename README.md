@@ -186,7 +186,8 @@ The Phase 4B local-only MLB prospective weekly dry-run schemas documentation is 
 The Phase 4C local-only MLB prospective weekly dry-run sample documentation is `docs/mlb-prospective-weekly-local-dry-run-sample.md`.
 The Phase 4D local-only MLB prospective weekly dry-run check command documentation is `docs/mlb-prospective-weekly-dry-run-check-command.md`.
 The Phase 4E local-only MLB prospective weekly dry-run check golden-output test documentation is `docs/mlb-prospective-weekly-dry-run-check-golden-output.md`.
-The Phase 4F planning-only manually supplied MLB schedule-file dry-run plan is `docs/mlb-manual-schedule-file-dry-run-plan.md`.
+The Phase 4F planning-only manually supplied MLB schedule-file dry-run plan documentation is `docs/mlb-manual-schedule-file-dry-run-plan.md`.
+The Phase 4G local-only MLB manual schedule file schema and validator documentation is `docs/mlb-manual-schedule-file-schemas.md`.
 
 ## Architecture
 
