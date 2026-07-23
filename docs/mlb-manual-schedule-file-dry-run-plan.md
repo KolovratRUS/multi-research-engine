@@ -26,6 +26,9 @@ This is a planning step before any authorized source ingestion.
 - Phase 4C local sample exists: `src/prospective/mlb/local-dry-run-sample.ts`
 - Phase 4D local check command exists: `npm run prospective:mlb:dry-run-check`
 - Phase 4E golden output test exists: `tests/prospective/fixtures/mlb-dry-run-check-output-v1.json`
+- Phase 4F plan exists: `docs/mlb-manual-schedule-file-dry-run-plan.md`
+- Phase 4G schema/validator module exists: `src/prospective/mlb/manual-schedule-file.ts`
+- Phase 4H static fixtures/golden validator outputs exist: `docs/mlb-manual-schedule-file-fixtures.md`
 - Current local dry-run runId: `mlb-local-dry-run-2024-07-sample`
 - Current historical fixture inventory remains 29 games (2024-06-01 through 2024-07-21, June 17, July 12)
 - No live/API/web authorization exists
@@ -158,6 +161,7 @@ Behavior:
 - No generated run artifacts committed by default.
 
 The Phase 4G local-only MLB manual schedule file schema and validator implementation is `src/prospective/mlb/manual-schedule-file.ts`.
+The Phase 4H static fixtures and golden validator outputs are documented in `docs/mlb-manual-schedule-file-fixtures.md`.
 See `docs/mlb-manual-schedule-file-schemas.md`.
 
 ## Implementation staging
@@ -177,6 +181,7 @@ Stage 6 — separate outcome attachment after completion.
 - No network/API/web needed.
 - Historical fixture inventory remains unchanged.
 - Dry-run command and golden output remain stable.
+- Fixture-based golden tests pass.
 
 ## Current readiness assessment
 
@@ -188,11 +193,12 @@ Stage 6 — separate outcome attachment after completion.
 
 ## Recommended next safe phase
 
-Phase 4G — add manual schedule file schema and validators.
+Phase 4I — add manual schedule validator CLI.
 State:
 - local-only
 - no live/API/web
-- no real schedule ingestion
+- reads only a user-provided local JSON path
+- validates only
 - no generated run artifacts committed
+- no snapshot creation yet
 - no historical fixture data changes
-- add only types/validators/tests/docs

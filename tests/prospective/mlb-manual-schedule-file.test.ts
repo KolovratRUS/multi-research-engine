@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import {
   MLB_MANUAL_SCHEDULE_SCHEMA_VERSION,
   MLBManualScheduleSourceMode,
@@ -179,6 +181,36 @@ describe('Phase 4G MLB prospective weekly: manual schedule file schema and valid
       games: [{ ...valid.games[0], impliedProbability: 0.5 }],
     };
     const messages = validateMLBManualScheduleFile(file);
+    expect(messages.some((m) => m.code === 'MANUAL_SCHEDULE_FORBIDDEN_EXTERNAL_FIELD')).toBe(true);
+  });
+
+  it('validates fixtures/golden files deterministically', () => {
+    const validFixturePath = join(__dirname, 'fixtures', 'manual-schedule', 'valid-manual-schedule-v1.json');
+    const validGoldenPath = join(__dirname, 'fixtures', 'manual-schedule', 'valid-manual-schedule-validation-v1.json');
+    const validFixture = JSON.parse(readFileSync(validFixturePath, 'utf8')) as unknown;
+    const validGolden = JSON.parse(readFileSync(validGoldenPath, 'utf8')) as readonly { severity: string; code: string; message: string }[];
+
+    const validMessages = validateMLBManualScheduleFile(validFixture);
+    expect(validMessages).toEqual(validGolden);
+
+    const validTyped = validFixture as MLBManualScheduleFile;
+    const snapshot = buildScheduleSnapshotFromManualScheduleFile(validTyped);
+    expect(validateProspectiveScheduleSnapshot(snapshot)).toEqual([]);
+    for (const game of snapshot.games) {
+      expect('finalScore' in (game as object)).toBe(false);
+      expect('completedGameState' in (game as object)).toBe(false);
+    }
+  });
+
+  it('validates invalid fixture/golden output with forbidden fields', () => {
+    const invalidFixturePath = join(__dirname, 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-v1.json');
+    const invalidGoldenPath = join(__dirname, 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-validation-v1.json');
+    const invalidFixture = JSON.parse(readFileSync(invalidFixturePath, 'utf8')) as unknown;
+    const invalidGolden = JSON.parse(readFileSync(invalidGoldenPath, 'utf8')) as readonly { severity: string; code: string; message: string }[];
+
+    const messages = validateMLBManualScheduleFile(invalidFixture);
+    expect(messages).toEqual(invalidGolden);
+    expect(messages.some((m) => m.code === 'MANUAL_SCHEDULE_FORBIDDEN_PREGAME_FIELD')).toBe(true);
     expect(messages.some((m) => m.code === 'MANUAL_SCHEDULE_FORBIDDEN_EXTERNAL_FIELD')).toBe(true);
   });
 });

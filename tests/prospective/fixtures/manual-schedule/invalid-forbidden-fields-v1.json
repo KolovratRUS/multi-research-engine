@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "mlb-manual-schedule-v1",
+  "sport": "MLB",
+  "sourceMode": "manual-schedule",
+  "runId": "manual-schedule-fixture-week-1",
+  "weekStart": "2024-07-01",
+  "weekEnd": "2024-07-07",
+  "createdAt": "2024-07-01T00:00:00Z",
+  "sourceProvenance": "test-fixture-user-supplied-static-schedule",
+  "games": [
+    {
+      "gameId": "manual-game-1",
+      "officialDate": "2024-07-03",
+      "scheduledStartTime": "2024-07-03T17:10:00Z",
+      "awayTeam": "MANUAL_AWAY_1",
+      "homeTeam": "MANUAL_HOME_1",
+      "sourceProvenance": "manual-game-provenance",
+      "finalScore": {
+        "awayScore": 1,
+        "homeScore": 2
+      },
+      "completedGameState": {
+        "final": true
+      },
+      "actualStartingPitchers": []
+    },
+    {
+      "gameId": "manual-game-2",
+      "officialDate": "2024-07-05",
+      "scheduledStartTime": "2024-07-05T19:15:00Z",
+      "awayTeam": "MANUAL_AWAY_2",
+      "homeTeam": "MANUAL_HOME_2",
+      "sourceProvenance": "manual-game-provenance",
+      "closingOdds": 1.5,
+      "impliedProbability": 0.5
+    }
+  ]
+}

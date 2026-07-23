@@ -116,3 +116,5 @@ State:
 - no real schedule ingestion
 - add tiny static manual schedule fixture/golden only
 - no generated artifacts committed
+
+See `docs/mlb-manual-schedule-file-fixtures.md` for the committed static fixtures and golden validator outputs.
