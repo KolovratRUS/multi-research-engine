@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 
 const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-prospective-dry-run-check.ts');
 const tsxPath = join(projectRoot, 'node_modules', '.bin', 'tsx');
+const goldenPath = join(__dirname, 'fixtures', 'mlb-dry-run-check-output-v1.json');
+const goldenOutput = readFileSync(goldenPath, 'utf8').trim();
 
 function runCheck(): string {
   return execFileSync(process.execPath, [tsxPath, scriptPath], {
@@ -32,5 +35,9 @@ describe('Phase 4D MLB prospective weekly: dry-run check CLI', () => {
     expect(summary.pregameSnapshotsContainFinalScore).toBe(false);
     expect(summary.pregameSnapshotsContainCompletedGameState).toBe(false);
     expect(summary.historicalFixtureInventoryTouched).toBe(false);
+  });
+
+  it('stdout matches the golden dry-run check JSON exactly', () => {
+    expect(runCheck().trim()).toBe(goldenOutput.trim());
   });
 });

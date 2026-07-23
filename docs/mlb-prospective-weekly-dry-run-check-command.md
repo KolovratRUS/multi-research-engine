@@ -81,3 +81,6 @@ State:
 - no live/API/web
 - no real schedule ingestion
 - test asserts stable JSON output shape and values for future regressions
+- golden fixture: `tests/prospective/fixtures/mlb-dry-run-check-output-v1.json`
+
+See `docs/mlb-prospective-weekly-dry-run-check-golden-output.md` for the golden-output test.

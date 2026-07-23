@@ -1,0 +1,22 @@
+{
+  "runId": "mlb-local-dry-run-2024-07-sample",
+  "sourceMode": "local-dry-run",
+  "weekStart": "2024-07-01",
+  "weekEnd": "2024-07-07",
+  "gameCount": 3,
+  "pregameResearchCount": 3,
+  "lockedOutputCount": 1,
+  "outcomeAttachmentCount": 3,
+  "evaluationReportPresent": true,
+  "scheduleValidationMessageCount": 0,
+  "pregameValidationMessageCount": 0,
+  "lockedValidationMessageCount": 0,
+  "outcomeValidationMessageCount": 0,
+  "validationErrorCount": 0,
+  "validationWarningCount": 0,
+  "passed": true,
+  "modelProbabilityStatus": "null",
+  "pregameSnapshotsContainFinalScore": false,
+  "pregameSnapshotsContainCompletedGameState": false,
+  "historicalFixtureInventoryTouched": false
+}
