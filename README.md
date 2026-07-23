@@ -184,6 +184,7 @@ The Phase 3C implementation note is `docs/historical-coverage-fixture-inventory-
 The Phase 4A planning-only MLB prospective weekly test mode plan is `docs/mlb-prospective-weekly-test-mode-plan.md`.
 The Phase 4B local-only MLB prospective weekly dry-run schemas documentation is `docs/mlb-prospective-weekly-dry-run-schemas.md`.
 The Phase 4C local-only MLB prospective weekly dry-run sample documentation is `docs/mlb-prospective-weekly-local-dry-run-sample.md`.
+The Phase 4D local-only MLB prospective weekly dry-run check command documentation is `docs/mlb-prospective-weekly-dry-run-check-command.md`.
 
 ## Architecture
 

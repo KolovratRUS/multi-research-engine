@@ -76,3 +76,5 @@ State:
 - no real schedule ingestion
 - no generated run artifacts committed
 - command should validate the sample and print a deterministic JSON summary
+
+See `docs/mlb-prospective-weekly-dry-run-check-command.md` for the implemented check command.
