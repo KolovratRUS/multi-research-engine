@@ -27,6 +27,7 @@ Phase 4J locks the exact JSON output of the manual schedule validator CLI for th
 - `docs/mlb-manual-schedule-validator-cli.md`
 - `docs/mlb-manual-schedule-snapshot-creation-cli.md`
 - `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`
+- `docs/mlb-manual-week-lock-cli.md`
 
 ## Golden output fixtures
 
@@ -87,20 +88,19 @@ The valid command exits 0. The invalid command exits 1 by design and its JSON st
 - Phase 4J goldens lock validator CLI stdout only.
 - Phase 4M goldens lock the separate snapshot CLI stdout.
 - Phase 4N is the planning-only future lock workflow in `docs/mlb-manual-week-lock-workflow-plan.md`.
+- Phase 4O implements the separate lock CLI documented in `docs/mlb-manual-week-lock-cli.md`; exact lock CLI goldens remain Phase 4P scope.
 
-The validator CLI remains validation-only. Phase 4N does not change either existing CLI or add file output.
+The validator CLI remains validation-only, the snapshot CLI remains conversion-only, and the Phase 4O lock CLI owns deterministic wrapping. None adds file output.
 
 ## Recommended next safe phase
 
-Phase 4O — add the `lock-manual-week` CLI.
+Phase 4P — add golden output tests for the `lock-manual-week` CLI.
 
 State:
 
 - local-only
-- stdout-only
-- reads one user-provided local manual schedule JSON path
-- validates first and converts in memory
-- wraps the snapshot in a deterministic locked snapshot
+- fixture-only
+- locks exact stdout JSON for valid and invalid lock CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion
@@ -111,3 +111,4 @@ Phase 4K adds the planning-only snapshot creation design in `docs/mlb-manual-sch
 Phase 4L implements the separate stdout-only snapshot creation CLI documented in `docs/mlb-manual-schedule-snapshot-creation-cli.md`; the validator CLI and its Phase 4J goldens remain validation-only.
 Phase 4M locks the separate snapshot CLI stdout in `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`; those goldens include the snapshot only for valid input and do not change the Phase 4J validator CLI contract.
 Phase 4N defines the future lock contract in `docs/mlb-manual-week-lock-workflow-plan.md` without implementing it.
+Phase 4O implements that contract as the stdout-only CLI in `docs/mlb-manual-week-lock-cli.md`, without exact lock CLI goldens or file output.

@@ -113,14 +113,19 @@ Phase 4N plans a future separate lock workflow after validation and in-memory sn
 See `docs/mlb-manual-week-lock-workflow-plan.md`.
 The validator CLI remains validation-only, the snapshot CLI remains conversion-only, and Phase 4N does not implement locking or file output.
 
+## Phase 4O manual week lock CLI
+
+Phase 4O implements the separate lock CLI documented in `docs/mlb-manual-week-lock-cli.md`.
+The validator CLI remains validation-only, the snapshot CLI remains conversion-only, and the lock CLI validates again before conversion and deterministic wrapping.
+None of these commands writes files.
+
 ## Recommended next safe phase
 
-Phase 4O — add the `lock-manual-week` CLI.
+Phase 4P — add golden output tests for the `lock-manual-week` CLI.
 State:
 - local-only
-- stdout-only
-- validates one user-provided local manual schedule JSON path before conversion
-- wraps valid converted input in a deterministic locked snapshot
+- fixture-only
+- locks exact stdout JSON for valid and invalid lock CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion

@@ -81,19 +81,22 @@ The valid command exits 0 and includes a snapshot. The invalid command exits 1 b
 ## Phase 4N manual week lock workflow plan
 
 Phase 4N adds the planning-only lock workflow in `docs/mlb-manual-week-lock-workflow-plan.md`.
-It defines the future deterministic lock summary and locked snapshot wrapper without implementing a command, changing snapshot CLI behavior, or adding file output.
+It defined the deterministic lock summary and locked snapshot wrapper before implementation, without changing snapshot CLI behavior or adding file output.
+
+## Phase 4O manual week lock CLI
+
+Phase 4O implements the separate local-only, stdout-only lock CLI documented in `docs/mlb-manual-week-lock-cli.md`.
+The lock CLI validates and converts one manual schedule input before wrapping the snapshot; it does not change the Phase 4M snapshot CLI golden-output contract or add file output.
 
 ## Recommended next safe phase
 
-Phase 4O — add the `lock-manual-week` CLI.
+Phase 4P — add golden output tests for the `lock-manual-week` CLI.
 
 State:
 
 - local-only
-- stdout-only
-- reads one user-provided local manual schedule JSON path
-- validates first and converts in memory
-- wraps the snapshot in a deterministic locked snapshot
+- fixture-only
+- locks exact stdout JSON for valid and invalid lock CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion

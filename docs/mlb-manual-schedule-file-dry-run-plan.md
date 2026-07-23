@@ -35,6 +35,7 @@ This is a planning step before any authorized source ingestion.
 - Phase 4L stdout-only snapshot creation CLI exists: `docs/mlb-manual-schedule-snapshot-creation-cli.md`
 - Phase 4M exact snapshot CLI golden-output tests exist: `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`
 - Phase 4N planning-only manual week lock workflow exists: `docs/mlb-manual-week-lock-workflow-plan.md`
+- Phase 4O local-only, stdout-only manual week lock CLI exists: `docs/mlb-manual-week-lock-cli.md`
 - Current local dry-run runId: `mlb-local-dry-run-2024-07-sample`
 - Current historical fixture inventory remains 29 games (2024-06-01 through 2024-07-21, June 17, July 12)
 - No live/API/web authorization exists
@@ -173,6 +174,7 @@ The Phase 4K planning-only manual schedule snapshot creation design is documente
 The Phase 4L local-only, stdout-only manual schedule snapshot creation CLI is documented in `docs/mlb-manual-schedule-snapshot-creation-cli.md`. It does not implement live mode, network schedule ingestion, file output, or historical fixture changes.
 The Phase 4M exact manual schedule snapshot CLI golden outputs are documented in `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`. They lock local static-fixture stdout only and do not add file output or generated run artifacts.
 The Phase 4N planning-only manual week lock workflow is documented in `docs/mlb-manual-week-lock-workflow-plan.md`. It defines the future local deterministic lock contract without implementing the command, file output, or generated run artifacts.
+The Phase 4O local-only, stdout-only manual week lock CLI is documented in `docs/mlb-manual-week-lock-cli.md`. It validates one local manual schedule path, converts it in memory, and wraps the valid snapshot without implementing live mode, network schedule ingestion, file output, generated run artifacts, or historical fixture changes.
 See `docs/mlb-manual-schedule-file-schemas.md`.
 
 ## Implementation staging
@@ -197,20 +199,18 @@ Stage 6 — separate outcome attachment after completion.
 ## Current readiness assessment
 
 - Local prospective dry-run foundation is now solid.
-- Manually supplied schedule-file workflow is not implemented yet.
+- The manually supplied schedule validation, snapshot conversion, and stdout-only lock workflow are implemented locally.
 - This plan improves architecture clarity only.
 - After implementation of Stage 1–3, MLB real-week dry-run readiness could move toward 55–60%.
 - Real API/live readiness remains lower until explicit authorized ingestion is designed.
 
 ## Recommended next safe phase
 
-Phase 4O — add the `lock-manual-week` CLI.
+Phase 4P — add golden output tests for the `lock-manual-week` CLI.
 State:
 - local-only
-- stdout-only
-- reads one user-provided local manual schedule JSON path
-- validates first and converts in memory
-- wraps the snapshot in a deterministic locked snapshot
+- fixture-only
+- locks exact stdout JSON for valid and invalid lock CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion
@@ -223,3 +223,4 @@ See `docs/mlb-manual-schedule-snapshot-creation-plan.md` for the Phase 4K snapsh
 See `docs/mlb-manual-schedule-snapshot-creation-cli.md` for the Phase 4L stdout-only snapshot creation CLI.
 See `docs/mlb-manual-schedule-snapshot-cli-golden-output.md` for the Phase 4M exact snapshot CLI stdout fixtures and tests.
 See `docs/mlb-manual-week-lock-workflow-plan.md` for the Phase 4N planning-only lock workflow.
+See `docs/mlb-manual-week-lock-cli.md` for the Phase 4O stdout-only lock CLI.

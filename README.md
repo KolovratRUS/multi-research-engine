@@ -195,6 +195,7 @@ The Phase 4K planning-only MLB manual schedule snapshot creation documentation i
 The Phase 4L local-only, stdout-only MLB manual schedule snapshot creation CLI documentation is `docs/mlb-manual-schedule-snapshot-creation-cli.md`; it validates one local file before in-memory conversion and adds no file-output mode.
 The Phase 4M local-only MLB manual schedule snapshot CLI golden-output documentation is `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`; it locks exact stdout JSON for static valid and invalid fixtures without adding file output.
 The Phase 4N planning-only MLB manual week lock workflow documentation is `docs/mlb-manual-week-lock-workflow-plan.md`; it defines a future local, stdout-only deterministic lock contract without implementing a command or file output.
+The Phase 4O local-only, stdout-only MLB manual week lock CLI documentation is `docs/mlb-manual-week-lock-cli.md`; it validates one user-provided local schedule file, converts it in memory, and emits a deterministic valid-only lock wrapper without file output.
 
 ## Architecture
 

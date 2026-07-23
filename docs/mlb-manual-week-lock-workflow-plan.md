@@ -2,8 +2,8 @@
 
 ## Status
 
-Phase 4N planning-only documentation.
-No implementation.
+Phase 4N planning record.
+Phase 4O stdout-only CLI implemented.
 No file-output artifacts.
 No generated prospective run artifact committed.
 No live source used.
@@ -16,10 +16,11 @@ No model-quality or predictive-performance claim.
 
 ## Purpose
 
-Phase 4N plans the future `lock-manual-week` workflow.
+Phase 4N planned the `lock-manual-week` workflow.
 The workflow defines how a validated manual schedule snapshot becomes a locked weekly prospective test input.
 This is the next design step after the Phase 4L stdout-only snapshot creation CLI and the Phase 4M snapshot CLI golden outputs.
-This phase does not implement a lock command, lock files, file-output mode, or generated run artifacts.
+Phase 4O implements the local-only, stdout-only lock command without lock files, file-output mode, or generated run artifacts.
+See `docs/mlb-manual-week-lock-cli.md`.
 
 ## Current foundation
 
@@ -30,32 +31,28 @@ This phase does not implement a lock command, lock files, file-output mode, or g
 - Phase 4K provides the snapshot creation plan.
 - Phase 4L provides the stdout-only snapshot creation CLI.
 - Phase 4M provides exact snapshot CLI golden outputs.
+- Phase 4O provides the stdout-only manual week lock CLI and focused behavioral tests.
 - The historical fixture inventory remains 29 games: June 17 and July 12.
 
-## Proposed future command
+## Implemented command
 
-Planned package command name only:
+Package command:
 
 ```text
 prospective:mlb:lock-manual-week
 ```
 
-Planned script path only:
+Script path:
 
 ```text
 scripts/mlb-manual-week-lock.ts
 ```
 
-Neither the command nor the script is implemented in Phase 4N.
+Both are implemented in Phase 4O with stdout-only output.
 
-## Planned inputs
+## Implemented input
 
-The eventual workflow may accept either:
-
-- one user-provided local manual schedule JSON path; or
-- one user-provided local snapshot JSON path.
-
-The first implementation should accept only one manual schedule JSON path. This reuses the existing validation and conversion helpers and avoids introducing a second input contract before the basic locking behavior is stable.
+The first implementation accepts only one user-provided local manual schedule JSON path. This reuses the existing validation and conversion helpers and avoids introducing a second input contract before the basic locking behavior is stable.
 
 The command must:
 
@@ -69,11 +66,11 @@ The command must:
 
 Direct snapshot JSON input should remain a later extension. Its week-boundary and validation contract must be planned separately before implementation.
 
-## Planned stdout output
+## Implemented stdout output
 
-The first implementation should emit a stdout-only deterministic lock summary. It should not write a lock file.
+The implementation emits a stdout-only deterministic lock summary. It does not write a lock file.
 
-Planned fields, in stable order:
+Fields, in stable order:
 
 - `ok`
 - `runId`
@@ -117,13 +114,13 @@ manual-week-lock:manual-schedule-fixture-week-1
 
 The lock identity must not hash file paths, include absolute paths, or include machine-specific values.
 
-## Planned locked snapshot
+## Implemented locked snapshot
 
 `lockedSnapshot` should wrap the validated prospective schedule snapshot rather than duplicate or mutate its games.
 
-Planned fields:
+Fields:
 
-- `lockVersion`, suggested value `"mlb-manual-week-lock-v1"`
+- `lockVersion`, value `"mlb-manual-week-lock-v1"`
 - `runId`
 - `lockId`
 - `sourceMode`, fixed to `"manual-schedule"`
@@ -174,7 +171,7 @@ The nested snapshot should remain the output of the existing validated in-memory
 - Historical schedule probable information must not be retrospectively promoted.
 - Actual starters remain evaluation-only.
 
-## Planned tests for future implementation
+## Phase 4O tests
 
 - A valid manual schedule fixture creates a deterministic lock summary.
 - The invalid fixture exits 1 and produces no `lockedSnapshot`.
@@ -185,9 +182,9 @@ The nested snapshot should remain the output of the existing validated in-memory
 - `lockedSnapshot` contains the expected two-game snapshot.
 - `lockedSnapshot` excludes `finalScore`, `completedGameState`, `actualStartingPitchers`, `outcome`, `finalStatus`, and `outcomeStatus`.
 - The nested snapshot passes snapshot validation where appropriate.
-- Valid lock stdout matches an exact golden output.
-- Invalid lock stdout matches an exact golden output.
 - No output files are written.
+
+Exact valid and invalid lock stdout golden outputs remain Phase 4P scope.
 
 ## Implementation staging
 
@@ -213,28 +210,28 @@ The nested snapshot should remain the output of the existing validated in-memory
 - Prospective dry-run logic passes with zero validation errors and warnings.
 - Valid manual schedule validator logic exits 0 with two games and no validation messages.
 - Valid manual schedule snapshot logic exits 0 with the exact two-game in-memory snapshot.
+- Valid manual week lock logic exits 0 with deterministic lock fields and the expected two-game `lockedSnapshot`.
+- Invalid forbidden-fields lock logic exits 1 by design with five validation errors and no `lockedSnapshot`.
+- Focused Phase 4O lock CLI tests pass: 8 tests.
 - Historical export release behavior passes in all four modes through the local loader.
 - Focused historical export rollout review tests pass: 154 tests.
-- Prospective tests pass: 55 tests.
+- Prospective tests pass: 63 tests.
 - Backtesting tests pass: 699 tests.
-- Full Vitest and `npm test` pass: 811 tests across 55 files.
+- Full Vitest and `npm test` pass: 819 tests across 56 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
-- In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are blocked with `EPERM` before script execution. The prospective and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; package scripts remain unchanged.
+- In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are intermittently blocked with `EPERM` before script execution. The validator, snapshot, lock, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; the requested package command remains the `tsx` command.
 
 ## Recommended next safe phase
 
-Phase 4O — add the `lock-manual-week` CLI.
+Phase 4P — add golden output tests for the `lock-manual-week` CLI.
 
 State:
 
 - local-only
-- stdout-only
-- reads one user-provided local manual schedule JSON path
-- validates first
-- converts in memory
-- wraps the snapshot in a deterministic `lockedSnapshot`
+- fixture-only
+- locks exact stdout JSON for valid and invalid lock CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion

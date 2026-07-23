@@ -30,6 +30,7 @@ See `docs/mlb-manual-schedule-snapshot-creation-cli.md`.
 - Phase 4J provides exact validator CLI golden outputs.
 - Phase 4L provides the stdout-only manual schedule snapshot creation CLI.
 - Phase 4M provides exact snapshot CLI golden outputs for the valid and invalid local fixtures.
+- Phase 4O provides the separate stdout-only manual week lock CLI documented in `docs/mlb-manual-week-lock-cli.md`.
 - The current converter helper is `buildScheduleSnapshotFromManualScheduleFile`.
 - The validator CLI remains validation-only; the separate snapshot CLI validates before in-memory conversion.
 - The historical fixture inventory remains 29 games (June 17, July 12).
@@ -133,16 +134,23 @@ They lock the valid exit 0 response with a snapshot and the invalid expected exi
 
 ## Phase 4N manual week lock workflow plan
 
-Phase 4N defines the future deterministic wrapper and stdout contract for locking a validated manual schedule snapshot.
+Phase 4N defined the deterministic wrapper and stdout contract for locking a validated manual schedule snapshot.
 See `docs/mlb-manual-week-lock-workflow-plan.md`.
 It is planning-only and does not add a command, file output, or generated run artifacts.
+
+## Phase 4O manual week lock CLI
+
+Phase 4O implements the planned deterministic wrapper as a separate local-only, stdout-only command.
+See `docs/mlb-manual-week-lock-cli.md`.
+The Phase 4L snapshot CLI remains conversion-only; Phase 4O validates, converts in memory, and wraps the valid snapshot without adding file output.
 
 ## Implementation staging
 
 - Phase 4L — add manual schedule snapshot creation CLI, stdout-only, with no file output.
 - Phase 4M — add golden-output tests for the manual schedule snapshot CLI.
 - Phase 4N — plan the `lock-manual-week` workflow.
-- Phase 4O — implement `lock-manual-week` only after planning and goldens.
+- Phase 4O — implement `lock-manual-week`, stdout-only, after the Phase 4N plan.
+- Phase 4P — add exact lock CLI golden-output tests.
 
 ## Success criteria
 
@@ -167,15 +175,13 @@ It is planning-only and does not add a command, file output, or generated run ar
 
 ## Recommended next safe phase
 
-Phase 4O — add the `lock-manual-week` CLI.
+Phase 4P — add golden output tests for the `lock-manual-week` CLI.
 
 State:
 
 - local-only
-- stdout-only
-- reads one user-provided local manual schedule JSON path
-- validates first and converts in memory
-- wraps the snapshot in a deterministic locked snapshot
+- fixture-only
+- locks exact stdout JSON for valid and invalid lock CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion
