@@ -108,13 +108,13 @@ Leave this section empty until validation is run.
 
 ## Recommended next safe phase
 
-Phase 4H — add manual schedule file fixture and validator golden tests.
-
+Phase 4I — add manual schedule validator CLI.
 State:
 - local-only
 - no live/API/web
 - no real schedule ingestion
-- add tiny static manual schedule fixture/golden only
+- reads only a user-provided local JSON path
+- validates only
 - no generated artifacts committed
 
-See `docs/mlb-manual-schedule-file-fixtures.md` for the committed static fixtures and golden validator outputs.
+See `docs/mlb-manual-schedule-validator-cli.md` for the validator CLI documentation.

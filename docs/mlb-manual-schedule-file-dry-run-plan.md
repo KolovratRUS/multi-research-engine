@@ -193,12 +193,14 @@ Stage 6 — separate outcome attachment after completion.
 
 ## Recommended next safe phase
 
-Phase 4I — add manual schedule validator CLI.
+Phase 4J — add golden output tests for manual schedule validator CLI.
 State:
 - local-only
 - no live/API/web
-- reads only a user-provided local JSON path
-- validates only
-- no generated run artifacts committed
+- fixture-only
+- locks exact CLI JSON output for valid/invalid fixtures
 - no snapshot creation yet
+- no generated run artifacts committed
 - no historical fixture data changes
+
+See `docs/mlb-manual-schedule-validator-cli.md` for the validator CLI documentation.

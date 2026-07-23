@@ -70,6 +70,8 @@ State:
 - no live/API/web
 - reads only a user-provided local JSON path
 - validates only
-- no generated run artifacts committed
 - no snapshot creation yet
+- no generated run artifacts committed
 - no historical fixture data changes
+
+See `docs/mlb-manual-schedule-validator-cli.md` for the validator CLI documentation.

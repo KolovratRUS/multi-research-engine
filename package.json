@@ -19,6 +19,7 @@
     "backtest:mlb": "tsx scripts/backtest-mlb.ts",
     "inventory:mlb-fixtures": "tsx scripts/mlb-fixture-inventory.ts",
     "prospective:mlb:dry-run-check": "tsx scripts/mlb-prospective-dry-run-check.ts",
+    "prospective:mlb:validate-manual-schedule": "tsx scripts/mlb-manual-schedule-validate.ts",
     "review:historical-export:full": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json",
     "review:historical-export:batch": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json",
     "review:historical-export:ci": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json --review-thresholds-json tests/backtesting/fixtures/historical-research-threshold-presets/passing-ci-thresholds-v1.json",
