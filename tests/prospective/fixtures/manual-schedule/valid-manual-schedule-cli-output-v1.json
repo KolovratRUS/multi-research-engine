@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "schemaVersion": "mlb-manual-schedule-v1",
+  "sport": "MLB",
+  "sourceMode": "manual-schedule",
+  "runId": "manual-schedule-fixture-week-1",
+  "weekStart": "2024-07-01",
+  "weekEnd": "2024-07-07",
+  "gameCount": 2,
+  "validationMessageCount": 0,
+  "validationErrorCount": 0,
+  "validationWarningCount": 0,
+  "validationMessages": []
+}

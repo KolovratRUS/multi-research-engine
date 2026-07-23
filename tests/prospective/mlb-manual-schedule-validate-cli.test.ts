@@ -14,9 +14,11 @@ function runValidate(args: string[]): string {
   });
 }
 
-describe('Phase 4I MLB manual schedule validator CLI', () => {
+describe('Phase 4I/4J MLB manual schedule validator CLI', () => {
   const validFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-schedule-v1.json');
   const invalidFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-v1.json');
+  const validGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-schedule-cli-output-v1.json');
+  const invalidGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-cli-output-v1.json');
 
   it('exits 1 with MANUAL_SCHEDULE_PATH_REQUIRED when no path is provided', () => {
     let error: unknown;
@@ -83,6 +85,32 @@ describe('Phase 4I MLB manual schedule validator CLI', () => {
     const codes = (summary.validationMessages as Array<{ code: string }>).map((m) => m.code);
     expect(codes).toContain('MANUAL_SCHEDULE_FORBIDDEN_PREGAME_FIELD');
     expect(codes).toContain('MANUAL_SCHEDULE_FORBIDDEN_EXTERNAL_FIELD');
+  });
+
+  it('matches the exact golden JSON output for the valid fixture', () => {
+    const stdout = runValidate([validFixturePath]);
+    const summary = JSON.parse(stdout) as unknown;
+    const golden = JSON.parse(readFileSync(validGoldenPath, 'utf8')) as unknown;
+
+    expect(summary).toEqual(golden);
+  });
+
+  it('matches the exact golden JSON output and expected exit 1 for the invalid fixture', () => {
+    let error: unknown;
+    try {
+      runValidate([invalidFixturePath]);
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeTruthy();
+    const stdout = error && typeof error === 'object' && 'stdout' in error
+      ? (error as { stdout: string }).stdout
+      : '{}';
+    const summary = JSON.parse(stdout) as unknown;
+    const golden = JSON.parse(readFileSync(invalidGoldenPath, 'utf8')) as unknown;
+
+    expect(summary).toEqual(golden);
   });
 
   it('exits 1 for malformed JSON with MANUAL_SCHEDULE_READ_OR_PARSE_FAILED', () => {

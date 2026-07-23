@@ -29,6 +29,8 @@ This is a planning step before any authorized source ingestion.
 - Phase 4F plan exists: `docs/mlb-manual-schedule-file-dry-run-plan.md`
 - Phase 4G schema/validator module exists: `src/prospective/mlb/manual-schedule-file.ts`
 - Phase 4H static fixtures/golden validator outputs exist: `docs/mlb-manual-schedule-file-fixtures.md`
+- Phase 4I local validator CLI exists: `docs/mlb-manual-schedule-validator-cli.md`
+- Phase 4J exact CLI golden-output tests exist: `docs/mlb-manual-schedule-validator-cli-golden-output.md`
 - Current local dry-run runId: `mlb-local-dry-run-2024-07-sample`
 - Current historical fixture inventory remains 29 games (2024-06-01 through 2024-07-21, June 17, July 12)
 - No live/API/web authorization exists
@@ -162,6 +164,7 @@ Behavior:
 
 The Phase 4G local-only MLB manual schedule file schema and validator implementation is `src/prospective/mlb/manual-schedule-file.ts`.
 The Phase 4H static fixtures and golden validator outputs are documented in `docs/mlb-manual-schedule-file-fixtures.md`.
+The Phase 4J exact manual schedule validator CLI golden outputs are documented in `docs/mlb-manual-schedule-validator-cli-golden-output.md`.
 See `docs/mlb-manual-schedule-file-schemas.md`.
 
 ## Implementation staging
@@ -193,14 +196,14 @@ Stage 6 — separate outcome attachment after completion.
 
 ## Recommended next safe phase
 
-Phase 4J — add golden output tests for manual schedule validator CLI.
+Phase 4K — plan manual schedule snapshot creation.
 State:
-- local-only
+- planning-only
 - no live/API/web
-- fixture-only
-- locks exact CLI JSON output for valid/invalid fixtures
-- no snapshot creation yet
+- no real schedule network/API ingestion
 - no generated run artifacts committed
+- define conversion CLI/output behavior before implementation
 - no historical fixture data changes
 
 See `docs/mlb-manual-schedule-validator-cli.md` for the validator CLI documentation.
+See `docs/mlb-manual-schedule-validator-cli-golden-output.md` for the Phase 4J golden-output documentation.

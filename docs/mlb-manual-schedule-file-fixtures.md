@@ -21,6 +21,7 @@ This phase locks deterministic validation behavior and is entirely local-only.
 - `docs/mlb-manual-schedule-file-dry-run-plan.md`
 - `docs/mlb-manual-schedule-file-schemas.md`
 - `docs/mlb-prospective-weekly-test-mode-plan.md`
+- `docs/mlb-manual-schedule-validator-cli-golden-output.md`
 
 ## Fixture files
 
@@ -64,14 +65,14 @@ This phase locks deterministic validation behavior and is entirely local-only.
 
 ## Recommended next safe phase
 
-Phase 4I — add manual schedule validator CLI.
+Phase 4K — plan manual schedule snapshot creation.
 State:
-- local-only
+- planning-only
 - no live/API/web
-- reads only a user-provided local JSON path
-- validates only
-- no snapshot creation yet
+- no real schedule network/API ingestion
 - no generated run artifacts committed
+- define conversion CLI/output behavior before implementation
 - no historical fixture data changes
 
 See `docs/mlb-manual-schedule-validator-cli.md` for the validator CLI documentation.
+See `docs/mlb-manual-schedule-validator-cli-golden-output.md` for the Phase 4J exact CLI JSON output fixtures and tests.

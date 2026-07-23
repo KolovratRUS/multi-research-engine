@@ -190,6 +190,7 @@ The Phase 4F planning-only manually supplied MLB schedule-file dry-run plan docu
 The Phase 4G local-only MLB manual schedule file schema and validator documentation is `docs/mlb-manual-schedule-file-schemas.md`.
 The Phase 4H local-only MLB manual schedule file fixture and golden validator test documentation is `docs/mlb-manual-schedule-file-fixtures.md`.
 The Phase 4I local-only MLB manual schedule validator CLI documentation is `docs/mlb-manual-schedule-validator-cli.md`.
+The Phase 4J local-only MLB manual schedule validator CLI golden-output test documentation is `docs/mlb-manual-schedule-validator-cli-golden-output.md`.
 
 ## Architecture
 

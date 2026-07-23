@@ -73,15 +73,29 @@ npm run prospective:mlb:validate-manual-schedule -- tests/prospective/fixtures/m
 
 ## Validation
 
-Leave this section empty until validation is run.
+- Phase 4J exact golden-output tests pass for both local fixtures.
+- Valid fixture exits 0; invalid forbidden-fields fixture exits 1 as designed.
+- Prospective, backtesting, and full Vitest suites pass.
+- Full suite passes with 802 tests.
+- TypeScript, build, inventory guard, historical export rollout/release checks, and Git diff check pass.
+
+## Phase 4J golden-output tests
+
+Phase 4J locks the exact JSON stdout for the valid and invalid local fixtures.
+See `docs/mlb-manual-schedule-validator-cli-golden-output.md`.
+
+Golden output fixtures:
+
+- `tests/prospective/fixtures/manual-schedule/valid-manual-schedule-cli-output-v1.json`
+- `tests/prospective/fixtures/manual-schedule/invalid-forbidden-fields-cli-output-v1.json`
 
 ## Recommended next safe phase
 
-Phase 4J — add golden output tests for manual schedule validator CLI.
+Phase 4K — plan manual schedule snapshot creation.
 State:
-- local-only
+- planning-only
 - no live/API/web
-- fixture-only
-- locks exact CLI JSON output for valid/invalid fixtures
-- no snapshot creation yet
+- no real schedule network/API ingestion
+- no generated run artifacts committed
+- define conversion CLI/output behavior before implementation
 - no historical fixture data changes
