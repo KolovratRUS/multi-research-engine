@@ -131,6 +131,12 @@ Mapping from `MLBManualScheduleFile` to the command summary and `MLBProspectiveS
 Phase 4M exact stdout golden-output tests are documented in `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`.
 They lock the valid exit 0 response with a snapshot and the invalid expected exit 1 response without a snapshot.
 
+## Phase 4N manual week lock workflow plan
+
+Phase 4N defines the future deterministic wrapper and stdout contract for locking a validated manual schedule snapshot.
+See `docs/mlb-manual-week-lock-workflow-plan.md`.
+It is planning-only and does not add a command, file output, or generated run artifacts.
+
 ## Implementation staging
 
 - Phase 4L — add manual schedule snapshot creation CLI, stdout-only, with no file output.
@@ -161,14 +167,16 @@ They lock the valid exit 0 response with a snapshot and the invalid expected exi
 
 ## Recommended next safe phase
 
-Phase 4N — plan the `lock-manual-week` workflow.
+Phase 4O — add the `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- defines how validated manual schedule snapshots will be locked for a week
-- no implementation
-- no file-output artifacts yet
+- local-only
+- stdout-only
+- reads one user-provided local manual schedule JSON path
+- validates first and converts in memory
+- wraps the snapshot in a deterministic locked snapshot
+- no file output
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

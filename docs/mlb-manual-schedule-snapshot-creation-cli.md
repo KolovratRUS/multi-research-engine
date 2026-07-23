@@ -106,16 +106,24 @@ Golden output fixtures:
 - `tests/prospective/fixtures/manual-schedule/valid-manual-schedule-snapshot-cli-output-v1.json`
 - `tests/prospective/fixtures/manual-schedule/invalid-forbidden-fields-snapshot-cli-output-v1.json`
 
+## Phase 4N manual week lock workflow plan
+
+Phase 4N plans the separate future workflow that will validate, convert, and wrap a manual schedule snapshot in a deterministic locked snapshot.
+See `docs/mlb-manual-week-lock-workflow-plan.md`.
+The Phase 4L snapshot CLI remains stdout-only snapshot conversion and does not lock or write files.
+
 ## Recommended next safe phase
 
-Phase 4N — plan the `lock-manual-week` workflow.
+Phase 4O — add the `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- defines how validated manual schedule snapshots will be locked for a week
-- no implementation
-- no file-output artifacts yet
+- local-only
+- stdout-only
+- reads one user-provided local manual schedule JSON path
+- validates first and converts in memory
+- wraps the snapshot in a deterministic locked snapshot
+- no file output
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

@@ -78,16 +78,23 @@ The valid command exits 0 and includes a snapshot. The invalid command exits 1 b
 - Git diff check passes.
 - In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are blocked with `EPERM` before script execution. The validator, snapshot, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; package scripts remain unchanged.
 
+## Phase 4N manual week lock workflow plan
+
+Phase 4N adds the planning-only lock workflow in `docs/mlb-manual-week-lock-workflow-plan.md`.
+It defines the future deterministic lock summary and locked snapshot wrapper without implementing a command, changing snapshot CLI behavior, or adding file output.
+
 ## Recommended next safe phase
 
-Phase 4N — plan the `lock-manual-week` workflow.
+Phase 4O — add the `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- defines how validated manual schedule snapshots will be locked for a week
-- no implementation
-- no file-output artifacts yet
+- local-only
+- stdout-only
+- reads one user-provided local manual schedule JSON path
+- validates first and converts in memory
+- wraps the snapshot in a deterministic locked snapshot
+- no file output
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

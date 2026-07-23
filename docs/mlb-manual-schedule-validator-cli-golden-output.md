@@ -82,16 +82,26 @@ The valid command exits 0. The invalid command exits 1 by design and its JSON st
 - Build passes.
 - Git diff check passes.
 
+## Phase responsibility boundary
+
+- Phase 4J goldens lock validator CLI stdout only.
+- Phase 4M goldens lock the separate snapshot CLI stdout.
+- Phase 4N is the planning-only future lock workflow in `docs/mlb-manual-week-lock-workflow-plan.md`.
+
+The validator CLI remains validation-only. Phase 4N does not change either existing CLI or add file output.
+
 ## Recommended next safe phase
 
-Phase 4N — plan the `lock-manual-week` workflow.
+Phase 4O — add the `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- defines how validated manual schedule snapshots will be locked for a week
-- no implementation
-- no file-output artifacts yet
+- local-only
+- stdout-only
+- reads one user-provided local manual schedule JSON path
+- validates first and converts in memory
+- wraps the snapshot in a deterministic locked snapshot
+- no file output
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
@@ -100,3 +110,4 @@ State:
 Phase 4K adds the planning-only snapshot creation design in `docs/mlb-manual-schedule-snapshot-creation-plan.md`.
 Phase 4L implements the separate stdout-only snapshot creation CLI documented in `docs/mlb-manual-schedule-snapshot-creation-cli.md`; the validator CLI and its Phase 4J goldens remain validation-only.
 Phase 4M locks the separate snapshot CLI stdout in `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`; those goldens include the snapshot only for valid input and do not change the Phase 4J validator CLI contract.
+Phase 4N defines the future lock contract in `docs/mlb-manual-week-lock-workflow-plan.md` without implementing it.
