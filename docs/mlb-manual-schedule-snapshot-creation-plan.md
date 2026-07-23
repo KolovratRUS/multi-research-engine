@@ -2,12 +2,12 @@
 
 ## Status
 
-Planning-only.
+Phase 4K planning record.
+Phase 4L stdout-only CLI implemented.
 No live source used.
 No real MLB API request made.
 No web lookup used.
 No real schedule network/API ingestion.
-No snapshot creation implemented.
 No snapshot files written.
 No lock-file creation.
 No generated prospective run artifact committed.
@@ -17,9 +17,10 @@ modelProbability remains null/absent/not available until calibrated.
 
 ## Purpose
 
-Phase 4K plans a future local command that converts a validated, user-provided manual schedule JSON file into an `MLBProspectiveScheduleSnapshot`.
-This is the next step after the Phase 4I validator CLI and Phase 4J validator CLI golden-output tests.
-This phase defines the intended command, mapping, output contract, validation behavior, tests, and safety boundary without implementing snapshot creation.
+Phase 4K planned a local command that converts a validated, user-provided manual schedule JSON file into an `MLBProspectiveScheduleSnapshot`.
+This followed the Phase 4I validator CLI and Phase 4J validator CLI golden-output tests.
+Phase 4L implements that command as a local-only, stdout-only conversion with no file output.
+See `docs/mlb-manual-schedule-snapshot-creation-cli.md`.
 
 ## Current foundation
 
@@ -27,25 +28,24 @@ This phase defines the intended command, mapping, output contract, validation be
 - Phase 4H provides static fixtures and golden validator outputs.
 - Phase 4I provides the validator CLI.
 - Phase 4J provides exact validator CLI golden outputs.
+- Phase 4L provides the stdout-only manual schedule snapshot creation CLI.
 - The current converter helper is `buildScheduleSnapshotFromManualScheduleFile`.
-- The current CLI validates only and does not create snapshots.
+- The validator CLI remains validation-only; the separate snapshot CLI validates before in-memory conversion.
 - The historical fixture inventory remains 29 games (June 17, July 12).
 
-## Proposed future command
+## Implemented command
 
-Planned name only; do not implement in this phase:
-
-```text
-prospective:mlb:create-manual-snapshot
+```bash
+npm run prospective:mlb:create-manual-snapshot -- <path-to-json>
 ```
 
-Planned script path only; do not implement in this phase:
+Implemented script path:
 
 ```text
 scripts/mlb-manual-schedule-create-snapshot.ts
 ```
 
-## Planned input
+## CLI input
 
 - Accept exactly one user-provided local JSON file path.
 - Require the input to pass `validateMLBManualScheduleFile` before conversion.
@@ -54,9 +54,9 @@ scripts/mlb-manual-schedule-create-snapshot.ts
 - Perform no real source fetching.
 - Have no historical fixture dependency.
 
-## Planned output modes
+## CLI output
 
-Start with a stdout-only deterministic JSON summary containing:
+The command prints a stdout-only deterministic JSON summary containing:
 
 - `ok`
 - `runId`
@@ -71,12 +71,11 @@ Start with a stdout-only deterministic JSON summary containing:
 - `validationMessages`
 - `snapshot`, only when valid
 
-The first implementation should not add file output. File-output mode should be considered only after stdout golden tests exist.
-Generated prospective run artifacts must not be committed by default.
+Phase 4L does not add file output or create generated prospective run artifacts.
 
 ## Snapshot mapping
 
-The future command should validate first, then use `buildScheduleSnapshotFromManualScheduleFile`.
+The command validates first, then uses `buildScheduleSnapshotFromManualScheduleFile`.
 
 Mapping from `MLBManualScheduleFile` to the command summary and `MLBProspectiveScheduleSnapshot`:
 
@@ -118,7 +117,7 @@ Mapping from `MLBManualScheduleFile` to the command summary and `MLBProspectiveS
 - No historical fixture data is mutated.
 - No generated run artifacts are committed by default.
 
-## Planned tests for future implementation
+## Phase 4L tests
 
 - Valid fixture creates deterministic snapshot stdout.
 - Invalid fixture exits 1 and produces no snapshot.
@@ -126,8 +125,9 @@ Mapping from `MLBManualScheduleFile` to the command summary and `MLBProspectiveS
 - Malformed JSON returns a read/parse error.
 - Snapshot excludes `finalScore` and `completedGameState`.
 - Converted snapshot passes `validateProspectiveScheduleSnapshot`.
-- Valid snapshot stdout matches an exact golden output.
 - No output files are written.
+
+Exact stdout golden-output tests remain deferred to Phase 4M.
 
 ## Implementation staging
 
@@ -145,17 +145,27 @@ Mapping from `MLBManualScheduleFile` to the command summary and `MLBProspectiveS
 - No generated artifacts are committed.
 - Historical fixture inventory remains unchanged.
 
+## Phase 4L validation
+
+- Focused snapshot CLI tests pass: 7 tests.
+- Prospective tests pass: 53 tests.
+- Backtesting tests pass: 699 tests.
+- Full Vitest and `npm test` pass: 809 tests across 55 files.
+- TypeScript and production build pass.
+- Inventory guard remains 29 total games (June 17, July 12).
+- The valid fixture produces two games with zero validation messages.
+- The invalid fixture exits 1 with five validation errors and no snapshot.
+- See `docs/mlb-manual-schedule-snapshot-creation-cli.md` for the command-level validation note.
+
 ## Recommended next safe phase
 
-Phase 4L — add manual schedule snapshot creation CLI.
+Phase 4M — add golden output tests for the manual schedule snapshot CLI.
 
 State:
 
 - local-only
-- stdout-only
-- reads one user-provided local JSON path
-- validates first
-- creates an in-memory snapshot and then prints deterministic JSON
+- fixture-only
+- locks exact stdout JSON for valid and invalid snapshot CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion

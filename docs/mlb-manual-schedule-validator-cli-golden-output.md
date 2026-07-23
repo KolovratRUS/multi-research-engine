@@ -25,6 +25,7 @@ Phase 4J locks the exact JSON output of the manual schedule validator CLI for th
 - `docs/mlb-manual-schedule-file-schemas.md`
 - `docs/mlb-manual-schedule-file-fixtures.md`
 - `docs/mlb-manual-schedule-validator-cli.md`
+- `docs/mlb-manual-schedule-snapshot-creation-cli.md`
 
 ## Golden output fixtures
 
@@ -82,15 +83,13 @@ The valid command exits 0. The invalid command exits 1 by design and its JSON st
 
 ## Recommended next safe phase
 
-Phase 4L — add manual schedule snapshot creation CLI.
+Phase 4M — add golden output tests for the manual schedule snapshot CLI.
 
 State:
 
 - local-only
-- stdout-only
-- reads one user-provided local JSON path
-- validates first
-- creates an in-memory snapshot and then prints deterministic JSON
+- fixture-only
+- locks exact stdout JSON for valid and invalid snapshot CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion
@@ -98,3 +97,4 @@ State:
 - no historical fixture data changes
 
 Phase 4K adds the planning-only snapshot creation design in `docs/mlb-manual-schedule-snapshot-creation-plan.md`.
+Phase 4L implements the separate stdout-only snapshot creation CLI documented in `docs/mlb-manual-schedule-snapshot-creation-cli.md`; the validator CLI and its Phase 4J goldens remain validation-only.

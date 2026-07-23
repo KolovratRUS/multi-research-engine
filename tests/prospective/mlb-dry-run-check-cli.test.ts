@@ -5,12 +5,11 @@ import { readFileSync } from 'node:fs';
 
 const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-prospective-dry-run-check.ts');
-const tsxPath = join(projectRoot, 'node_modules', '.bin', 'tsx');
 const goldenPath = join(__dirname, 'fixtures', 'mlb-dry-run-check-output-v1.json');
 const goldenOutput = readFileSync(goldenPath, 'utf8').trim();
 
 function runCheck(): string {
-  return execFileSync(process.execPath, [tsxPath, scriptPath], {
+  return execFileSync(process.execPath, ['--require', 'tsx/cjs', scriptPath], {
     cwd: projectRoot,
     encoding: 'utf8',
   });

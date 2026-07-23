@@ -32,6 +32,7 @@ This is a planning step before any authorized source ingestion.
 - Phase 4I local validator CLI exists: `docs/mlb-manual-schedule-validator-cli.md`
 - Phase 4J exact CLI golden-output tests exist: `docs/mlb-manual-schedule-validator-cli-golden-output.md`
 - Phase 4K snapshot creation plan exists: `docs/mlb-manual-schedule-snapshot-creation-plan.md`
+- Phase 4L stdout-only snapshot creation CLI exists: `docs/mlb-manual-schedule-snapshot-creation-cli.md`
 - Current local dry-run runId: `mlb-local-dry-run-2024-07-sample`
 - Current historical fixture inventory remains 29 games (2024-06-01 through 2024-07-21, June 17, July 12)
 - No live/API/web authorization exists
@@ -167,6 +168,7 @@ The Phase 4G local-only MLB manual schedule file schema and validator implementa
 The Phase 4H static fixtures and golden validator outputs are documented in `docs/mlb-manual-schedule-file-fixtures.md`.
 The Phase 4J exact manual schedule validator CLI golden outputs are documented in `docs/mlb-manual-schedule-validator-cli-golden-output.md`.
 The Phase 4K planning-only manual schedule snapshot creation design is documented in `docs/mlb-manual-schedule-snapshot-creation-plan.md`.
+The Phase 4L local-only, stdout-only manual schedule snapshot creation CLI is documented in `docs/mlb-manual-schedule-snapshot-creation-cli.md`. It does not implement live mode, network schedule ingestion, file output, or historical fixture changes.
 See `docs/mlb-manual-schedule-file-schemas.md`.
 
 ## Implementation staging
@@ -198,13 +200,11 @@ Stage 6 — separate outcome attachment after completion.
 
 ## Recommended next safe phase
 
-Phase 4L — add manual schedule snapshot creation CLI.
+Phase 4M — add golden output tests for the manual schedule snapshot CLI.
 State:
 - local-only
-- stdout-only
-- reads one user-provided local JSON path
-- validates first
-- creates an in-memory snapshot and then prints deterministic JSON
+- fixture-only
+- locks exact stdout JSON for valid and invalid snapshot CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion
@@ -214,3 +214,4 @@ State:
 See `docs/mlb-manual-schedule-validator-cli.md` for the validator CLI documentation.
 See `docs/mlb-manual-schedule-validator-cli-golden-output.md` for the Phase 4J golden-output documentation.
 See `docs/mlb-manual-schedule-snapshot-creation-plan.md` for the Phase 4K snapshot creation plan.
+See `docs/mlb-manual-schedule-snapshot-creation-cli.md` for the Phase 4L stdout-only snapshot creation CLI.

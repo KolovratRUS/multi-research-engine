@@ -5,10 +5,9 @@ import { readFileSync, mkdirSync, writeFileSync, rmSync, readdirSync } from 'nod
 
 const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-manual-schedule-validate.ts');
-const tsxPath = join(projectRoot, 'node_modules', '.bin', 'tsx');
 
 function runValidate(args: string[]): string {
-  return execFileSync(process.execPath, [tsxPath, scriptPath, ...args], {
+  return execFileSync(process.execPath, ['--require', 'tsx/cjs', scriptPath, ...args], {
     cwd: projectRoot,
     encoding: 'utf8',
   });
@@ -24,7 +23,7 @@ describe('Phase 4I/4J MLB manual schedule validator CLI', () => {
     let error: unknown;
     let stdout = '';
     try {
-      stdout = execFileSync(process.execPath, [tsxPath, scriptPath], {
+      stdout = execFileSync(process.execPath, ['--require', 'tsx/cjs', scriptPath], {
         cwd: projectRoot,
         encoding: 'utf8',
       });
@@ -42,7 +41,7 @@ describe('Phase 4I/4J MLB manual schedule validator CLI', () => {
     let error: unknown;
     let stdout = '';
     try {
-      stdout = execFileSync(process.execPath, [tsxPath, scriptPath, validFixturePath, invalidFixturePath], {
+      stdout = execFileSync(process.execPath, ['--require', 'tsx/cjs', scriptPath, validFixturePath, invalidFixturePath], {
         cwd: projectRoot,
         encoding: 'utf8',
       });

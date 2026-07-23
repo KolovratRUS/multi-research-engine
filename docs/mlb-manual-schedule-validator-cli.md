@@ -91,19 +91,23 @@ Golden output fixtures:
 
 ## Phase 4K snapshot creation plan
 
-Phase 4K plans the future local manual schedule snapshot creation command.
+Phase 4K planned the local manual schedule snapshot creation command.
 See `docs/mlb-manual-schedule-snapshot-creation-plan.md`.
 The current validator CLI remains validation-only and does not create snapshots or write files.
 
+## Phase 4L snapshot creation CLI
+
+The separate Phase 4L CLI validates first and then converts valid input into an in-memory snapshot printed to stdout.
+See `docs/mlb-manual-schedule-snapshot-creation-cli.md`.
+This does not change the validator CLI: it remains validation-only.
+
 ## Recommended next safe phase
 
-Phase 4L — add manual schedule snapshot creation CLI.
+Phase 4M — add golden output tests for the manual schedule snapshot CLI.
 State:
 - local-only
-- stdout-only
-- reads one user-provided local JSON path
-- validates first
-- creates an in-memory snapshot and then prints deterministic JSON
+- fixture-only
+- locks exact stdout JSON for valid and invalid snapshot CLI cases
 - no file output
 - no live/API/web
 - no network schedule ingestion
