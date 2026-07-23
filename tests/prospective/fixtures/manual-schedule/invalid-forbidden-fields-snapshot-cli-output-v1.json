@@ -1,0 +1,39 @@
+{
+  "ok": false,
+  "runId": "manual-schedule-fixture-week-1",
+  "sourceMode": "manual-schedule",
+  "weekStart": "2024-07-01",
+  "weekEnd": "2024-07-07",
+  "snapshotTimestamp": "2024-07-01T00:00:00Z",
+  "gameCount": 2,
+  "validationMessageCount": 5,
+  "validationErrorCount": 5,
+  "validationWarningCount": 0,
+  "validationMessages": [
+    {
+      "severity": "error",
+      "code": "MANUAL_SCHEDULE_FORBIDDEN_PREGAME_FIELD",
+      "message": "game[0] must not contain finalScore"
+    },
+    {
+      "severity": "error",
+      "code": "MANUAL_SCHEDULE_FORBIDDEN_PREGAME_FIELD",
+      "message": "game[0] must not contain completedGameState"
+    },
+    {
+      "severity": "error",
+      "code": "MANUAL_SCHEDULE_FORBIDDEN_PREGAME_FIELD",
+      "message": "game[0] must not contain actualStartingPitchers"
+    },
+    {
+      "severity": "error",
+      "code": "MANUAL_SCHEDULE_FORBIDDEN_EXTERNAL_FIELD",
+      "message": "game[1] must not contain closingOdds"
+    },
+    {
+      "severity": "error",
+      "code": "MANUAL_SCHEDULE_FORBIDDEN_EXTERNAL_FIELD",
+      "message": "game[1] must not contain impliedProbability"
+    }
+  ]
+}

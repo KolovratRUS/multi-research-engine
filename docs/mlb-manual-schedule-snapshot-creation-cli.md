@@ -92,17 +92,30 @@ The snapshot and summary `snapshotTimestamp` use input `createdAt`; the command 
 - The valid local fixture produces a two-game snapshot with `sourceMode` `"manual-schedule"` and `snapshotTimestamp` `"2024-07-01T00:00:00Z"`.
 - The invalid forbidden-fields fixture exits 1 with five validation errors and no snapshot.
 - In the managed validation sandbox, npm commands whose `tsx` launcher opened a local IPC listener were blocked with `EPERM` before script execution. The same validator, snapshot, and historical review entry points passed through the local `tsx/cjs` loader without an IPC listener; the required package script remains the planned `tsx` command.
+- Phase 4M focused snapshot CLI tests pass: 9 tests.
+- Phase 4M prospective tests pass: 55 tests.
+- Phase 4M full Vitest and `npm test` pass: 811 tests across 55 files.
+
+## Phase 4M golden-output tests
+
+Phase 4M locks the exact parsed stdout JSON for the valid exit 0 case and the invalid expected exit 1 case.
+See `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`.
+
+Golden output fixtures:
+
+- `tests/prospective/fixtures/manual-schedule/valid-manual-schedule-snapshot-cli-output-v1.json`
+- `tests/prospective/fixtures/manual-schedule/invalid-forbidden-fields-snapshot-cli-output-v1.json`
 
 ## Recommended next safe phase
 
-Phase 4M — add golden output tests for the manual schedule snapshot CLI.
+Phase 4N — plan the `lock-manual-week` workflow.
 
 State:
 
-- local-only
-- fixture-only
-- locks exact stdout JSON for valid and invalid snapshot CLI cases
-- no file output
+- planning-only
+- defines how validated manual schedule snapshots will be locked for a week
+- no implementation
+- no file-output artifacts yet
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

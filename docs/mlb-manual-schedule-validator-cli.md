@@ -101,14 +101,19 @@ The separate Phase 4L CLI validates first and then converts valid input into an 
 See `docs/mlb-manual-schedule-snapshot-creation-cli.md`.
 This does not change the validator CLI: it remains validation-only.
 
+## Phase 4M snapshot CLI golden outputs
+
+Phase 4M locks exact stdout for the separate snapshot creation CLI.
+See `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`.
+The validator CLI and its Phase 4J golden outputs remain validation-only and separate from snapshot conversion.
+
 ## Recommended next safe phase
 
-Phase 4M — add golden output tests for the manual schedule snapshot CLI.
+Phase 4N — plan the `lock-manual-week` workflow.
 State:
-- local-only
-- fixture-only
-- locks exact stdout JSON for valid and invalid snapshot CLI cases
-- no file output
+- planning-only
+- no implementation
+- no file-output artifacts yet
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

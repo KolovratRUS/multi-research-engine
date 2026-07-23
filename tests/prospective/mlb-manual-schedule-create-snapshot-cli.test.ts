@@ -34,9 +34,11 @@ function expectNoSnapshot(summary: Record<string, unknown>): void {
   expect('snapshot' in summary).toBe(false);
 }
 
-describe('Phase 4L MLB manual schedule snapshot creation CLI', () => {
+describe('Phase 4L/4M MLB manual schedule snapshot creation CLI', () => {
   const validFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-schedule-v1.json');
   const invalidFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-v1.json');
+  const validGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-schedule-snapshot-cli-output-v1.json');
+  const invalidGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-snapshot-cli-output-v1.json');
 
   afterEach(() => {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -100,6 +102,22 @@ describe('Phase 4L MLB manual schedule snapshot creation CLI', () => {
     expect(first.validationWarningCount).toBe(0);
     expect(first.validationMessages).toEqual([]);
     expect(first).toEqual(second);
+  });
+
+  it('matches the exact golden JSON output for the valid fixture', () => {
+    const summary = JSON.parse(runCreateSnapshot([validFixturePath])) as Record<string, unknown>;
+    const golden = JSON.parse(readFileSync(validGoldenPath, 'utf8')) as Record<string, unknown>;
+
+    expect(summary).toEqual(golden);
+    expect(validateProspectiveScheduleSnapshot(golden.snapshot)).toEqual([]);
+  });
+
+  it('matches the exact golden JSON output and expected exit 1 for the invalid fixture', () => {
+    const summary = runCreateSnapshotExpectingFailure([invalidFixturePath]);
+    const golden = JSON.parse(readFileSync(invalidGoldenPath, 'utf8')) as Record<string, unknown>;
+
+    expect(summary).toEqual(golden);
+    expectNoSnapshot(golden);
   });
 
   it('uses input createdAt and includes exactly two safe games in a valid snapshot', () => {

@@ -193,6 +193,7 @@ The Phase 4I local-only MLB manual schedule validator CLI documentation is `docs
 The Phase 4J local-only MLB manual schedule validator CLI golden-output test documentation is `docs/mlb-manual-schedule-validator-cli-golden-output.md`.
 The Phase 4K planning-only MLB manual schedule snapshot creation documentation is `docs/mlb-manual-schedule-snapshot-creation-plan.md`.
 The Phase 4L local-only, stdout-only MLB manual schedule snapshot creation CLI documentation is `docs/mlb-manual-schedule-snapshot-creation-cli.md`; it validates one local file before in-memory conversion and adds no file-output mode.
+The Phase 4M local-only MLB manual schedule snapshot CLI golden-output documentation is `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`; it locks exact stdout JSON for static valid and invalid fixtures without adding file output.
 
 ## Architecture
 
