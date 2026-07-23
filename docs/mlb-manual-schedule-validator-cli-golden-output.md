@@ -82,13 +82,19 @@ The valid command exits 0. The invalid command exits 1 by design and its JSON st
 
 ## Recommended next safe phase
 
-Phase 4K — plan manual schedule snapshot creation.
+Phase 4L — add manual schedule snapshot creation CLI.
 
 State:
 
-- planning-only
+- local-only
+- stdout-only
+- reads one user-provided local JSON path
+- validates first
+- creates an in-memory snapshot and then prints deterministic JSON
+- no file output
 - no live/API/web
-- no real schedule network/API ingestion
+- no network schedule ingestion
 - no generated run artifacts committed
-- define conversion CLI/output behavior before implementation
 - no historical fixture data changes
+
+Phase 4K adds the planning-only snapshot creation design in `docs/mlb-manual-schedule-snapshot-creation-plan.md`.

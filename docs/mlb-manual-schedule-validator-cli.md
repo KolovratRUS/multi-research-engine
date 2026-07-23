@@ -89,13 +89,23 @@ Golden output fixtures:
 - `tests/prospective/fixtures/manual-schedule/valid-manual-schedule-cli-output-v1.json`
 - `tests/prospective/fixtures/manual-schedule/invalid-forbidden-fields-cli-output-v1.json`
 
+## Phase 4K snapshot creation plan
+
+Phase 4K plans the future local manual schedule snapshot creation command.
+See `docs/mlb-manual-schedule-snapshot-creation-plan.md`.
+The current validator CLI remains validation-only and does not create snapshots or write files.
+
 ## Recommended next safe phase
 
-Phase 4K — plan manual schedule snapshot creation.
+Phase 4L — add manual schedule snapshot creation CLI.
 State:
-- planning-only
+- local-only
+- stdout-only
+- reads one user-provided local JSON path
+- validates first
+- creates an in-memory snapshot and then prints deterministic JSON
+- no file output
 - no live/API/web
-- no real schedule network/API ingestion
+- no network schedule ingestion
 - no generated run artifacts committed
-- define conversion CLI/output behavior before implementation
 - no historical fixture data changes
