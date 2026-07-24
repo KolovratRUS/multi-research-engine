@@ -1,0 +1,26 @@
+{
+  "ok": false,
+  "runId": "manual-schedule-fixture-week-1",
+  "lockId": "manual-week-lock:manual-schedule-fixture-week-1",
+  "sourceMode": "manual-schedule",
+  "weekStart": "2024-07-01",
+  "weekEnd": "2024-07-07",
+  "constructedAt": "2024-07-01T00:00:00Z",
+  "lockedAt": "2024-07-01T00:00:00Z",
+  "gameCount": 0,
+  "validationMessageCount": 2,
+  "validationErrorCount": 2,
+  "validationWarningCount": 0,
+  "validationMessages": [
+    {
+      "severity": "error",
+      "code": "WEEKLY_RESEARCH_SNAPSHOT_INVALID",
+      "message": "snapshot validation failed: MISSING_GAMES: schedule snapshot requires at least one game"
+    },
+    {
+      "severity": "error",
+      "code": "WEEKLY_RESEARCH_SNAPSHOT_EMPTY",
+      "message": "snapshot games must not be empty"
+    }
+  ]
+}

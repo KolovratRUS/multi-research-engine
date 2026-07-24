@@ -7,7 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, win32 } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   CONSTRUCTION_VERSION,
@@ -18,18 +18,47 @@ import {
 
 const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-weekly-prospective-research-construct.ts');
-const fixturePath = join(
+const fixtureRoot = join(
   projectRoot,
   'tests',
   'prospective',
   'fixtures',
   'manual-schedule',
+);
+const fixturePath = join(
+  fixtureRoot,
   'valid-manual-week-lock-file-artifact-v1.json',
 );
+const validGoldenPath = join(
+  fixtureRoot,
+  'valid-weekly-prospective-research-construction-cli-output-v1.json',
+);
+const invalidLockVersionGoldenPath = join(
+  fixtureRoot,
+  'invalid-weekly-prospective-research-construction-lock-version-output-v1.json',
+);
+const invalidForbiddenFieldGoldenPath = join(
+  fixtureRoot,
+  'invalid-weekly-prospective-research-construction-forbidden-field-output-v1.json',
+);
+const invalidEmptyGamesGoldenPath = join(
+  fixtureRoot,
+  'invalid-weekly-prospective-research-construction-empty-games-output-v1.json',
+);
+const goldenPaths = [
+  validGoldenPath,
+  invalidLockVersionGoldenPath,
+  invalidForbiddenFieldGoldenPath,
+  invalidEmptyGamesGoldenPath,
+] as const;
 const tempRoot = join(projectRoot, 'tmp', 'prospective-phase4u-weekly-research-construction');
 
 function readValidArtifact(): Record<string, unknown> {
   return JSON.parse(readFileSync(fixturePath, 'utf8')) as Record<string, unknown>;
+}
+
+function readGolden(path: string): string {
+  return readFileSync(path, 'utf8');
 }
 
 function writeTemporaryArtifact(
@@ -98,9 +127,31 @@ function expectValidationCode(summary: Record<string, unknown>, code: string): v
   expect(validationMessages.map((message) => message.code)).toContain(code);
 }
 
-describe('Phase 4U MLB weekly prospective research construction', () => {
+function expectNoAbsolutePathStrings(input: unknown): void {
+  if (typeof input === 'string') {
+    expect(isAbsolute(input)).toBe(false);
+    expect(win32.isAbsolute(input)).toBe(false);
+    return;
+  }
+  if (Array.isArray(input)) {
+    for (const value of input) {
+      expectNoAbsolutePathStrings(value);
+    }
+    return;
+  }
+  if (typeof input !== 'object' || input === null) {
+    return;
+  }
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    expectNoAbsolutePathStrings(key);
+    expectNoAbsolutePathStrings(value);
+  }
+}
+
+describe('Phase 4U/4V MLB weekly prospective research construction', () => {
   afterEach(() => {
     rmSync(tempRoot, { recursive: true, force: true });
+    expect(existsSync(tempRoot)).toBe(false);
   });
 
   it('constructs one deterministic pending pre-game FULL stub per locked game', () => {
@@ -155,6 +206,40 @@ describe('Phase 4U MLB weekly prospective research construction', () => {
     expect(first.validationWarningCount).toBe(0);
     expect(first.validationMessages).toEqual([]);
     expect(first.package).toBeDefined();
+  });
+
+  it('matches the exact valid construction stdout golden byte-for-byte', () => {
+    const stdout = runConstructWeek([fixturePath]);
+    const goldenText = readGolden(validGoldenPath);
+    const golden = JSON.parse(goldenText) as {
+      package: {
+        constructionVersion: string;
+        constructedAt: string;
+        lockedAt: string;
+        inputSnapshot: unknown;
+        games: Array<{
+          constructionStatus: string;
+          researchMode: string;
+          researchScope: string;
+        }>;
+        constructionWarnings: unknown[];
+        constructionMessages: unknown[];
+      };
+    };
+    const artifact = readValidArtifact();
+
+    expect(stdout).toBe(goldenText);
+    expect(golden.package.constructionVersion).toBe(CONSTRUCTION_VERSION);
+    expect(golden.package.constructedAt).toBe(golden.package.lockedAt);
+    expect(golden.package.inputSnapshot).toEqual(artifact.snapshot);
+    expect(golden.package.games).toHaveLength(2);
+    for (const game of golden.package.games) {
+      expect(game.constructionStatus).toBe('pending-research');
+      expect(game.researchMode).toBe('pregame');
+      expect(game.researchScope).toBe('FULL');
+    }
+    expect(golden.package.constructionWarnings).toEqual([]);
+    expect(golden.package.constructionMessages).toEqual([]);
   });
 
   it('keeps result, completion, starter, external, and uncalibrated fields out of the package', () => {
@@ -214,6 +299,20 @@ describe('Phase 4U MLB weekly prospective research construction', () => {
     expectNoPackage(summary);
   });
 
+  it('matches the exact wrong-lockVersion stdout golden byte-for-byte', () => {
+    const path = writeTemporaryArtifact('golden-wrong-lock-version.json', (artifact) => {
+      artifact.lockVersion = 'wrong-lock-version';
+    });
+    const { stdout, summary } = runConstructWeekExpectingFailure([path]);
+    const goldenText = readGolden(invalidLockVersionGoldenPath);
+    const golden = JSON.parse(goldenText) as Record<string, unknown>;
+
+    expect(stdout).toBe(goldenText);
+    expect(summary).toEqual(golden);
+    expectValidationCode(golden, 'WEEKLY_RESEARCH_LOCK_VERSION_INVALID');
+    expectNoPackage(golden);
+  });
+
   it('rejects non-manual source mode', () => {
     const path = writeTemporaryArtifact('wrong-source-mode.json', (artifact) => {
       artifact.sourceMode = 'authorized-ingestion';
@@ -264,6 +363,35 @@ describe('Phase 4U MLB weekly prospective research construction', () => {
 
     expectValidationCode(summary, 'WEEKLY_RESEARCH_SNAPSHOT_EMPTY');
     expectNoPackage(summary);
+  });
+
+  it('matches the exact empty-games stdout golden byte-for-byte', () => {
+    const path = writeTemporaryArtifact('golden-empty-games.json', (artifact) => {
+      const snapshot = artifact.snapshot as Record<string, unknown>;
+      snapshot.games = [];
+    });
+    const { stdout, summary } = runConstructWeekExpectingFailure([path]);
+    const goldenText = readGolden(invalidEmptyGamesGoldenPath);
+    const golden = JSON.parse(goldenText) as Record<string, unknown>;
+
+    expect(stdout).toBe(goldenText);
+    expect(summary).toEqual(golden);
+    expectValidationCode(golden, 'WEEKLY_RESEARCH_SNAPSHOT_EMPTY');
+    expectNoPackage(golden);
+  });
+
+  it('matches the exact forbidden-field stdout golden byte-for-byte', () => {
+    const path = writeTemporaryArtifact('golden-forbidden-field.json', (artifact) => {
+      artifact.finalScore = 'deliberate-invalid-fixture-value';
+    });
+    const { stdout, summary } = runConstructWeekExpectingFailure([path]);
+    const goldenText = readGolden(invalidForbiddenFieldGoldenPath);
+    const golden = JSON.parse(goldenText) as Record<string, unknown>;
+
+    expect(stdout).toBe(goldenText);
+    expect(summary).toEqual(golden);
+    expectValidationCode(golden, 'WEEKLY_RESEARCH_FORBIDDEN_FIELD');
+    expectNoPackage(golden);
   });
 
   it.each([
@@ -336,6 +464,19 @@ describe('Phase 4U MLB weekly prospective research construction', () => {
     const strings = JSON.stringify(summary).match(/"[^"]*"/g) ?? [];
     for (const value of strings) {
       expect(isAbsolute(value.slice(1, -1))).toBe(false);
+    }
+  });
+
+  it('keeps every construction stdout golden path-free and invalid goldens package-free', () => {
+    for (const goldenPath of goldenPaths) {
+      const goldenText = readGolden(goldenPath);
+      const golden = JSON.parse(goldenText) as Record<string, unknown>;
+
+      expect(goldenText).not.toContain(projectRoot);
+      expectNoAbsolutePathStrings(golden);
+      if (golden.ok === false) {
+        expectNoPackage(golden);
+      }
     }
   });
 

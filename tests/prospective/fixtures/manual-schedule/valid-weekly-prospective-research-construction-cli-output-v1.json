@@ -1,0 +1,84 @@
+{
+  "ok": true,
+  "runId": "manual-schedule-fixture-week-1",
+  "lockId": "manual-week-lock:manual-schedule-fixture-week-1",
+  "sourceMode": "manual-schedule",
+  "weekStart": "2024-07-01",
+  "weekEnd": "2024-07-07",
+  "constructedAt": "2024-07-01T00:00:00Z",
+  "lockedAt": "2024-07-01T00:00:00Z",
+  "gameCount": 2,
+  "validationMessageCount": 0,
+  "validationErrorCount": 0,
+  "validationWarningCount": 0,
+  "validationMessages": [],
+  "package": {
+    "constructionVersion": "mlb-weekly-prospective-research-construction-v1",
+    "lockVersion": "mlb-manual-week-lock-v1",
+    "runId": "manual-schedule-fixture-week-1",
+    "lockId": "manual-week-lock:manual-schedule-fixture-week-1",
+    "sourceMode": "manual-schedule",
+    "weekStart": "2024-07-01",
+    "weekEnd": "2024-07-07",
+    "constructedAt": "2024-07-01T00:00:00Z",
+    "lockedAt": "2024-07-01T00:00:00Z",
+    "inputSnapshot": {
+      "runId": "manual-schedule-fixture-week-1",
+      "createdAt": "2024-07-01T00:00:00Z",
+      "sourceMode": "manual-schedule",
+      "games": [
+        {
+          "gameId": "manual-game-1",
+          "officialDate": "2024-07-03",
+          "scheduledStartTime": "2024-07-03T17:10:00Z",
+          "awayTeam": "MANUAL_AWAY_1",
+          "homeTeam": "MANUAL_HOME_1",
+          "snapshotTimestamp": "2024-07-01T00:00:00Z",
+          "sourceProvenance": "manual-game-provenance"
+        },
+        {
+          "gameId": "manual-game-2",
+          "officialDate": "2024-07-05",
+          "scheduledStartTime": "2024-07-05T19:15:00Z",
+          "awayTeam": "MANUAL_AWAY_2",
+          "homeTeam": "MANUAL_HOME_2",
+          "snapshotTimestamp": "2024-07-01T00:00:00Z",
+          "sourceProvenance": "manual-game-provenance"
+        }
+      ],
+      "warnings": []
+    },
+    "games": [
+      {
+        "gameId": "manual-game-1",
+        "officialDate": "2024-07-03",
+        "scheduledStartTime": "2024-07-03T17:10:00Z",
+        "awayTeam": "MANUAL_AWAY_1",
+        "homeTeam": "MANUAL_HOME_1",
+        "snapshotTimestamp": "2024-07-01T00:00:00Z",
+        "sourceProvenance": "manual-game-provenance",
+        "constructionStatus": "pending-research",
+        "researchMode": "pregame",
+        "researchScope": "FULL",
+        "constructionMessages": [],
+        "warnings": []
+      },
+      {
+        "gameId": "manual-game-2",
+        "officialDate": "2024-07-05",
+        "scheduledStartTime": "2024-07-05T19:15:00Z",
+        "awayTeam": "MANUAL_AWAY_2",
+        "homeTeam": "MANUAL_HOME_2",
+        "snapshotTimestamp": "2024-07-01T00:00:00Z",
+        "sourceProvenance": "manual-game-provenance",
+        "constructionStatus": "pending-research",
+        "researchMode": "pregame",
+        "researchScope": "FULL",
+        "constructionMessages": [],
+        "warnings": []
+      }
+    ],
+    "constructionWarnings": [],
+    "constructionMessages": []
+  }
+}

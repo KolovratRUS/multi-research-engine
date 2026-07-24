@@ -219,16 +219,19 @@ Phase 4T is planning-only and is documented in `docs/mlb-weekly-prospective-rese
 
 Phase 4U implements the handoff as `npm run prospective:mlb:construct-week -- <locked-week-artifact-json>`. Its input is the exact locked `lockedSnapshot` artifact, not a raw manual schedule. The local-only command validates before constructing a deterministic stdout package with one pre-game `pending-research` `FULL` stub per locked game. It adds no file output or network ingestion and leaves the Phase 4P no-flag and Phase 4S file-output lock goldens unchanged.
 
+## Phase 4V construction stdout golden tests
+
+Phase 4V adds byte-for-byte stdout goldens for the valid construction package and representative invalid locked artifacts. Phase 4U implementation behavior remains unchanged, the Phase 4P/4S lock goldens remain unchanged, and construction still has no file output.
+
 ## Recommended next safe phase
 
-Phase 4V — add exact construction stdout golden tests.
+Phase 4W — plan file-output mode for constructed weekly research packages.
 
 State:
 
-- local-only
-- fixture-only
-- exact stdout package regression tests
-- no file output
+- planning-only
+- no implementation
+- no file output yet
 - no live/API/web
 - no network schedule ingestion
 - no historical fixture changes

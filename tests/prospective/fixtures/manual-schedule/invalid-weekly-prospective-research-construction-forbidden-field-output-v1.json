@@ -1,0 +1,21 @@
+{
+  "ok": false,
+  "runId": "manual-schedule-fixture-week-1",
+  "lockId": "manual-week-lock:manual-schedule-fixture-week-1",
+  "sourceMode": "manual-schedule",
+  "weekStart": "2024-07-01",
+  "weekEnd": "2024-07-07",
+  "constructedAt": "2024-07-01T00:00:00Z",
+  "lockedAt": "2024-07-01T00:00:00Z",
+  "gameCount": 2,
+  "validationMessageCount": 1,
+  "validationErrorCount": 1,
+  "validationWarningCount": 0,
+  "validationMessages": [
+    {
+      "severity": "error",
+      "code": "WEEKLY_RESEARCH_FORBIDDEN_FIELD",
+      "message": "locked artifact must not contain finalScore at finalScore"
+    }
+  ]
+}

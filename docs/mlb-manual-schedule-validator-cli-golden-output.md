@@ -104,16 +104,19 @@ Phase 4T is planning-only and defines how the exact validated lock artifact will
 
 Phase 4U implements a separate local locked-artifact consumer. It validates the exact `lockedSnapshot`, not a raw manual schedule, and emits a deterministic stdout package with one pre-game `pending-research` `FULL` stub per locked game. It adds no file output or network ingestion, and the Phase 4P no-flag and Phase 4S file-output lock goldens remain unchanged.
 
+## Phase 4V construction stdout golden tests
+
+Phase 4V adds separate byte-for-byte stdout goldens for the valid construction package and representative invalid locked artifacts. The Phase 4U implementation and the Phase 4P/4S lock goldens remain unchanged. Construction still has no file output.
+
 ## Recommended next safe phase
 
-Phase 4V — add exact construction stdout golden tests.
+Phase 4W — plan file-output mode for constructed weekly research packages.
 
 State:
 
-- local-only
-- fixture-only
-- exact stdout package regression tests
-- no file output
+- planning-only
+- no implementation
+- no file output yet
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
