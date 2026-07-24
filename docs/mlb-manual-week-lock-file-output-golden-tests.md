@@ -81,15 +81,23 @@ Phase 4U uses this exact valid lock artifact fixture as its local construction i
 
 Phase 4V adds separate exact construction stdout fixtures for the valid package and representative invalid locked artifacts. It does not alter these Phase 4S goldens, the Phase 4P no-flag goldens, or Phase 4U construction behavior. Construction still has no file output.
 
+## Phase 4W construction file-output plan
+
+Phase 4W is planning-only and is documented in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`. It plans a separate future construction file mode without implementing it. Phase 4U remains unchanged, the Phase 4V construction stdout goldens remain unchanged, and these Phase 4S file-output lock goldens plus the Phase 4P no-flag lock goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4W — plan file-output mode for constructed weekly research packages.
+Phase 4X — implement file-output mode for constructed weekly research packages.
 
 State:
 
-- planning-only
-- no implementation
-- no file output yet
+- local-only
+- implementation
+- double opt-in `--write-file` + `--output-dir`
+- no-flag stdout goldens unchanged
+- writes the exact construction package artifact only
+- validates before writing
+- refuses overwrite
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

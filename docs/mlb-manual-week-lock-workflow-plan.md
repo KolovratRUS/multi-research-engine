@@ -253,15 +253,23 @@ Phase 4U implements the handoff through `npm run prospective:mlb:construct-week 
 
 Phase 4V adds byte-for-byte stdout goldens for the valid construction package and representative invalid locked artifacts. It does not change the Phase 4U implementation, Phase 4P no-flag goldens, or Phase 4S file-output goldens, and construction still has no file output.
 
+## Phase 4W construction file-output plan
+
+Phase 4W is planning-only and is documented in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`. It plans future construction file output without implementing it. Phase 4U construction behavior, Phase 4V construction stdout goldens, Phase 4P no-flag lock goldens, and Phase 4S file-output lock goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4W — plan file-output mode for constructed weekly research packages.
+Phase 4X — implement file-output mode for constructed weekly research packages.
 
 State:
 
-- planning-only
-- no implementation
-- no file output yet
+- local-only
+- implementation
+- double opt-in `--write-file` + `--output-dir`
+- no-flag stdout goldens unchanged
+- writes the exact construction package artifact only
+- validates before writing
+- refuses overwrite
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

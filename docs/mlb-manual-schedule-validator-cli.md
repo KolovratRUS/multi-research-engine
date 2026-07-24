@@ -147,15 +147,23 @@ Phase 4U adds a separate local command that consumes the exact locked `lockedSna
 
 Phase 4V adds byte-for-byte construction stdout goldens for the valid package and representative invalid locked artifacts. The Phase 4U implementation, this validator, and the Phase 4P/4S lock goldens remain unchanged. Construction still has no file output.
 
+## Phase 4W construction file-output plan
+
+Phase 4W is planning-only and is documented in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`. It plans future construction file output without implementing it or changing this validation-only CLI. Phase 4U remains unchanged, the Phase 4V construction stdout goldens remain unchanged, and the Phase 4P no-flag and Phase 4S file-output lock goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4W — plan file-output mode for constructed weekly research packages.
+Phase 4X — implement file-output mode for constructed weekly research packages.
 
 State:
 
-- planning-only
-- no implementation
-- no file output yet
+- local-only
+- implementation
+- double opt-in `--write-file` + `--output-dir`
+- no-flag stdout goldens unchanged
+- writes the exact construction package artifact only
+- validates before writing
+- refuses overwrite
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

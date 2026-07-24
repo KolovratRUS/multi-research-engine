@@ -74,13 +74,19 @@ npm run prospective:mlb:construct-week -- tests/prospective/fixtures/manual-sche
 
 ## Recommended next safe phase
 
-Phase 4W — plan file-output mode for constructed weekly research packages.
+Phase 4W is the planning-only future file-output design in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`. It does not implement construction file output. Phase 4U remains unchanged, these Phase 4V construction stdout goldens remain unchanged, and the Phase 4P no-flag and Phase 4S file-output lock goldens remain unchanged.
+
+Phase 4X — implement file-output mode for constructed weekly research packages.
 
 State:
 
-- planning-only
-- no implementation
-- no file output yet
+- local-only
+- implementation
+- double opt-in `--write-file` + `--output-dir`
+- no-flag stdout goldens unchanged
+- writes the exact construction package artifact only
+- validates before writing
+- refuses overwrite
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
