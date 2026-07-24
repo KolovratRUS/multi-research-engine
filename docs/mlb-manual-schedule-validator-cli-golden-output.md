@@ -96,15 +96,20 @@ The valid command exits 0. The invalid command exits 1 by design and its JSON st
 
 The validator CLI remains validation-only, the snapshot CLI remains conversion-only, and the lock CLI owns deterministic wrapping and its explicit file mode.
 
+## Phase 4T locked-week construction handoff
+
+Phase 4T is planning-only and defines how the exact validated lock artifact will feed future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R/4S lock behavior or goldens.
+
 ## Recommended next safe phase
 
-Phase 4T — plan weekly prospective research construction from a locked manual week.
+Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
 
 State:
 
-- planning-only
-- defines how a locked manual week will feed prospective research construction
-- no implementation
+- local-only
+- consumes and validates one locked artifact JSON
+- deterministic stdout research skeleton only
+- no file output
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

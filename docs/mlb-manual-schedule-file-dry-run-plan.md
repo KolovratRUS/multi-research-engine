@@ -211,13 +211,20 @@ Stage 6 — separate outcome attachment after completion.
 - After implementation of Stage 1–3, MLB real-week dry-run readiness could move toward 55–60%.
 - Real API/live readiness remains lower until explicit authorized ingestion is designed.
 
+## Phase 4T locked-week construction handoff
+
+Phase 4T is the planning-only handoff from the exact validated locked week artifact to future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R/4S lock behavior or goldens.
+
 ## Recommended next safe phase
 
-Phase 4T — plan weekly prospective research construction from a locked manual week.
+Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+
 State:
-- planning-only
-- defines how a locked manual week will feed prospective research construction
-- no implementation
+
+- local-only
+- consumes and validates one locked artifact JSON
+- deterministic stdout research skeleton only
+- no file output
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

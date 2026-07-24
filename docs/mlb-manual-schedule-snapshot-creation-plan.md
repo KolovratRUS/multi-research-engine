@@ -181,15 +181,20 @@ The Phase 4L snapshot CLI remains conversion-only; Phase 4O validates, converts 
 - The invalid fixture exits 1 with five validation errors and no snapshot.
 - See `docs/mlb-manual-schedule-snapshot-creation-cli.md` for the command-level validation note.
 
+## Phase 4T locked-week construction handoff
+
+Phase 4T is planning-only and defines how the exact validated lock artifact will feed future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R/4S lock behavior or goldens.
+
 ## Recommended next safe phase
 
-Phase 4T — plan weekly prospective research construction from a locked manual week.
+Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
 
 State:
 
-- planning-only
-- defines how a locked manual week will feed prospective research construction
-- no implementation
+- local-only
+- consumes and validates one locked artifact JSON
+- deterministic stdout research skeleton only
+- no file output
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

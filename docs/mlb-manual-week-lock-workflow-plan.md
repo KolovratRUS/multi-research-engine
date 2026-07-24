@@ -241,15 +241,20 @@ Phase 4R implements the plan. The Phase 4N lock workflow remains the validation,
 - The valid and invalid lock stdout objects match the Phase 4P golden fixtures exactly; the valid nested snapshot passes `validateProspectiveScheduleSnapshot`.
 - In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are blocked with `EPERM` before script execution. The inventory, dry-run, validator, snapshot, lock, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; package scripts remain unchanged.
 
+## Phase 4T locked-week construction handoff
+
+Phase 4T is planning-only and defines how the exact validated `lockedSnapshot` artifact will feed future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R/4S lock behavior or goldens.
+
 ## Recommended next safe phase
 
-Phase 4T — plan weekly prospective research construction from a locked manual week.
+Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
 
 State:
 
-- planning-only
-- defines how a locked manual week will feed prospective research construction
-- no implementation
+- local-only
+- consumes and validates one locked artifact JSON
+- deterministic stdout research skeleton only
+- no file output
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

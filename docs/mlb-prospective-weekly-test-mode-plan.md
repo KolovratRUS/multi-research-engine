@@ -211,12 +211,21 @@ Future implementation should test:
 - completing Phase 4A only improves architecture clarity, not functional readiness
 - implementing Stage 0/1 later could move readiness toward 50-60%
 
+## Phase 4T locked-week construction handoff
+
+Phase 4T is planning-only and is documented in `docs/mlb-weekly-prospective-research-construction-plan.md`. It plans the future handoff from the exact validated locked week artifact to deterministic pre-game research skeleton construction. It does not implement construction or change Phase 4R/4S lock behavior or goldens.
+
 ## Recommended next safe phase
 
-Phase 4B — add local prospective weekly dry-run schemas.
+Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+
 State:
-- small code/test/docs implementation
+
+- local-only
+- validates and consumes one locked artifact JSON
+- deterministic stdout research skeleton only
+- no file output
 - no live/API/web
-- no real schedule ingestion
-- no fixture data changes
+- no network schedule ingestion
+- no historical fixture changes
 - no generated run artifacts committed

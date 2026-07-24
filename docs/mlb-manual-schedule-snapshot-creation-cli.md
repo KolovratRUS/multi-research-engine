@@ -133,15 +133,20 @@ Phase 4R implements that separate lock file mode. The snapshot CLI remains stdou
 
 Phase 4S adds exact fixture-only regression coverage for the valid lock artifact and file-mode stdout summary. Phase 4R implementation behavior remains unchanged, the Phase 4P no-flag goldens remain protected, and generated lock artifacts remain local and uncommitted. See `docs/mlb-manual-week-lock-file-output-golden-tests.md`.
 
+## Phase 4T locked-week construction handoff
+
+Phase 4T is planning-only and defines how the exact validated lock artifact will feed future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R/4S lock behavior or goldens.
+
 ## Recommended next safe phase
 
-Phase 4T — plan weekly prospective research construction from a locked manual week.
+Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
 
 State:
 
-- planning-only
-- defines how a locked manual week will feed prospective research construction
-- no implementation
+- local-only
+- consumes and validates one locked artifact JSON
+- deterministic stdout research skeleton only
+- no file output
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
