@@ -5,7 +5,7 @@
 Local-only.
 Fixture-only.
 Exact stdout JSON regression tests.
-No file output.
+The protected no-flag cases remain stdout-only.
 No live source used.
 No real MLB API request made.
 No web lookup used.
@@ -19,7 +19,7 @@ modelProbability remains null/absent/not available until calibrated.
 
 Phase 4P locks the exact stdout JSON for the valid and invalid manual week lock CLI cases. The tests compare parsed CLI stdout with committed local golden fixtures, preserve validator message order, and require `lockedSnapshot` only for valid input.
 
-Phase 4Q adds only the future file-output mode plan in `docs/mlb-manual-week-lock-file-output-plan.md`. The current CLI and these exact stdout goldens remain unchanged.
+Phase 4Q planned file-output mode in `docs/mlb-manual-week-lock-file-output-plan.md`. Phase 4R implements that mode only when both explicit file flags are present. These no-flag exact stdout goldens remain unchanged.
 
 ## Golden output fixtures
 
@@ -56,8 +56,8 @@ The valid command exits 0 and includes `lockedSnapshot`. The invalid command exi
 
 - Golden outputs are local test fixtures only.
 - The CLI validates before conversion and locking.
-- No file output is implemented.
-- No generated artifacts are created.
+- These no-flag golden cases write no files.
+- Phase 4R file-mode fields and generated artifacts are outside these two exact stdout fixtures.
 - No live, API, or web source is used.
 - No network schedule ingestion is performed.
 - No historical fixture data is mutated.
@@ -66,6 +66,8 @@ The valid command exits 0 and includes `lockedSnapshot`. The invalid command exi
 - `TEAM_ONLY` excludes pitcher evidence.
 - Phase 1G-b observations remain unread and unused for pitcher availability.
 - modelProbability remains null/absent/not available until calibrated.
+- File-mode-only summary fields never appear in these no-flag golden outputs.
+- Generated lock artifacts are local files and must not be committed.
 
 ## Validation
 
@@ -74,28 +76,27 @@ The valid command exits 0 and includes `lockedSnapshot`. The invalid command exi
 - Valid validator, snapshot, and lock CLI logic exits 0 through the local loader.
 - Valid lock stdout matches its golden fixture, includes the exact two-game `lockedSnapshot`, and its nested snapshot passes `validateProspectiveScheduleSnapshot`.
 - Invalid forbidden-fields lock logic exits 1 by design, preserves all five validation messages in order, includes no `lockedSnapshot`, and matches its golden fixture.
-- Focused lock CLI tests pass: 10 tests.
+- Focused lock CLI tests pass: 23 tests, including both unchanged Phase 4P goldens and Phase 4R file-mode behavior.
 - Historical export review release behavior passes in all four modes through the local loader.
 - Focused historical export rollout review tests pass: 154 tests.
-- Prospective tests pass: 65 tests.
+- Prospective tests pass: 78 tests.
 - Backtesting tests pass: 699 tests.
-- Full Vitest and `npm test` pass: 821 tests across 56 files.
+- Full Vitest and `npm test` pass: 834 tests across 56 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
+- The manual file-mode verification artifact and output directory were removed; the no-flag commands created no artifacts.
 - In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are blocked with `EPERM` before script execution. The inventory, dry-run, validator, snapshot, lock, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; package scripts remain unchanged.
 
 ## Recommended next safe phase
 
-Phase 4R — implement file-output mode for the `lock-manual-week` CLI.
+Phase 4S — add golden and file-output regression tests for lock artifacts.
 
 State:
 
 - local-only
-- explicit `--write-file` and `--output-dir` flags only
-- validates first
-- writes exactly one deterministic locked artifact only when valid
-- no file writes without explicit flags
+- fixture-only
+- verifies exact file-output artifact contents and stdout summaries
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

@@ -127,18 +127,17 @@ The validator CLI, snapshot CLI, and lock CLI retain separate responsibilities.
 
 ## Phase 4Q manual week lock file-output plan
 
-Phase 4Q plans future file output only for the separate lock CLI.
+Phase 4Q planned file output only for the separate lock CLI.
 See `docs/mlb-manual-week-lock-file-output-plan.md`.
-The validator CLI remains validation-only, the snapshot CLI remains conversion-only, and the current lock CLI remains stdout-only. Phase 4Q implements no command or file output.
+Phase 4R implements that separate lock CLI file mode. The validator CLI remains validation-only, the snapshot CLI remains conversion-only, and neither command gains file-output responsibility.
 
 ## Recommended next safe phase
 
-Phase 4R — implement file-output mode for the separate `lock-manual-week` CLI.
+Phase 4S — add golden and file-output regression tests for lock artifacts.
 State:
 - local-only
-- explicit `--write-file` and `--output-dir` flags only
-- validates first
-- no file writes without explicit flags
+- fixture-only
+- verifies exact lock artifact contents and file-mode stdout summaries
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

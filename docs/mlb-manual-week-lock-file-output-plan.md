@@ -2,9 +2,10 @@
 
 ## Status
 
-Phase 4Q planning-only.
-No implementation.
-No file-output artifacts.
+Phase 4Q planning record.
+Phase 4R implementation complete.
+Explicit local file-output mode implemented.
+No generated file-output artifact committed.
 No generated prospective run artifact committed.
 No live source used.
 No real MLB API request made.
@@ -16,14 +17,14 @@ No model-quality or predictive-performance claim.
 
 ## Purpose
 
-Phase 4Q plans a future file-output mode for locked weekly artifacts.
+Phase 4Q planned a file-output mode for locked weekly artifacts.
 It follows:
 
 - Phase 4N, which planned the manual week lock workflow in `docs/mlb-manual-week-lock-workflow-plan.md`;
 - Phase 4O, which implemented the stdout-only lock CLI documented in `docs/mlb-manual-week-lock-cli.md`; and
 - Phase 4P, which locked exact lock CLI stdout in `docs/mlb-manual-week-lock-cli-golden-output.md`.
 
-This phase does not implement file-output mode, create output directories, write artifacts, add command flags, or change command behavior.
+Phase 4R implements that contract in `scripts/mlb-manual-week-lock.ts` and its focused tests. The no-flag command remains stdout-only and continues to match the Phase 4P valid and invalid goldens exactly.
 
 ## Current foundation
 
@@ -31,45 +32,47 @@ This phase does not implement file-output mode, create output directories, write
 - Validator CLI behavior and exact stdout goldens exist.
 - Snapshot creation CLI behavior and exact stdout goldens exist.
 - Lock CLI behavior and exact stdout goldens exist.
-- The current lock CLI is local-only and stdout-only.
+- The lock CLI is local-only; no-flag use remains stdout-only.
 - The current lock output is deterministic and includes `lockedSnapshot` only for valid input.
+- Explicit file output requires both `--write-file` and `--output-dir`.
+- A successful file-mode artifact contains the exact `lockedSnapshot`, not the outer summary.
 - The historical fixture inventory remains 29 games from 2024-06-01 through 2024-07-21: June 17 and July 12.
 
-## Proposed future command extension
+## Implemented command extension
 
-Existing command to extend later:
+The existing command remains:
 
 ```bash
 npm run prospective:mlb:lock-manual-week -- <path-to-json>
 ```
 
-Proposed future flags only; do not implement them in Phase 4Q:
+Phase 4R adds:
 
 ```text
 --write-file
 --output-dir <directory>
 ```
 
-Future file output should require both `--write-file` and `--output-dir`. This double opt-in makes accidental writes impossible.
+File output requires both `--write-file` and `--output-dir`. This double opt-in makes accidental writes impossible.
 
 - Without either flag, the command must retain its exact stdout-only behavior.
 - `--write-file` without `--output-dir` must exit 1 without writing.
 - `--output-dir` without `--write-file` must exit 1 without writing. Phase 4Q chooses this rule to avoid ambiguous operator intent.
-- File-mode-only stdout fields must not alter the existing no-flag golden output.
+- File-mode-only stdout fields do not alter the existing no-flag golden output.
 
-## Proposed output location
+## Output location
 
-The recommended root for future generated local artifacts is:
+The recommended root for generated local artifacts is:
 
 ```text
 tmp/prospective/mlb/manual-week-locks/
 ```
 
-The repository `.gitignore` currently ignores `tmp`, so this proposed root is already ignored. Generated artifacts must remain uncommitted. Phase 4Q does not create this directory or write any artifact.
+The repository `.gitignore` ignores `tmp`, so this root is ignored. Generated artifacts must remain uncommitted. The command creates the selected directory only after validation passes.
 
-A caller may later provide a different local temporary output directory for testing, but the implementation must resolve it safely, keep the final artifact inside that requested directory, and reject repository-tracked fixture directories.
+A caller may provide a different local temporary output directory. The implementation resolves it safely, keeps the final artifact inside that requested directory, and rejects repository-tracked fixture directories under `tests/` and `src/fixtures/`.
 
-## Proposed filename
+## Deterministic filename
 
 Use a deterministic, path-independent filename:
 
@@ -83,7 +86,7 @@ Example:
 2024-07-01__2024-07-07__manual-schedule-fixture-week-1__manual-week-lock-v1.json
 ```
 
-The future implementation must validate the filename components and reject path separators or traversal components rather than allowing `runId` to change the destination.
+The implementation validates the filename components and rejects empty values, path separators, backslashes, and traversal components rather than allowing `runId` to change the destination.
 
 The filename must not:
 
@@ -123,7 +126,7 @@ The artifact must not include:
 
 The nested `snapshot` must remain the existing validated in-memory snapshot. File serialization must not mutate, enrich, or reconstruct it.
 
-## Write safety
+## Implemented write safety
 
 - Validate the manual schedule before conversion, locking, directory creation, temporary-file creation, or final-file creation.
 - Write only after validation passes.
@@ -133,15 +136,16 @@ The nested `snapshot` must remain the existing validated in-memory snapshot. Fil
 - If overwrite support is planned later, require an explicit `--overwrite` flag and dedicated tests in a separate authorized phase.
 - Reject unsafe traversal or ensure normalization proves the final path is a child of the requested output directory.
 - Refuse writes to repository-tracked fixture directories.
-- Perform one atomic write when practical:
+- Perform one atomic no-overwrite write:
   1. write the complete JSON to a temporary filename in the same output directory;
-  2. flush and `fsync` if practical in the later implementation; and
-  3. rename the temporary file to the final deterministic filename.
-- Clean up a temporary file after a failed write when safe and practical.
+  2. flush and `fsync` the temporary file;
+  3. create the final path with a same-directory hard link that fails when the final path exists; and
+  4. remove the temporary file.
+- Clean up the temporary file and any newly linked final path after a failed write when practical.
 
-For the first implementation, file-mode stdout should add:
+File-mode stdout adds:
 
-- `artifactWritten`: `true` only after the final rename succeeds, otherwise `false`;
+- `artifactWritten`: `true` only after the no-overwrite final link succeeds, otherwise `false`;
 - `artifactPath`: relative path only when written;
 - `artifactFilename`: only when the input is valid and the artifact is written; and
 - `outputMode`: `"file"` in explicit file mode.
@@ -152,11 +156,11 @@ Without file-output flags, the current stdout contract remains unchanged and is 
 
 - Generated lock artifacts must not be committed by default.
 - The existing `.gitignore` entry for `tmp` covers `tmp/prospective/`.
-- Future implementation tests must create output only inside temporary test directories.
+- Phase 4R tests create output only inside temporary test directories.
 - Tests must clean up their temporary directories.
-- Future implementation must not add generated local artifacts or their containing output directories to version control.
+- Phase 4R adds no generated local artifact or output directory to version control.
 
-## Testing plan for future implementation
+## Phase 4R behavioral tests
 
 - No flags preserves the exact existing stdout-only behavior and Phase 4P goldens.
 - `--write-file` without `--output-dir` exits 1 and writes nothing.
@@ -168,7 +172,7 @@ Without file-output flags, the current stdout contract remains unchanged and is 
 - The artifact contents equal `lockedSnapshot` exactly.
 - File-mode stdout includes only a relative artifact path.
 - Existing artifact refuses overwrite.
-- Explicit overwrite behavior remains unimplemented unless separately planned and authorized.
+- Explicit overwrite behavior remains unimplemented.
 - Output directory traversal is rejected or normalized safely.
 - No write occurs outside the requested output directory.
 - No write occurs in repository-tracked fixture directories.
@@ -177,6 +181,8 @@ Without file-output flags, the current stdout contract remains unchanged and is 
 - The generated artifact passes `lockedSnapshot` structure checks.
 - The artifact contains no final, completion, starter, or outcome fields.
 - Package tests clean up temporary directories.
+- Both supported flag orders are covered.
+- Argument errors include stable codes for missing paired flags, a missing directory value, and unknown arguments.
 
 ## Safety boundary
 
@@ -200,7 +206,7 @@ Without file-output flags, the current stdout contract remains unchanged and is 
 
 ## Implementation staging
 
-- Phase 4R — implement file-output mode for the `lock-manual-week` CLI with explicit `--write-file` and `--output-dir` flags.
+- Phase 4R — implemented file-output mode for the `lock-manual-week` CLI with explicit `--write-file` and `--output-dir` flags.
 - Phase 4S — add golden and file-output tests for lock artifacts.
 - Phase 4T — plan weekly prospective research construction from a locked manual week.
 - Phase 4U — implement weekly prospective research construction from a locked manual week.
@@ -224,32 +230,32 @@ Without file-output flags, the current stdout contract remains unchanged and is 
 - Valid manual schedule validator logic exits 0 with two games and no validation messages.
 - Valid manual schedule snapshot logic exits 0 and includes the exact two-game `snapshot`.
 - Valid manual week lock logic exits 0 and includes the deterministic two-game `lockedSnapshot`.
+- Explicit file mode writes the deterministic artifact, reports only a relative path, and the parsed artifact equals `summary.lockedSnapshot` exactly.
+- The manual validation artifact and output directory were removed immediately after verification.
 - Historical export release behavior passes in all four review modes through the local loader.
 - Focused historical export rollout review tests pass: 154 tests.
-- Prospective tests pass: 65 tests, including all 10 lock CLI tests.
+- Focused lock CLI tests pass: 23 tests, including the unchanged Phase 4P goldens and Phase 4R file behavior.
+- Prospective tests pass: 78 tests.
 - Backtesting tests pass: 699 tests.
-- Full Vitest and `npm test` pass: 821 tests across 56 files.
+- Full Vitest and `npm test` pass: 834 tests across 56 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
-- Safety searches confirm restricted terms occur only in negative safety statements in the changed documentation.
-- `modelProbability` appears only as null/absent/not available until calibrated or in a statement preserving conceptual separation.
-- The literal `source=live` appears only in this negative safety statement and never in an executable command.
-- No generated output directory, lock artifact, snapshot artifact, export artifact, or review artifact was created or staged.
-- No historical fixture, package manifest, package lock, dependency, command, schema, script, or test was changed.
-- In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are blocked with `EPERM` before script execution. The dry-run, validator, snapshot, lock, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; package scripts remain unchanged.
+- Safety searches find no newly added restricted terminology.
+- No prohibited live-source execution or calibration claim was introduced.
+- No generated output directory, lock artifact, snapshot artifact, export artifact, or review artifact remains.
+- No historical fixture, package manifest, package lock, dependency, or schema changed.
+- In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are blocked with `EPERM` before script execution. The dry-run, validator, snapshot, lock, file-mode lock, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; package scripts remain unchanged.
 
 ## Recommended next safe phase
 
-Phase 4R — implement file-output mode for the `lock-manual-week` CLI.
+Phase 4S — add golden and file-output regression tests for lock artifacts.
 
 State:
 
 - local-only
-- explicit file-output flags only
-- validates first
-- writes exactly one deterministic locked artifact only when valid
-- no file writes without explicit flags
+- fixture-only
+- verifies exact file-output artifact contents and stdout summaries
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

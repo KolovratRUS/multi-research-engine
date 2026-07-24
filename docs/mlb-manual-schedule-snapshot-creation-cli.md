@@ -125,20 +125,19 @@ The snapshot CLI remains conversion-only and its Phase 4M goldens remain separat
 
 ## Phase 4Q manual week lock file-output plan
 
-Phase 4Q plans future file output only for the separate lock CLI.
+Phase 4Q planned future file output only for the separate lock CLI.
 See `docs/mlb-manual-week-lock-file-output-plan.md`.
-The snapshot CLI remains stdout-only and conversion-only; Phase 4Q adds no snapshot file output and changes no snapshot CLI behavior.
+Phase 4R implements that separate lock file mode. The snapshot CLI remains stdout-only and conversion-only, with no snapshot file output or behavior change.
 
 ## Recommended next safe phase
 
-Phase 4R — implement file-output mode for the separate `lock-manual-week` CLI.
+Phase 4S — add golden and file-output regression tests for lock artifacts.
 
 State:
 
 - local-only
-- explicit `--write-file` and `--output-dir` flags only
-- validates first
-- no file writes without explicit flags
+- fixture-only
+- verifies exact lock artifact contents and file-mode stdout summaries
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

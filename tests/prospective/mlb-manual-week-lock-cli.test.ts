@@ -1,12 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validateProspectiveScheduleSnapshot } from '@/prospective/mlb/weekly-test-schemas';
 
 const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-manual-week-lock.ts');
-const tempRoot = join(projectRoot, 'tmp', 'prospective-phase4o-lock-manual-week-cli');
+const tempRoot = join(projectRoot, 'tmp', 'prospective-phase4r-lock-manual-week-cli');
+const expectedArtifactFilename = '2024-07-01__2024-07-07__manual-schedule-fixture-week-1__manual-week-lock-v1.json';
 
 function runLockManualWeek(args: string[]): string {
   return execFileSync(process.execPath, ['--require', 'tsx/cjs', scriptPath, ...args], {
@@ -34,6 +35,10 @@ function expectNoLockedSnapshot(summary: Record<string, unknown>): void {
   expect('lockedSnapshot' in summary).toBe(false);
 }
 
+function expectNoOutputDirectory(outputDir: string): void {
+  expect(existsSync(outputDir)).toBe(false);
+}
+
 function expectForbiddenFieldsAbsent(input: unknown, forbiddenFields: readonly string[]): void {
   if (Array.isArray(input)) {
     for (const value of input) {
@@ -54,7 +59,7 @@ function expectForbiddenFieldsAbsent(input: unknown, forbiddenFields: readonly s
   }
 }
 
-describe('Phase 4O/4P MLB manual week lock CLI', () => {
+describe('Phase 4O/4P/4R MLB manual week lock CLI', () => {
   const validFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-schedule-v1.json');
   const invalidFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-v1.json');
   const validGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-week-lock-cli-output-v1.json');
@@ -201,5 +206,225 @@ describe('Phase 4O/4P MLB manual week lock CLI', () => {
     runLockManualWeek([inputPath]);
 
     expect(readdirSync(tempRoot)).toEqual(beforeFiles);
+  });
+
+  it('requires --output-dir when --write-file is provided and writes no file', () => {
+    const outputDir = join(tempRoot, 'missing-output-dir');
+    const summary = runLockManualWeekExpectingFailure([validFixturePath, '--write-file']);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.error).toBe('MANUAL_WEEK_LOCK_OUTPUT_DIR_REQUIRED');
+    expectNoLockedSnapshot(summary);
+    expectNoOutputDirectory(outputDir);
+  });
+
+  it('requires --write-file when --output-dir is provided and writes no file', () => {
+    const outputDir = join(tempRoot, 'write-flag-required');
+    const summary = runLockManualWeekExpectingFailure([validFixturePath, '--output-dir', outputDir]);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.error).toBe('MANUAL_WEEK_LOCK_WRITE_FILE_REQUIRED');
+    expectNoLockedSnapshot(summary);
+    expectNoOutputDirectory(outputDir);
+  });
+
+  it('requires a directory value after --output-dir and writes no file', () => {
+    const outputDir = join(tempRoot, 'value-required');
+    const summary = runLockManualWeekExpectingFailure([validFixturePath, '--output-dir']);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.error).toBe('MANUAL_WEEK_LOCK_OUTPUT_DIR_VALUE_REQUIRED');
+    expectNoLockedSnapshot(summary);
+    expectNoOutputDirectory(outputDir);
+  });
+
+  it('rejects an unknown flag and writes no file', () => {
+    const outputDir = join(tempRoot, 'unknown-argument');
+    const summary = runLockManualWeekExpectingFailure([validFixturePath, '--unknown']);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.error).toBe('MANUAL_WEEK_LOCK_UNKNOWN_ARGUMENT');
+    expectNoLockedSnapshot(summary);
+    expectNoOutputDirectory(outputDir);
+  });
+
+  it('writes exactly one deterministic artifact with the exact lockedSnapshot', () => {
+    const outputDir = join(tempRoot, 'valid-lock');
+    const summary = JSON.parse(runLockManualWeek([
+      validFixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ])) as Record<string, unknown>;
+    const files = readdirSync(outputDir);
+    const artifactPath = join(outputDir, expectedArtifactFilename);
+    const artifact = JSON.parse(readFileSync(artifactPath, 'utf8')) as Record<string, unknown>;
+
+    expect(summary.ok).toBe(true);
+    expect(summary.outputMode).toBe('file');
+    expect(summary.artifactWritten).toBe(true);
+    expect(summary.artifactFilename).toBe(expectedArtifactFilename);
+    expect(summary.artifactPath).toBe(`tmp/prospective-phase4r-lock-manual-week-cli/valid-lock/${expectedArtifactFilename}`);
+    expect(isAbsolute(summary.artifactPath as string)).toBe(false);
+    expect(files).toEqual([expectedArtifactFilename]);
+    expect(artifact).toEqual(summary.lockedSnapshot);
+    expect(readFileSync(artifactPath, 'utf8').endsWith('\n')).toBe(true);
+  });
+
+  it('accepts --output-dir before --write-file', () => {
+    const outputDir = join(tempRoot, 'reversed-flags');
+    const summary = JSON.parse(runLockManualWeek([
+      validFixturePath,
+      '--output-dir',
+      outputDir,
+      '--write-file',
+    ])) as Record<string, unknown>;
+
+    expect(summary.ok).toBe(true);
+    expect(summary.artifactWritten).toBe(true);
+    expect(readdirSync(outputDir)).toEqual([expectedArtifactFilename]);
+  });
+
+  it('writes no artifact for invalid input with file flags', () => {
+    const outputDir = join(tempRoot, 'invalid-input');
+    const summary = runLockManualWeekExpectingFailure([
+      invalidFixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.validationErrorCount).toBe(5);
+    expectNoLockedSnapshot(summary);
+    expectNoOutputDirectory(outputDir);
+  });
+
+  it('writes no artifact for malformed JSON with file flags', () => {
+    mkdirSync(tempRoot, { recursive: true });
+    const malformedPath = join(tempRoot, 'malformed-file-mode.json');
+    const outputDir = join(tempRoot, 'malformed-output');
+    writeFileSync(malformedPath, 'not-json');
+
+    const summary = runLockManualWeekExpectingFailure([
+      malformedPath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.error).toBe('MANUAL_WEEK_LOCK_READ_OR_PARSE_FAILED');
+    expectNoLockedSnapshot(summary);
+    expectNoOutputDirectory(outputDir);
+  });
+
+  it('refuses overwrite and does not alter an existing artifact', () => {
+    const outputDir = join(tempRoot, 'existing-artifact');
+    const artifactPath = join(outputDir, expectedArtifactFilename);
+    const existingContents = 'existing artifact must remain unchanged\n';
+    mkdirSync(outputDir, { recursive: true });
+    writeFileSync(artifactPath, existingContents);
+
+    const summary = runLockManualWeekExpectingFailure([
+      validFixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.outputMode).toBe('file');
+    expect(summary.artifactWritten).toBe(false);
+    expect(summary.error).toBe('MANUAL_WEEK_LOCK_OUTPUT_PATH_EXISTS');
+    expect(readFileSync(artifactPath, 'utf8')).toBe(existingContents);
+    expect(readdirSync(outputDir)).toEqual([expectedArtifactFilename]);
+  });
+
+  it('rejects unsafe filename traversal before creating the output directory', () => {
+    mkdirSync(tempRoot, { recursive: true });
+    const unsafeInputPath = join(tempRoot, 'unsafe-run-id.json');
+    const outputDir = join(tempRoot, 'unsafe-output');
+    const input = JSON.parse(readFileSync(validFixturePath, 'utf8')) as Record<string, unknown>;
+    input.runId = '../escape';
+    writeFileSync(unsafeInputPath, `${JSON.stringify(input, null, 2)}\n`);
+
+    const summary = runLockManualWeekExpectingFailure([
+      unsafeInputPath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.outputMode).toBe('file');
+    expect(summary.artifactWritten).toBe(false);
+    expect(summary.error).toBe('MANUAL_WEEK_LOCK_OUTPUT_DIR_UNSAFE');
+    expectNoLockedSnapshot(summary);
+    expectNoOutputDirectory(outputDir);
+    expect(existsSync(join(tempRoot, 'escape__manual-week-lock-v1.json'))).toBe(false);
+  });
+
+  it('normalizes a traversing directory string and keeps the final path inside the resolved output directory', () => {
+    const requestedOutputDir = join(tempRoot, 'unused-segment', '..', 'normalized-output');
+    const resolvedOutputDir = resolve(requestedOutputDir);
+    const summary = JSON.parse(runLockManualWeek([
+      validFixturePath,
+      '--write-file',
+      '--output-dir',
+      requestedOutputDir,
+    ])) as Record<string, unknown>;
+    const finalPath = join(resolvedOutputDir, expectedArtifactFilename);
+    const relativeFinalPath = relative(resolvedOutputDir, finalPath);
+
+    expect(summary.ok).toBe(true);
+    expect(relativeFinalPath.startsWith('..')).toBe(false);
+    expect(isAbsolute(relativeFinalPath)).toBe(false);
+    expect(readdirSync(resolvedOutputDir)).toEqual([expectedArtifactFilename]);
+  });
+
+  it('refuses writes to a repository-tracked fixture directory', () => {
+    const fixtureOutputDir = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule');
+    const beforeFiles = [...readdirSync(fixtureOutputDir)].sort();
+    const summary = runLockManualWeekExpectingFailure([
+      validFixturePath,
+      '--write-file',
+      '--output-dir',
+      fixtureOutputDir,
+    ]);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.outputMode).toBe('file');
+    expect(summary.artifactWritten).toBe(false);
+    expect(summary.error).toBe('MANUAL_WEEK_LOCK_OUTPUT_DIR_UNSAFE');
+    expectNoLockedSnapshot(summary);
+    expect([...readdirSync(fixtureOutputDir)].sort()).toEqual(beforeFiles);
+  });
+
+  it('keeps absolute paths and forbidden pre-game fields out of stdout and artifact JSON', () => {
+    const outputDir = join(tempRoot, 'safe-json');
+    const stdout = runLockManualWeek([
+      validFixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+    const summary = JSON.parse(stdout) as { lockedSnapshot: Record<string, unknown> };
+    const artifactText = readFileSync(join(outputDir, expectedArtifactFilename), 'utf8');
+    const artifact = JSON.parse(artifactText) as Record<string, unknown>;
+    const forbiddenFields = [
+      'finalScore',
+      'completedGameState',
+      'actualStartingPitchers',
+      'outcome',
+      'outcomeStatus',
+      'finalStatus',
+    ];
+
+    expect(stdout).not.toContain(projectRoot);
+    expect(artifactText).not.toContain(projectRoot);
+    expect(artifact).toEqual(summary.lockedSnapshot);
+    expectForbiddenFieldsAbsent(artifact, forbiddenFields);
+    expect(readdirSync(outputDir).some((filename) => filename.endsWith('.tmp'))).toBe(false);
   });
 });
