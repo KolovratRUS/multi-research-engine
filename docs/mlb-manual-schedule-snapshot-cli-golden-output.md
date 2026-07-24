@@ -93,15 +93,21 @@ The lock CLI validates and converts one manual schedule input before wrapping th
 Phase 4P locks exact stdout for the separate lock CLI in `docs/mlb-manual-week-lock-cli-golden-output.md`.
 Phase 4M remains responsible only for snapshot CLI stdout; Phase 4P remains responsible only for lock CLI stdout.
 
+## Phase 4Q manual week lock file-output plan
+
+Phase 4Q plans future file output only for the separate lock CLI in `docs/mlb-manual-week-lock-file-output-plan.md`.
+It does not change snapshot creation responsibilities, snapshot CLI output, or the Phase 4M goldens.
+
 ## Recommended next safe phase
 
-Phase 4Q — plan file-output mode for locked weekly artifacts.
+Phase 4R — implement file-output mode for the separate `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- no implementation
-- no file-output artifacts yet
+- local-only
+- explicit `--write-file` and `--output-dir` flags only
+- validates first
+- no file writes without explicit flags
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

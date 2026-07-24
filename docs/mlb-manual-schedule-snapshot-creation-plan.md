@@ -32,6 +32,7 @@ See `docs/mlb-manual-schedule-snapshot-creation-cli.md`.
 - Phase 4M provides exact snapshot CLI golden outputs for the valid and invalid local fixtures.
 - Phase 4O provides the separate stdout-only manual week lock CLI documented in `docs/mlb-manual-week-lock-cli.md`.
 - Phase 4P provides exact stdout golden outputs for that separate lock CLI, documented in `docs/mlb-manual-week-lock-cli-golden-output.md`.
+- Phase 4Q provides the planning-only file-output contract for the separate lock CLI in `docs/mlb-manual-week-lock-file-output-plan.md`.
 - The current converter helper is `buildScheduleSnapshotFromManualScheduleFile`.
 - The validator CLI remains validation-only; the separate snapshot CLI validates before in-memory conversion.
 - The historical fixture inventory remains 29 games (June 17, July 12).
@@ -152,6 +153,8 @@ The Phase 4L snapshot CLI remains conversion-only; Phase 4O validates, converts 
 - Phase 4N — plan the `lock-manual-week` workflow.
 - Phase 4O — implement `lock-manual-week`, stdout-only, after the Phase 4N plan.
 - Phase 4P — add exact lock CLI golden-output tests.
+- Phase 4Q — plan explicit file-output mode for locked weekly artifacts.
+- Phase 4R — implement that separate file-output mode.
 
 ## Success criteria
 
@@ -176,14 +179,17 @@ The Phase 4L snapshot CLI remains conversion-only; Phase 4O validates, converts 
 
 ## Recommended next safe phase
 
-Phase 4Q — plan file-output mode for locked weekly artifacts.
+Phase 4R — implement file-output mode for the separate `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- no implementation
-- no file-output artifacts yet
+- local-only
+- explicit `--write-file` and `--output-dir` flags only
+- validates first
+- no file writes without explicit flags
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
 - no historical fixture data changes
+
+The Phase 4L snapshot CLI remains stdout-only and conversion-only. See `docs/mlb-manual-week-lock-file-output-plan.md` for the separate Phase 4Q lock artifact plan.

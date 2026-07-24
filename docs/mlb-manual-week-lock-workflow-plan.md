@@ -33,6 +33,7 @@ See `docs/mlb-manual-week-lock-cli.md`.
 - Phase 4M provides exact snapshot CLI golden outputs.
 - Phase 4O provides the stdout-only manual week lock CLI and focused behavioral tests.
 - Phase 4P provides exact manual week lock CLI golden outputs for valid and invalid local fixtures.
+- Phase 4Q provides the separate planning-only file-output contract in `docs/mlb-manual-week-lock-file-output-plan.md`.
 - The historical fixture inventory remains 29 games: June 17 and July 12.
 
 ## Implemented command
@@ -187,13 +188,21 @@ The nested snapshot should remain the output of the existing validated in-memory
 
 Exact valid and invalid lock stdout golden outputs are implemented in Phase 4P and documented in `docs/mlb-manual-week-lock-cli-golden-output.md`.
 
+## Phase 4Q file-output plan
+
+Phase 4Q separately plans how a later explicit file-output mode may write the exact valid `lockedSnapshot`.
+See `docs/mlb-manual-week-lock-file-output-plan.md`.
+The Phase 4N lock workflow remains the validation, conversion, determinism, and wrapper contract. Phase 4Q does not change that workflow, the current stdout-only CLI, or the Phase 4P goldens, and it creates no output artifacts.
+
 ## Implementation staging
 
 - Phase 4O — add the `lock-manual-week` CLI, stdout-only, with no file output.
 - Phase 4P — add golden-output tests for the `lock-manual-week` CLI.
 - Phase 4Q — plan file-output mode for locked weekly artifacts.
 - Phase 4R — implement file-output mode only after planning and goldens.
-- Phase 4S — plan weekly prospective research construction from a locked manual week.
+- Phase 4S — add golden and file-output tests for lock artifacts.
+- Phase 4T — plan weekly prospective research construction from a locked manual week.
+- Phase 4U — implement weekly prospective research construction from a locked manual week.
 
 ## Success criteria
 
@@ -227,14 +236,15 @@ Exact valid and invalid lock stdout golden outputs are implemented in Phase 4P a
 
 ## Recommended next safe phase
 
-Phase 4Q — plan file-output mode for locked weekly artifacts.
+Phase 4R — implement file-output mode for the `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- defines where and how locked weekly artifacts would be written later
-- no implementation
-- no file-output artifacts yet
+- local-only
+- explicit `--write-file` and `--output-dir` flags only
+- validates first
+- writes exactly one deterministic locked artifact only when valid
+- no file writes without explicit flags
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

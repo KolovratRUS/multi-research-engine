@@ -19,6 +19,8 @@ modelProbability remains null/absent/not available until calibrated.
 
 Phase 4P locks the exact stdout JSON for the valid and invalid manual week lock CLI cases. The tests compare parsed CLI stdout with committed local golden fixtures, preserve validator message order, and require `lockedSnapshot` only for valid input.
 
+Phase 4Q adds only the future file-output mode plan in `docs/mlb-manual-week-lock-file-output-plan.md`. The current CLI and these exact stdout goldens remain unchanged.
+
 ## Golden output fixtures
 
 - `tests/prospective/fixtures/manual-schedule/valid-manual-week-lock-cli-output-v1.json`
@@ -85,14 +87,15 @@ The valid command exits 0 and includes `lockedSnapshot`. The invalid command exi
 
 ## Recommended next safe phase
 
-Phase 4Q — plan file-output mode for locked weekly artifacts.
+Phase 4R — implement file-output mode for the `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- defines where and how locked weekly artifacts would be written later
-- no implementation
-- no file-output artifacts yet
+- local-only
+- explicit `--write-file` and `--output-dir` flags only
+- validates first
+- writes exactly one deterministic locked artifact only when valid
+- no file writes without explicit flags
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

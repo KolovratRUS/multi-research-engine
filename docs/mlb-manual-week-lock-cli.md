@@ -137,16 +137,22 @@ Golden output fixtures:
 - `tests/prospective/fixtures/manual-schedule/valid-manual-week-lock-cli-output-v1.json`
 - `tests/prospective/fixtures/manual-schedule/invalid-forbidden-fields-week-lock-cli-output-v1.json`
 
+## Phase 4Q file-output plan
+
+Phase 4Q plans a later explicit file-output mode in `docs/mlb-manual-week-lock-file-output-plan.md`.
+The current CLI remains stdout-only: Phase 4Q adds no flags, creates no directories or artifacts, and does not change command behavior or Phase 4P golden output.
+
 ## Recommended next safe phase
 
-Phase 4Q — plan file-output mode for locked weekly artifacts.
+Phase 4R — implement file-output mode for the `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- defines where and how locked weekly artifacts would be written later
-- no implementation
-- no file-output artifacts yet
+- local-only
+- explicit `--write-file` and `--output-dir` flags only
+- validates first
+- writes exactly one deterministic locked artifact only when valid
+- no file writes without explicit flags
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

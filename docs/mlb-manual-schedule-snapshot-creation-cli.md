@@ -123,15 +123,22 @@ Phase 4P adds exact stdout regression fixtures for the separate lock CLI.
 See `docs/mlb-manual-week-lock-cli-golden-output.md`.
 The snapshot CLI remains conversion-only and its Phase 4M goldens remain separate.
 
+## Phase 4Q manual week lock file-output plan
+
+Phase 4Q plans future file output only for the separate lock CLI.
+See `docs/mlb-manual-week-lock-file-output-plan.md`.
+The snapshot CLI remains stdout-only and conversion-only; Phase 4Q adds no snapshot file output and changes no snapshot CLI behavior.
+
 ## Recommended next safe phase
 
-Phase 4Q — plan file-output mode for locked weekly artifacts.
+Phase 4R — implement file-output mode for the separate `lock-manual-week` CLI.
 
 State:
 
-- planning-only
-- no implementation
-- no file-output artifacts yet
+- local-only
+- explicit `--write-file` and `--output-dir` flags only
+- validates first
+- no file writes without explicit flags
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
