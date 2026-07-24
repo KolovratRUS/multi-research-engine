@@ -20,6 +20,7 @@ modelProbability remains null/absent/not available until calibrated.
 Phase 4P locks the exact stdout JSON for the valid and invalid manual week lock CLI cases. The tests compare parsed CLI stdout with committed local golden fixtures, preserve validator message order, and require `lockedSnapshot` only for valid input.
 
 Phase 4Q planned file-output mode in `docs/mlb-manual-week-lock-file-output-plan.md`. Phase 4R implements that mode only when both explicit file flags are present. These no-flag exact stdout goldens remain unchanged.
+Phase 4S adds separate exact file-output artifact and file-mode stdout summary goldens in `docs/mlb-manual-week-lock-file-output-golden-tests.md`. The Phase 4P no-flag fixtures remain byte-for-byte unchanged.
 
 ## Golden output fixtures
 
@@ -76,12 +77,12 @@ The valid command exits 0 and includes `lockedSnapshot`. The invalid command exi
 - Valid validator, snapshot, and lock CLI logic exits 0 through the local loader.
 - Valid lock stdout matches its golden fixture, includes the exact two-game `lockedSnapshot`, and its nested snapshot passes `validateProspectiveScheduleSnapshot`.
 - Invalid forbidden-fields lock logic exits 1 by design, preserves all five validation messages in order, includes no `lockedSnapshot`, and matches its golden fixture.
-- Focused lock CLI tests pass: 23 tests, including both unchanged Phase 4P goldens and Phase 4R file-mode behavior.
+- Focused lock CLI tests pass: 24 tests, including both unchanged Phase 4P goldens, Phase 4R file-mode behavior, and the Phase 4S exact file-mode summary/artifact regression.
 - Historical export review release behavior passes in all four modes through the local loader.
 - Focused historical export rollout review tests pass: 154 tests.
-- Prospective tests pass: 78 tests.
+- Prospective tests pass: 79 tests.
 - Backtesting tests pass: 699 tests.
-- Full Vitest and `npm test` pass: 834 tests across 56 files.
+- Full Vitest and `npm test` pass: 835 tests across 56 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
@@ -90,13 +91,13 @@ The valid command exits 0 and includes `lockedSnapshot`. The invalid command exi
 
 ## Recommended next safe phase
 
-Phase 4S — add golden and file-output regression tests for lock artifacts.
+Phase 4T — plan weekly prospective research construction from a locked manual week.
 
 State:
 
-- local-only
-- fixture-only
-- verifies exact file-output artifact contents and stdout summaries
+- planning-only
+- defines how a locked manual week will feed prospective research construction
+- no implementation
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

@@ -30,6 +30,7 @@ npm run prospective:mlb:lock-manual-week -- tests/prospective/fixtures/manual-sc
 Phase 4O converts a validated manual schedule JSON into a prospective schedule snapshot and then wraps it in a deterministic weekly lock object for later prospective research construction.
 The command validates the parsed input with `validateMLBManualScheduleFile` before conversion, uses `buildScheduleSnapshotFromManualScheduleFile` in memory, and prints the summary and valid-only lock to stdout.
 Phase 4R adds a double-opt-in local file mode. It validates first and writes the exact `lockedSnapshot` only after every validation and destination safety check passes.
+Phase 4S adds exact fixture-only golden coverage for the valid file artifact and file-mode stdout summary without changing Phase 4R behavior or the Phase 4P no-flag goldens.
 
 ## Input
 
@@ -160,12 +161,13 @@ New Phase 4R argument/write error codes:
 - Valid manual week lock logic exits 0 with deterministic `lockId`, `lockedAt`, `snapshotTimestamp`, and a two-game `lockedSnapshot`.
 - Invalid forbidden-fields lock logic exits 1 by design with five validation errors and no `lockedSnapshot`.
 - File mode writes the deterministic artifact only after validation, reports a relative artifact path, and serializes the exact `lockedSnapshot`.
-- Focused Phase 4O/4P/4R lock CLI tests pass: 23 tests, including exact unchanged valid and invalid stdout goldens.
+- Phase 4S exact file-mode stdout and artifact goldens match the deterministic valid fixture output.
+- Focused Phase 4O/4P/4R/4S lock CLI tests pass: 24 tests, including exact unchanged valid and invalid no-flag stdout goldens.
 - Historical export release behavior passes in all four modes through the local loader.
 - Focused historical export rollout review tests pass: 154 tests.
-- Prospective tests pass: 78 tests.
+- Prospective tests pass: 79 tests.
 - Backtesting tests pass: 699 tests.
-- Full Vitest and `npm test` pass: 834 tests across 56 files.
+- Full Vitest and `npm test` pass: 835 tests across 56 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
@@ -189,15 +191,19 @@ Golden output fixtures:
 Phase 4Q planned the explicit file-output mode in `docs/mlb-manual-week-lock-file-output-plan.md`.
 Phase 4R implements it while preserving the Phase 4P no-flag valid and invalid stdout goldens exactly.
 
+## Phase 4S file-output golden tests
+
+Phase 4S locks the exact valid artifact body and file-mode stdout summary in `docs/mlb-manual-week-lock-file-output-golden-tests.md`. Generated artifacts remain local and uncommitted, and the deterministic test directory is removed after every test.
+
 ## Recommended next safe phase
 
-Phase 4S — add golden and file-output regression tests for lock artifacts.
+Phase 4T — plan weekly prospective research construction from a locked manual week.
 
 State:
 
-- local-only
-- fixture-only
-- verifies exact file-output artifact contents and stdout summaries
+- planning-only
+- defines how a locked manual week will feed prospective research construction
+- no implementation
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

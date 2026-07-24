@@ -22,6 +22,7 @@ The workflow defines how a validated manual schedule snapshot becomes a locked w
 This is the next design step after the Phase 4L stdout-only snapshot creation CLI and the Phase 4M snapshot CLI golden outputs.
 Phase 4O implemented the local-only, stdout-only lock command.
 Phase 4R implements the separately planned explicit file mode while preserving the Phase 4P no-flag stdout goldens.
+Phase 4S adds exact fixture-only artifact and file-mode stdout summary regression coverage without changing Phase 4R behavior.
 See `docs/mlb-manual-week-lock-cli.md`.
 
 ## Current foundation
@@ -37,6 +38,7 @@ See `docs/mlb-manual-week-lock-cli.md`.
 - Phase 4P provides exact manual week lock CLI golden outputs for valid and invalid local fixtures.
 - Phase 4Q provides the separate planning-only file-output contract in `docs/mlb-manual-week-lock-file-output-plan.md`.
 - Phase 4R implements that file-output contract with double-opt-in flags and focused behavioral tests.
+- Phase 4S locks the exact valid artifact and file-mode stdout summary in `docs/mlb-manual-week-lock-file-output-golden-tests.md`.
 - The historical fixture inventory remains 29 games: June 17 and July 12.
 
 ## Implemented command
@@ -241,13 +243,13 @@ Phase 4R implements the plan. The Phase 4N lock workflow remains the validation,
 
 ## Recommended next safe phase
 
-Phase 4S — add golden and file-output regression tests for lock artifacts.
+Phase 4T — plan weekly prospective research construction from a locked manual week.
 
 State:
 
-- local-only
-- fixture-only
-- verifies exact file-output artifact contents and stdout summaries
+- planning-only
+- defines how a locked manual week will feed prospective research construction
+- no implementation
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

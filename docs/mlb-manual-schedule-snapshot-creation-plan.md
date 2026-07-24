@@ -34,6 +34,7 @@ See `docs/mlb-manual-schedule-snapshot-creation-cli.md`.
 - Phase 4P provides exact stdout golden outputs for that separate lock CLI, documented in `docs/mlb-manual-week-lock-cli-golden-output.md`.
 - Phase 4Q provides the planning-only file-output contract for the separate lock CLI in `docs/mlb-manual-week-lock-file-output-plan.md`.
 - Phase 4R implements that separate lock CLI file-output contract without changing snapshot CLI behavior.
+- Phase 4S provides exact fixture-only file artifact and file-mode stdout summary regression coverage in `docs/mlb-manual-week-lock-file-output-golden-tests.md`.
 - The current converter helper is `buildScheduleSnapshotFromManualScheduleFile`.
 - The validator CLI remains validation-only; the separate snapshot CLI validates before in-memory conversion.
 - The historical fixture inventory remains 29 games (June 17, July 12).
@@ -157,6 +158,7 @@ The Phase 4L snapshot CLI remains conversion-only; Phase 4O validates, converts 
 - Phase 4Q — plan explicit file-output mode for locked weekly artifacts.
 - Phase 4R — implemented that separate file-output mode while preserving snapshot CLI behavior.
 - Phase 4S — add golden and file-output regression tests for lock artifacts.
+- Phase 4T — plan weekly prospective research construction from a locked manual week.
 
 ## Success criteria
 
@@ -181,16 +183,16 @@ The Phase 4L snapshot CLI remains conversion-only; Phase 4O validates, converts 
 
 ## Recommended next safe phase
 
-Phase 4S — add golden and file-output regression tests for lock artifacts.
+Phase 4T — plan weekly prospective research construction from a locked manual week.
 
 State:
 
-- local-only
-- fixture-only
-- verifies exact lock artifact contents and file-mode stdout summaries
+- planning-only
+- defines how a locked manual week will feed prospective research construction
+- no implementation
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
 - no historical fixture data changes
 
-The Phase 4L snapshot CLI remains stdout-only and conversion-only. See `docs/mlb-manual-week-lock-file-output-plan.md` for the separate Phase 4Q lock artifact plan.
+The Phase 4L snapshot CLI remains stdout-only and conversion-only. Phase 4R behavior remains unchanged, Phase 4P no-flag goldens remain protected, and generated lock artifacts stay local and uncommitted. See `docs/mlb-manual-week-lock-file-output-golden-tests.md` for Phase 4S coverage.

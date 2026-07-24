@@ -199,7 +199,8 @@ The Phase 4O local-only, stdout-only MLB manual week lock CLI documentation is `
 The Phase 4P local-only MLB manual week lock CLI golden-output documentation is `docs/mlb-manual-week-lock-cli-golden-output.md`; it locks exact stdout JSON for static valid and invalid fixtures without adding file output.
 The Phase 4Q planning-only MLB manual week lock file-output documentation is `docs/mlb-manual-week-lock-file-output-plan.md`; it defines a future explicit, local-only artifact-writing contract without implementing file output or creating generated artifacts.
 The Phase 4R local-only MLB manual week lock file-output implementation is documented in `docs/mlb-manual-week-lock-file-output-plan.md`; file writes require both `--write-file` and `--output-dir`, write the exact valid `lockedSnapshot`, and leave the Phase 4P no-flag stdout goldens unchanged.
-Generated lock artifacts are local files and must not be committed. Phase 4S should add dedicated golden and file-output regression coverage for lock artifacts without changing historical fixture data.
+The Phase 4S local-only golden and file-output regression coverage is documented in `docs/mlb-manual-week-lock-file-output-golden-tests.md`; it locks the exact valid artifact body and file-mode stdout summary while preserving the Phase 4R implementation and Phase 4P no-flag goldens.
+Generated lock artifacts are local files and must not be committed. The recommended next safe phase is Phase 4T, planning only, to define how a locked manual week will feed prospective research construction without implementation, live/API/web use, network schedule ingestion, generated run artifacts, or historical fixture changes.
 
 ## Architecture
 

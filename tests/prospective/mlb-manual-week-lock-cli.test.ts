@@ -8,6 +8,7 @@ const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-manual-week-lock.ts');
 const tempRoot = join(projectRoot, 'tmp', 'prospective-phase4r-lock-manual-week-cli');
 const expectedArtifactFilename = '2024-07-01__2024-07-07__manual-schedule-fixture-week-1__manual-week-lock-v1.json';
+const stableGoldenOutputDir = join(tempRoot, 'valid-lock');
 
 function runLockManualWeek(args: string[]): string {
   return execFileSync(process.execPath, ['--require', 'tsx/cjs', scriptPath, ...args], {
@@ -59,11 +60,32 @@ function expectForbiddenFieldsAbsent(input: unknown, forbiddenFields: readonly s
   }
 }
 
-describe('Phase 4O/4P/4R MLB manual week lock CLI', () => {
+function expectNoAbsolutePaths(input: unknown): void {
+  if (typeof input === 'string') {
+    expect(isAbsolute(input)).toBe(false);
+    return;
+  }
+  if (Array.isArray(input)) {
+    for (const value of input) {
+      expectNoAbsolutePaths(value);
+    }
+    return;
+  }
+  if (typeof input !== 'object' || input === null) {
+    return;
+  }
+  for (const value of Object.values(input as Record<string, unknown>)) {
+    expectNoAbsolutePaths(value);
+  }
+}
+
+describe('Phase 4O/4P/4R/4S MLB manual week lock CLI', () => {
   const validFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-schedule-v1.json');
   const invalidFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-v1.json');
   const validGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-week-lock-cli-output-v1.json');
   const invalidGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-week-lock-cli-output-v1.json');
+  const fileArtifactGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-week-lock-file-artifact-v1.json');
+  const fileSummaryGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-week-lock-file-summary-v1.json');
 
   afterEach(() => {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -268,6 +290,56 @@ describe('Phase 4O/4P/4R MLB manual week lock CLI', () => {
     expect(isAbsolute(summary.artifactPath as string)).toBe(false);
     expect(files).toEqual([expectedArtifactFilename]);
     expect(artifact).toEqual(summary.lockedSnapshot);
+    expect(readFileSync(artifactPath, 'utf8').endsWith('\n')).toBe(true);
+  });
+
+  it('matches the exact Phase 4S file-mode stdout and artifact goldens', () => {
+    const summary = JSON.parse(runLockManualWeek([
+      validFixturePath,
+      '--write-file',
+      '--output-dir',
+      stableGoldenOutputDir,
+    ])) as Record<string, unknown>;
+    const summaryGolden = JSON.parse(readFileSync(fileSummaryGoldenPath, 'utf8')) as Record<string, unknown>;
+    const artifactGolden = JSON.parse(readFileSync(fileArtifactGoldenPath, 'utf8')) as Record<string, unknown>;
+    const files = readdirSync(stableGoldenOutputDir);
+    const artifactPath = join(stableGoldenOutputDir, expectedArtifactFilename);
+    const artifact = JSON.parse(readFileSync(artifactPath, 'utf8')) as Record<string, unknown>;
+    const lockedSnapshot = summary.lockedSnapshot as { snapshot: unknown };
+    const outerSummaryFields = [
+      'ok',
+      'gameCount',
+      'validationMessageCount',
+      'validationErrorCount',
+      'validationWarningCount',
+      'outputMode',
+      'artifactWritten',
+      'artifactFilename',
+      'artifactPath',
+      'error',
+      'usage',
+    ];
+    const forbiddenFields = [
+      'finalScore',
+      'completedGameState',
+      'actualStartingPitchers',
+      'outcome',
+      'outcomeStatus',
+      'finalStatus',
+    ];
+
+    expect(summary).toEqual(summaryGolden);
+    expect(artifact).toEqual(artifactGolden);
+    expect(artifact).toEqual(summary.lockedSnapshot);
+    expect(validateProspectiveScheduleSnapshot(lockedSnapshot.snapshot)).toEqual([]);
+    expect(isAbsolute(summary.artifactPath as string)).toBe(false);
+    expect(files).toEqual([expectedArtifactFilename]);
+    for (const field of outerSummaryFields) {
+      expect(field in artifact).toBe(false);
+    }
+    expectNoAbsolutePaths(artifact);
+    expectForbiddenFieldsAbsent(artifact, forbiddenFields);
+    expect(files.some((filename) => filename.endsWith('.tmp'))).toBe(false);
     expect(readFileSync(artifactPath, 'utf8').endsWith('\n')).toBe(true);
   });
 

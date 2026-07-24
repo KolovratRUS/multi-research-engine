@@ -131,13 +131,17 @@ Phase 4Q planned file output only for the separate lock CLI.
 See `docs/mlb-manual-week-lock-file-output-plan.md`.
 Phase 4R implements that separate lock CLI file mode. The validator CLI remains validation-only, the snapshot CLI remains conversion-only, and neither command gains file-output responsibility.
 
+## Phase 4S lock file-output goldens
+
+Phase 4S adds fixture-only exact artifact and file-mode stdout summary regression coverage in `docs/mlb-manual-week-lock-file-output-golden-tests.md`. Phase 4R behavior is unchanged, the Phase 4P no-flag goldens remain protected, and generated file artifacts stay local and uncommitted.
+
 ## Recommended next safe phase
 
-Phase 4S — add golden and file-output regression tests for lock artifacts.
+Phase 4T — plan weekly prospective research construction from a locked manual week.
 State:
-- local-only
-- fixture-only
-- verifies exact lock artifact contents and file-mode stdout summaries
+- planning-only
+- defines how a locked manual week will feed prospective research construction
+- no implementation
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

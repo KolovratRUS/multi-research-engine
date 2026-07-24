@@ -92,18 +92,19 @@ The valid command exits 0. The invalid command exits 1 by design and its JSON st
 - Phase 4O implements the separate lock CLI documented in `docs/mlb-manual-week-lock-cli.md`.
 - Phase 4P goldens lock the separate lock CLI stdout in `docs/mlb-manual-week-lock-cli-golden-output.md`.
 - Phase 4Q planned explicit file output for the lock CLI in `docs/mlb-manual-week-lock-file-output-plan.md`; Phase 4R implements it without changing validator or snapshot responsibilities.
+- Phase 4S locks the exact valid file artifact and file-mode stdout summary in `docs/mlb-manual-week-lock-file-output-golden-tests.md` without changing Phase 4R behavior or the Phase 4P no-flag goldens.
 
 The validator CLI remains validation-only, the snapshot CLI remains conversion-only, and the lock CLI owns deterministic wrapping and its explicit file mode.
 
 ## Recommended next safe phase
 
-Phase 4S — add golden and file-output regression tests for lock artifacts.
+Phase 4T — plan weekly prospective research construction from a locked manual week.
 
 State:
 
-- local-only
-- fixture-only
-- verifies exact lock artifact contents and file-mode stdout summaries
+- planning-only
+- defines how a locked manual week will feed prospective research construction
+- no implementation
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
@@ -116,3 +117,4 @@ Phase 4N defines the future lock contract in `docs/mlb-manual-week-lock-workflow
 Phase 4O implements that contract as the stdout-only CLI in `docs/mlb-manual-week-lock-cli.md`, without exact lock CLI goldens or file output.
 Phase 4P locks that CLI stdout in `docs/mlb-manual-week-lock-cli-golden-output.md`, without changing validator or snapshot CLI responsibilities.
 Phase 4Q planned the explicit lock artifact file-output mode in `docs/mlb-manual-week-lock-file-output-plan.md`; Phase 4R implements it without changing validator or snapshot CLI goldens.
+Phase 4S adds exact file-output regression fixtures while generated artifacts remain local and uncommitted.
