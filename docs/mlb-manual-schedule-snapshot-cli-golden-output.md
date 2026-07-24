@@ -88,16 +88,20 @@ It defined the deterministic lock summary and locked snapshot wrapper before imp
 Phase 4O implements the separate local-only, stdout-only lock CLI documented in `docs/mlb-manual-week-lock-cli.md`.
 The lock CLI validates and converts one manual schedule input before wrapping the snapshot; it does not change the Phase 4M snapshot CLI golden-output contract or add file output.
 
+## Phase 4P manual week lock CLI golden outputs
+
+Phase 4P locks exact stdout for the separate lock CLI in `docs/mlb-manual-week-lock-cli-golden-output.md`.
+Phase 4M remains responsible only for snapshot CLI stdout; Phase 4P remains responsible only for lock CLI stdout.
+
 ## Recommended next safe phase
 
-Phase 4P — add golden output tests for the `lock-manual-week` CLI.
+Phase 4Q — plan file-output mode for locked weekly artifacts.
 
 State:
 
-- local-only
-- fixture-only
-- locks exact stdout JSON for valid and invalid lock CLI cases
-- no file output
+- planning-only
+- no implementation
+- no file-output artifacts yet
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

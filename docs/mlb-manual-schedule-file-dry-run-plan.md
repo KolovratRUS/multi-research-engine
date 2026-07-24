@@ -36,6 +36,7 @@ This is a planning step before any authorized source ingestion.
 - Phase 4M exact snapshot CLI golden-output tests exist: `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`
 - Phase 4N planning-only manual week lock workflow exists: `docs/mlb-manual-week-lock-workflow-plan.md`
 - Phase 4O local-only, stdout-only manual week lock CLI exists: `docs/mlb-manual-week-lock-cli.md`
+- Phase 4P exact manual week lock CLI golden-output tests exist: `docs/mlb-manual-week-lock-cli-golden-output.md`
 - Current local dry-run runId: `mlb-local-dry-run-2024-07-sample`
 - Current historical fixture inventory remains 29 games (2024-06-01 through 2024-07-21, June 17, July 12)
 - No live/API/web authorization exists
@@ -175,6 +176,7 @@ The Phase 4L local-only, stdout-only manual schedule snapshot creation CLI is do
 The Phase 4M exact manual schedule snapshot CLI golden outputs are documented in `docs/mlb-manual-schedule-snapshot-cli-golden-output.md`. They lock local static-fixture stdout only and do not add file output or generated run artifacts.
 The Phase 4N planning-only manual week lock workflow is documented in `docs/mlb-manual-week-lock-workflow-plan.md`. It defines the future local deterministic lock contract without implementing the command, file output, or generated run artifacts.
 The Phase 4O local-only, stdout-only manual week lock CLI is documented in `docs/mlb-manual-week-lock-cli.md`. It validates one local manual schedule path, converts it in memory, and wraps the valid snapshot without implementing live mode, network schedule ingestion, file output, generated run artifacts, or historical fixture changes.
+The Phase 4P exact manual week lock CLI golden outputs are documented in `docs/mlb-manual-week-lock-cli-golden-output.md`. They lock local static-fixture stdout only and do not add file output or generated run artifacts.
 See `docs/mlb-manual-schedule-file-schemas.md`.
 
 ## Implementation staging
@@ -206,12 +208,12 @@ Stage 6 — separate outcome attachment after completion.
 
 ## Recommended next safe phase
 
-Phase 4P — add golden output tests for the `lock-manual-week` CLI.
+Phase 4Q — plan file-output mode for locked weekly artifacts.
 State:
-- local-only
-- fixture-only
-- locks exact stdout JSON for valid and invalid lock CLI cases
-- no file output
+- planning-only
+- defines where and how locked weekly artifacts would be written later
+- no implementation
+- no file-output artifacts yet
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
@@ -224,3 +226,4 @@ See `docs/mlb-manual-schedule-snapshot-creation-cli.md` for the Phase 4L stdout-
 See `docs/mlb-manual-schedule-snapshot-cli-golden-output.md` for the Phase 4M exact snapshot CLI stdout fixtures and tests.
 See `docs/mlb-manual-week-lock-workflow-plan.md` for the Phase 4N planning-only lock workflow.
 See `docs/mlb-manual-week-lock-cli.md` for the Phase 4O stdout-only lock CLI.
+See `docs/mlb-manual-week-lock-cli-golden-output.md` for the Phase 4P exact lock CLI stdout fixtures and tests.

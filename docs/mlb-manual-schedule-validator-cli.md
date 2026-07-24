@@ -119,14 +119,19 @@ Phase 4O implements the separate lock CLI documented in `docs/mlb-manual-week-lo
 The validator CLI remains validation-only, the snapshot CLI remains conversion-only, and the lock CLI validates again before conversion and deterministic wrapping.
 None of these commands writes files.
 
+## Phase 4P manual week lock CLI golden outputs
+
+Phase 4P locks exact stdout for the separate lock CLI.
+See `docs/mlb-manual-week-lock-cli-golden-output.md`.
+The validator CLI, snapshot CLI, and lock CLI retain separate responsibilities.
+
 ## Recommended next safe phase
 
-Phase 4P — add golden output tests for the `lock-manual-week` CLI.
+Phase 4Q — plan file-output mode for locked weekly artifacts.
 State:
-- local-only
-- fixture-only
-- locks exact stdout JSON for valid and invalid lock CLI cases
-- no file output
+- planning-only
+- no implementation
+- no file-output artifacts yet
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

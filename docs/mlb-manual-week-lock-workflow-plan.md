@@ -32,6 +32,7 @@ See `docs/mlb-manual-week-lock-cli.md`.
 - Phase 4L provides the stdout-only snapshot creation CLI.
 - Phase 4M provides exact snapshot CLI golden outputs.
 - Phase 4O provides the stdout-only manual week lock CLI and focused behavioral tests.
+- Phase 4P provides exact manual week lock CLI golden outputs for valid and invalid local fixtures.
 - The historical fixture inventory remains 29 games: June 17 and July 12.
 
 ## Implemented command
@@ -184,7 +185,7 @@ The nested snapshot should remain the output of the existing validated in-memory
 - The nested snapshot passes snapshot validation where appropriate.
 - No output files are written.
 
-Exact valid and invalid lock stdout golden outputs remain Phase 4P scope.
+Exact valid and invalid lock stdout golden outputs are implemented in Phase 4P and documented in `docs/mlb-manual-week-lock-cli-golden-output.md`.
 
 ## Implementation staging
 
@@ -212,27 +213,28 @@ Exact valid and invalid lock stdout golden outputs remain Phase 4P scope.
 - Valid manual schedule snapshot logic exits 0 with the exact two-game in-memory snapshot.
 - Valid manual week lock logic exits 0 with deterministic lock fields and the expected two-game `lockedSnapshot`.
 - Invalid forbidden-fields lock logic exits 1 by design with five validation errors and no `lockedSnapshot`.
-- Focused Phase 4O lock CLI tests pass: 8 tests.
+- Focused Phase 4O/4P lock CLI tests pass: 10 tests, including exact valid and invalid stdout goldens.
 - Historical export release behavior passes in all four modes through the local loader.
 - Focused historical export rollout review tests pass: 154 tests.
-- Prospective tests pass: 63 tests.
+- Prospective tests pass: 65 tests.
 - Backtesting tests pass: 699 tests.
-- Full Vitest and `npm test` pass: 819 tests across 56 files.
+- Full Vitest and `npm test` pass: 821 tests across 56 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
-- In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are intermittently blocked with `EPERM` before script execution. The validator, snapshot, lock, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; the requested package command remains the `tsx` command.
+- The valid and invalid lock stdout objects match the Phase 4P golden fixtures exactly; the valid nested snapshot passes `validateProspectiveScheduleSnapshot`.
+- In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are blocked with `EPERM` before script execution. The inventory, dry-run, validator, snapshot, lock, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; package scripts remain unchanged.
 
 ## Recommended next safe phase
 
-Phase 4P — add golden output tests for the `lock-manual-week` CLI.
+Phase 4Q — plan file-output mode for locked weekly artifacts.
 
 State:
 
-- local-only
-- fixture-only
-- locks exact stdout JSON for valid and invalid lock CLI cases
-- no file output
+- planning-only
+- defines where and how locked weekly artifacts would be written later
+- no implementation
+- no file-output artifacts yet
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

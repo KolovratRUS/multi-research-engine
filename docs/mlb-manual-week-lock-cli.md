@@ -115,27 +115,38 @@ Its `lockVersion` is `"mlb-manual-week-lock-v1"`, its `sourceMode` is `"manual-s
 - Valid manual schedule validator and snapshot logic each exit 0 with two games and no validation messages.
 - Valid manual week lock logic exits 0 with deterministic `lockId`, `lockedAt`, `snapshotTimestamp`, and a two-game `lockedSnapshot`.
 - Invalid forbidden-fields lock logic exits 1 by design with five validation errors and no `lockedSnapshot`.
-- Focused Phase 4O lock CLI tests pass: 8 tests.
+- Focused Phase 4O/4P lock CLI tests pass: 10 tests, including exact valid and invalid stdout goldens.
 - Historical export release behavior passes in all four modes through the local loader.
 - Focused historical export rollout review tests pass: 154 tests.
-- Prospective tests pass: 63 tests.
+- Prospective tests pass: 65 tests.
 - Backtesting tests pass: 699 tests.
-- Full Vitest and `npm test` pass: 819 tests across 56 files.
+- Full Vitest and `npm test` pass: 821 tests across 56 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
-- In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are intermittently blocked with `EPERM` before script execution. The validator, snapshot, lock, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; the requested package command remains the `tsx` command.
+- The valid and invalid lock stdout objects match the Phase 4P golden fixtures exactly; the valid nested snapshot passes `validateProspectiveScheduleSnapshot`.
+- In the managed validation sandbox, direct npm commands whose `tsx` launcher opens a local IPC listener are blocked with `EPERM` before script execution. The inventory, dry-run, validator, snapshot, lock, and historical review entry points pass through the existing local `tsx/cjs` loader pattern without an IPC listener; package scripts remain unchanged.
+
+## Phase 4P golden-output tests
+
+Phase 4P locks the exact parsed stdout JSON for the valid exit 0 case and the invalid expected exit 1 case.
+See `docs/mlb-manual-week-lock-cli-golden-output.md`.
+
+Golden output fixtures:
+
+- `tests/prospective/fixtures/manual-schedule/valid-manual-week-lock-cli-output-v1.json`
+- `tests/prospective/fixtures/manual-schedule/invalid-forbidden-fields-week-lock-cli-output-v1.json`
 
 ## Recommended next safe phase
 
-Phase 4P — add golden output tests for the `lock-manual-week` CLI.
+Phase 4Q — plan file-output mode for locked weekly artifacts.
 
 State:
 
-- local-only
-- fixture-only
-- locks exact stdout JSON for valid and invalid lock CLI cases
-- no file output
+- planning-only
+- defines where and how locked weekly artifacts would be written later
+- no implementation
+- no file-output artifacts yet
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

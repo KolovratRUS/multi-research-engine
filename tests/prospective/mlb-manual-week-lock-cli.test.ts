@@ -54,9 +54,11 @@ function expectForbiddenFieldsAbsent(input: unknown, forbiddenFields: readonly s
   }
 }
 
-describe('Phase 4O MLB manual week lock CLI', () => {
+describe('Phase 4O/4P MLB manual week lock CLI', () => {
   const validFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-schedule-v1.json');
   const invalidFixturePath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-v1.json');
+  const validGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'valid-manual-week-lock-cli-output-v1.json');
+  const invalidGoldenPath = join(projectRoot, 'tests', 'prospective', 'fixtures', 'manual-schedule', 'invalid-forbidden-fields-week-lock-cli-output-v1.json');
 
   afterEach(() => {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -122,6 +124,23 @@ describe('Phase 4O MLB manual week lock CLI', () => {
     expect(first.validationWarningCount).toBe(0);
     expect(first.validationMessages).toEqual([]);
     expect(first).toEqual(second);
+  });
+
+  it('matches the exact golden JSON output for the valid fixture', () => {
+    const summary = JSON.parse(runLockManualWeek([validFixturePath])) as Record<string, unknown>;
+    const golden = JSON.parse(readFileSync(validGoldenPath, 'utf8')) as Record<string, unknown>;
+    const lockedSnapshot = golden.lockedSnapshot as { snapshot: unknown };
+
+    expect(summary).toEqual(golden);
+    expect(validateProspectiveScheduleSnapshot(lockedSnapshot.snapshot)).toEqual([]);
+  });
+
+  it('matches the exact golden JSON output and expected exit 1 for the invalid fixture', () => {
+    const summary = runLockManualWeekExpectingFailure([invalidFixturePath]);
+    const golden = JSON.parse(readFileSync(invalidGoldenPath, 'utf8')) as Record<string, unknown>;
+
+    expect(summary).toEqual(golden);
+    expectNoLockedSnapshot(golden);
   });
 
   it('wraps a valid two-game prospective schedule snapshot with the planned lock fields', () => {

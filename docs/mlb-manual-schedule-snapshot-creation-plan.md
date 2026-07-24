@@ -31,6 +31,7 @@ See `docs/mlb-manual-schedule-snapshot-creation-cli.md`.
 - Phase 4L provides the stdout-only manual schedule snapshot creation CLI.
 - Phase 4M provides exact snapshot CLI golden outputs for the valid and invalid local fixtures.
 - Phase 4O provides the separate stdout-only manual week lock CLI documented in `docs/mlb-manual-week-lock-cli.md`.
+- Phase 4P provides exact stdout golden outputs for that separate lock CLI, documented in `docs/mlb-manual-week-lock-cli-golden-output.md`.
 - The current converter helper is `buildScheduleSnapshotFromManualScheduleFile`.
 - The validator CLI remains validation-only; the separate snapshot CLI validates before in-memory conversion.
 - The historical fixture inventory remains 29 games (June 17, July 12).
@@ -175,14 +176,13 @@ The Phase 4L snapshot CLI remains conversion-only; Phase 4O validates, converts 
 
 ## Recommended next safe phase
 
-Phase 4P — add golden output tests for the `lock-manual-week` CLI.
+Phase 4Q — plan file-output mode for locked weekly artifacts.
 
 State:
 
-- local-only
-- fixture-only
-- locks exact stdout JSON for valid and invalid lock CLI cases
-- no file output
+- planning-only
+- no implementation
+- no file-output artifacts yet
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
