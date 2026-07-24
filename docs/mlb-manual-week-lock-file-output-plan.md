@@ -210,7 +210,7 @@ Without file-output flags, the current stdout contract remains unchanged and is 
 - Phase 4R — implemented file-output mode for the `lock-manual-week` CLI with explicit `--write-file` and `--output-dir` flags.
 - Phase 4S — added golden and file-output tests for lock artifacts.
 - Phase 4T — plan weekly prospective research construction from a locked manual week.
-- Phase 4U — implement weekly prospective research construction from a locked manual week.
+- Phase 4U — implemented weekly prospective research construction from a locked manual week.
 
 ## Success criteria
 
@@ -253,15 +253,19 @@ Without file-output flags, the current stdout contract remains unchanged and is 
 
 Phase 4T is planning-only and defines how the exact validated lock artifact will feed future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change the Phase 4R file mode, Phase 4P no-flag goldens, or Phase 4S file-output goldens.
 
+## Phase 4U stdout-only construction
+
+Phase 4U consumes the exact `lockedSnapshot` file artifact produced by this explicit file mode. It validates the artifact locally and emits a deterministic stdout package with one pre-game `pending-research` `FULL` stub per locked game. Construction does not accept a raw manual schedule, adds no file output, and leaves the Phase 4P and Phase 4S lock goldens unchanged.
+
 ## Recommended next safe phase
 
-Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+Phase 4V — add exact construction stdout golden tests.
 
 State:
 
 - local-only
-- consumes and validates one locked artifact JSON
-- deterministic stdout research skeleton only
+- fixture-only
+- exact stdout package regression tests
 - no file output
 - no live/API/web
 - no network schedule ingestion

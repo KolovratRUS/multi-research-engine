@@ -93,15 +93,19 @@ The valid command exits 0 and includes `lockedSnapshot`. The invalid command exi
 
 Phase 4T is planning-only and defines how the exact validated lock artifact will feed future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R behavior, the Phase 4P no-flag goldens, or the Phase 4S file-output goldens.
 
+## Phase 4U stdout-only construction
+
+Phase 4U implements the separate locked-artifact consumer. It validates the exact `lockedSnapshot` artifact and emits a deterministic stdout package with one pre-game `pending-research` `FULL` stub per game. It accepts no raw manual schedule and adds no file output. These Phase 4P no-flag goldens and the Phase 4S file-output goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+Phase 4V — add exact construction stdout golden tests.
 
 State:
 
 - local-only
-- consumes and validates one locked artifact JSON
-- deterministic stdout research skeleton only
+- fixture-only
+- exact stdout package regression tests
 - no file output
 - no live/API/web
 - no network schedule ingestion

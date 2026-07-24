@@ -2,9 +2,10 @@
 
 ## Status
 
-Phase 4T planning-only documentation.
-No implementation.
-No new command.
+Phase 4T planning record.
+Phase 4U stdout-only implementation complete.
+Local locked-artifact validation and deterministic construction implemented.
+No file-output mode.
 No generated prospective run artifact committed.
 No live source used.
 No real MLB API request made.
@@ -16,7 +17,7 @@ No model-quality or predictive-performance claim.
 
 ## Purpose
 
-Phase 4T plans how a locked manual week will feed future weekly prospective research construction.
+Phase 4T planned how a locked manual week would feed weekly prospective research construction.
 It follows:
 
 - Phase 4N, the manual week lock workflow plan;
@@ -26,11 +27,11 @@ It follows:
 - Phase 4R, the lock file-output implementation; and
 - Phase 4S, the lock file-output goldens.
 
-This phase defines the handoff from the existing lock artifact to a future deterministic research skeleton. It does not implement construction, add commands, generate artifacts, or change lock behavior. The Phase 4P no-flag goldens and Phase 4S file-output goldens remain unchanged.
+Phase 4U implements that handoff from the existing lock artifact to a deterministic stdout research skeleton. It adds no construction file output, generates no persistent artifacts, and does not change lock behavior. The Phase 4P no-flag goldens and Phase 4S file-output goldens remain unchanged.
 
 ## Input contract
 
-Future construction should consume one locked week artifact, not a raw manual schedule file. The artifact is the exact `lockedSnapshot` JSON written by the current explicit lock file mode.
+Construction consumes one locked week artifact, not a raw manual schedule file. The artifact is the exact `lockedSnapshot` JSON written by the current explicit lock file mode.
 
 Required top-level input fields:
 
@@ -50,7 +51,7 @@ Input requirements:
 - `lockVersion` must equal `"mlb-manual-week-lock-v1"`.
 - `sourceMode` must equal `"manual-schedule"` in the first implementation.
 - `validationMessages` must be empty before construction begins.
-- `warnings` may contain entries. Construction should preserve them and may surface them in the future package.
+- `warnings` may contain entries. Construction preserves them as `constructionWarnings`.
 - `snapshot` must pass `validateProspectiveScheduleSnapshot`.
 - `snapshot.games` must be non-empty.
 - The lock metadata must be preserved exactly rather than recomputed from the nested snapshot or file path.
@@ -68,11 +69,11 @@ The locked artifact must not contain these fields anywhere:
 - absolute paths
 - environment metadata
 
-The first implementation should recursively reject these fields before constructing any output. It should not attempt to sanitize an invalid artifact and continue.
+Phase 4U recursively rejects these fields before constructing any output. It does not attempt to sanitize an invalid artifact and continue.
 
-## Construction output contract
+## Implemented construction output contract
 
-Future output should be one weekly prospective research package with these proposed fields:
+Phase 4U emits one weekly prospective research package with these fields:
 
 - `constructionVersion`
 - `lockVersion`
@@ -92,7 +93,7 @@ Contract rules:
 
 - `inputSnapshot` should preserve the validated nested schedule snapshot without enrichment or mutation.
 - `lockVersion`, `runId`, `lockId`, `sourceMode`, `weekStart`, `weekEnd`, and `lockedAt` should be copied exactly from the locked input.
-- `constructedAt` should be deterministic in test mode, preferably derived from `lockedAt` or supplied through an explicit CLI parameter in a later phase.
+- `constructedAt` is deterministic and equals `lockedAt`.
 - Deterministic fixtures must not read the current clock.
 - The output must preserve input game order.
 - The output must contain exactly one game research stub for each input snapshot game.
@@ -101,9 +102,9 @@ Contract rules:
 
 The initial construction package is a structural handoff. It does not evaluate input quality, make a prediction, or claim performance.
 
-## Game construction plan
+## Game construction
 
-For each locked snapshot game, future construction should create one prospective game research stub.
+For each locked snapshot game, construction creates one prospective game research stub.
 
 Preserve these schedule fields exactly:
 
@@ -117,12 +118,11 @@ Preserve these schedule fields exactly:
 
 Add only construction metadata needed for a deterministic skeleton:
 
-- `constructionStatus`, initially a value such as `"pending-research"`
-- `researchMode`, initially a value such as `"pregame"`
-- `researchScope`, `"FULL"` or `"TEAM_ONLY"` only where appropriate
-- a `dataQuality` placeholder only if the existing conceptual contract supports it
-- `constructionMessages`, initially `[]`
-- `warnings`, initially `[]` unless preserved input warnings apply
+- `constructionStatus`: `"pending-research"`
+- `researchMode`: `"pregame"`
+- `researchScope`: `"FULL"`
+- `constructionMessages`: `[]`
+- `warnings`: `[]`
 
 The skeleton must not attach:
 
@@ -135,11 +135,11 @@ The skeleton must not attach:
 
 The construction step must not read Phase 1G-b pitcher observations for pitcher availability. `TEAM_ONLY` must exclude pitcher evidence. `FULL` and `TEAM_ONLY` must remain distinct construction scopes rather than aliases.
 
-## Research construction phases
+## Implemented scope
 
-The first implementation should only build deterministic skeleton packages from valid locked artifacts.
+Phase 4U only builds deterministic skeleton packages from valid locked artifacts.
 
-It should:
+It:
 
 - validate the complete locked input before mapping;
 - copy locked metadata exactly;
@@ -149,7 +149,7 @@ It should:
 - expose deterministic messages and warnings; and
 - print the package to stdout.
 
-It should not:
+It does not:
 
 - evaluate research quality;
 - populate sport-specific evidence;
@@ -160,28 +160,44 @@ It should not:
 
 Later phases may fill research modules step-by-step while retaining the same local, pre-game-only, leakage-safe boundary.
 
-## Proposed future command
-
-Future command only; do not implement in Phase 4T:
+## Implemented command
 
 ```bash
 npm run prospective:mlb:construct-week -- <locked-week-artifact-json>
 ```
 
-Optional future flags only; do not implement in Phase 4T:
+Phase 4U accepts exactly one positional local JSON path. It reads and parses that file locally, validates the exact locked artifact, and prints a deterministic summary with `package` only for valid input. It has no flags and no file-output path. `--write-file`, `--output-dir`, and construction-mode flags remain unimplemented.
 
-```text
---mode FULL
---mode TEAM_ONLY
---output-dir <directory>
---write-file
-```
+Implementation files:
 
-The first implementation should be stdout-only. File output should be planned only after exact stdout construction goldens exist. Phase 4T does not add the command, flags, script, or package entry.
+- `src/prospective/mlb/weekly-research-construction.ts`
+- `scripts/mlb-weekly-prospective-research-construct.ts`
+- `tests/prospective/mlb-weekly-prospective-research-construction.test.ts`
 
-## Validation rules for future implementation
+The stdout summary contains `ok`, available lock metadata, `constructedAt`, `lockedAt`, game and validation counts, stable validation messages, and `package` only when valid.
 
-The future command should:
+Stable CLI argument/read codes:
+
+- `WEEKLY_RESEARCH_CONSTRUCTION_PATH_REQUIRED`
+- `WEEKLY_RESEARCH_CONSTRUCTION_SINGLE_PATH_ONLY`
+- `WEEKLY_RESEARCH_CONSTRUCTION_UNKNOWN_ARGUMENT`
+- `WEEKLY_RESEARCH_CONSTRUCTION_READ_OR_PARSE_FAILED`
+
+Stable locked-artifact validation codes:
+
+- `WEEKLY_RESEARCH_LOCK_VERSION_INVALID`
+- `WEEKLY_RESEARCH_SOURCE_MODE_UNSUPPORTED`
+- `WEEKLY_RESEARCH_VALIDATION_MESSAGES_PRESENT`
+- `WEEKLY_RESEARCH_SNAPSHOT_INVALID`
+- `WEEKLY_RESEARCH_SNAPSHOT_EMPTY`
+- `WEEKLY_RESEARCH_FORBIDDEN_FIELD`
+- `WEEKLY_RESEARCH_ABSOLUTE_PATH`
+- `WEEKLY_RESEARCH_ENVIRONMENT_METADATA`
+- `WEEKLY_RESEARCH_INPUT_NOT_OBJECT`
+
+## Implemented validation rules
+
+The command rejects or enforces the following:
 
 - reject a missing path;
 - reject multiple paths;
@@ -203,9 +219,9 @@ The future command should:
 
 Validation must complete before any package is constructed. An invalid input should exit 1 and emit no construction package.
 
-## Testing plan
+## Phase 4U tests
 
-Future implementation coverage should prove:
+The focused construction suite proves:
 
 - a valid locked artifact fixture produces a deterministic stdout package;
 - invalid or malformed locked artifacts exit 1 with no package;
@@ -219,12 +235,12 @@ Future implementation coverage should prove:
 - output game count equals input game count;
 - input game order is preserved;
 - no current timestamps appear;
-- the first implementation has no file output;
+- Phase 4U has no file output;
 - no generated artifacts are committed;
 - `TEAM_ONLY` construction excludes pitcher evidence when research evidence is introduced; and
 - `FULL` and `TEAM_ONLY` remain distinct.
 
-The first golden phase should compare exact parsed stdout for one static valid locked artifact and representative invalid locked artifacts. File-output behavior should not be added to that phase.
+Phase 4V should add exact stdout package regression fixtures for a static valid locked artifact and representative invalid locked artifacts. File-output behavior must not be added to Phase 4V.
 
 ## Safety boundary
 
@@ -254,7 +270,7 @@ Historical behavior remains outside this construction step and unchanged:
 
 ## Implementation staging
 
-- Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+- Phase 4U — implemented stdout-only weekly prospective research construction from a locked manual week.
 - Phase 4V — add exact construction stdout golden tests.
 - Phase 4W — plan file-output mode for constructed weekly research packages.
 - Phase 4X — implement file-output mode for constructed weekly research packages.
@@ -274,39 +290,38 @@ Historical behavior remains outside this construction step and unchanged:
 
 ## Validation
 
-- Preflight confirmed the repository at `/Users/samkassirov/multi-research-engine`, on clean `main`, with `HEAD`, local `main`, and the locally recorded `origin/main` all at `97f5ebd187b65ea987882db99a242ef0fb12b198`.
+- Preflight confirmed `/Users/samkassirov/multi-research-engine`, clean `main`, and `HEAD`, local `main`, and the locally recorded `origin/main` at `ceb0f69b474b943be111035d122ac04068826c8d`.
 - The fixture inventory guard passes with 29 games from 2024-06-01 through 2024-07-21: June 17 and July 12.
-- The prospective dry-run check passes with zero validation errors or warnings.
-- The valid manual schedule validator, snapshot, no-flag lock, and file-mode lock behaviors pass through the existing local `tsx/cjs` loader.
-- The Phase 4P valid and invalid no-flag stdout outputs remain exact matches for their committed goldens.
-- The Phase 4S artifact body and stable-directory file-mode stdout remain exact matches for their committed goldens.
-- The manual file-mode lock artifact and output directory were removed after validation.
-- Historical export review behavior passes in all four release-check modes through the local loader.
+- The prospective dry-run check passes with zero validation errors and warnings.
+- The valid manual validator, snapshot, no-flag lock, explicit file-mode lock, and Phase 4U construction behaviors pass. The valid construction result contains two games and zero validation messages.
+- The Phase 4P valid and invalid no-flag lock stdout remains byte-identical to its committed goldens.
+- The Phase 4S file artifact and stable-directory stdout summary remain byte-identical to their committed goldens.
+- Historical export release behavior passes in all four modes through the local `tsx/cjs` loader.
 - The focused historical rollout review suite passes: 154 tests.
-- The focused lock CLI suite passes: 24 tests.
-- The prospective suite passes: 79 tests.
+- The focused Phase 4U construction suite passes: 31 tests.
+- The prospective suite passes: 110 tests.
 - The backtesting suite passes: 699 tests.
-- Full Vitest and `npm test` pass: 835 tests across 56 files.
+- Full Vitest and `npm test` pass: 866 tests across 57 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
-- In the managed validation sandbox, direct npm commands whose `tsx` launcher attempted to open a local IPC listener were blocked with `EPERM` before script execution. The affected dry-run, validator, snapshot, no-flag lock, file-mode lock, and historical review entry points passed through the existing local `tsx/cjs` loader pattern; package scripts remain unchanged.
+- Direct npm entry points using the `tsx` launcher were intermittently blocked by managed-sandbox IPC `EPERM` before script execution. Inventory and dry-run ran directly; affected validator, snapshot, lock, construction, rollout, release-check, and file-mode entry points passed through the existing local `tsx/cjs` loader pattern and equivalent component commands.
+- The generated manual lock artifact and directory were removed after validation. No construction file or other generated prospective artifact was created.
 - No live source, MLB API request, web lookup, or network schedule ingestion was used.
-- No historical fixture game record, package manifest, package lock, dependency, implementation, test, or golden fixture changed.
+- No historical fixture game record, package lock, dependency, or protected lock golden changed.
 
 ## Recommended next safe phase
 
-Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+Phase 4V — add exact construction stdout golden tests.
 
 State:
 
 - local-only
-- stdout-only
-- consumes locked artifact JSON
-- validates first
-- outputs a deterministic weekly prospective research skeleton
+- local-only
+- fixture-only
+- exact stdout package regression tests
 - no file output
-- no live, API, or web source
+- no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
 - no historical fixture data changes

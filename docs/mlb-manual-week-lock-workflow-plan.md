@@ -209,7 +209,7 @@ Phase 4R implements the plan. The Phase 4N lock workflow remains the validation,
 - Phase 4R — implemented explicit double-opt-in file-output mode after planning and goldens.
 - Phase 4S — add golden and file-output tests for lock artifacts.
 - Phase 4T — plan weekly prospective research construction from a locked manual week.
-- Phase 4U — implement weekly prospective research construction from a locked manual week.
+- Phase 4U — implemented weekly prospective research construction from a locked manual week.
 
 ## Success criteria
 
@@ -245,15 +245,19 @@ Phase 4R implements the plan. The Phase 4N lock workflow remains the validation,
 
 Phase 4T is planning-only and defines how the exact validated `lockedSnapshot` artifact will feed future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R/4S lock behavior or goldens.
 
+## Phase 4U stdout-only construction
+
+Phase 4U implements the handoff through `npm run prospective:mlb:construct-week -- <locked-week-artifact-json>`. The input is the exact locked `lockedSnapshot` artifact, not a raw manual schedule. The command validates before emitting a deterministic stdout package with one pre-game `pending-research` `FULL` stub per locked game. It adds no file output or network ingestion, and the Phase 4P no-flag and Phase 4S file-output lock goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+Phase 4V — add exact construction stdout golden tests.
 
 State:
 
 - local-only
-- consumes and validates one locked artifact JSON
-- deterministic stdout research skeleton only
+- fixture-only
+- exact stdout package regression tests
 - no file output
 - no live/API/web
 - no network schedule ingestion

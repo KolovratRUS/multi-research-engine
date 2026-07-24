@@ -215,15 +215,19 @@ Stage 6 — separate outcome attachment after completion.
 
 Phase 4T is the planning-only handoff from the exact validated locked week artifact to future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R/4S lock behavior or goldens.
 
+## Phase 4U stdout-only construction
+
+Phase 4U implements that handoff. `prospective:mlb:construct-week` consumes the exact locked `lockedSnapshot` artifact rather than the raw manual schedule, validates it, and emits a deterministic stdout package with one pre-game `pending-research` `FULL` stub per locked game. It has no file output, live/API/web access, or network schedule ingestion. The Phase 4P no-flag and Phase 4S file-output lock goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+Phase 4V — add exact construction stdout golden tests.
 
 State:
 
 - local-only
-- consumes and validates one locked artifact JSON
-- deterministic stdout research skeleton only
+- fixture-only
+- exact stdout package regression tests
 - no file output
 - no live/API/web
 - no network schedule ingestion

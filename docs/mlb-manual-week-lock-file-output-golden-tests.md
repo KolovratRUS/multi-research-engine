@@ -73,15 +73,19 @@ The regression test invokes the same script through the existing local `tsx/cjs`
 
 Phase 4T is planning-only and defines how the exact validated lock artifact will feed future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R behavior, the Phase 4P no-flag goldens, or the Phase 4S file-output goldens.
 
+## Phase 4U stdout-only construction
+
+Phase 4U uses this exact valid lock artifact fixture as its local construction input. It validates the `lockedSnapshot` and emits a deterministic stdout package with one pre-game `pending-research` `FULL` stub per locked game. It adds no construction file output and does not change the Phase 4P no-flag or Phase 4S file-output lock goldens.
+
 ## Recommended next safe phase
 
-Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+Phase 4V — add exact construction stdout golden tests.
 
 State:
 
 - local-only
-- consumes and validates one locked artifact JSON
-- deterministic stdout research skeleton only
+- fixture-only
+- exact stdout package regression tests
 - no file output
 - no live/API/web
 - no network schedule ingestion

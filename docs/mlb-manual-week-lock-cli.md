@@ -199,15 +199,19 @@ Phase 4S locks the exact valid artifact body and file-mode stdout summary in `do
 
 Phase 4T is planning-only and defines how the exact validated `lockedSnapshot` artifact will feed future deterministic pre-game research skeleton construction. See `docs/mlb-weekly-prospective-research-construction-plan.md`. It does not implement construction or change Phase 4R/4S lock behavior or goldens.
 
+## Phase 4U stdout-only construction
+
+Phase 4U adds the separate `prospective:mlb:construct-week` consumer for the exact file-mode `lockedSnapshot` artifact. It does not accept the raw manual schedule. It validates the artifact and emits a deterministic stdout package with one pre-game `pending-research` `FULL` stub per locked game. Construction has no file-output flags, and this lock CLI plus the Phase 4P/4S goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4U — implement stdout-only weekly prospective research construction from a locked manual week.
+Phase 4V — add exact construction stdout golden tests.
 
 State:
 
 - local-only
-- consumes and validates one locked artifact JSON
-- deterministic stdout research skeleton only
+- fixture-only
+- exact stdout package regression tests
 - no file output
 - no live/API/web
 - no network schedule ingestion

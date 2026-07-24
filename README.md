@@ -200,8 +200,10 @@ The Phase 4P local-only MLB manual week lock CLI golden-output documentation is 
 The Phase 4Q planning-only MLB manual week lock file-output documentation is `docs/mlb-manual-week-lock-file-output-plan.md`; it defines a future explicit, local-only artifact-writing contract without implementing file output or creating generated artifacts.
 The Phase 4R local-only MLB manual week lock file-output implementation is documented in `docs/mlb-manual-week-lock-file-output-plan.md`; file writes require both `--write-file` and `--output-dir`, write the exact valid `lockedSnapshot`, and leave the Phase 4P no-flag stdout goldens unchanged.
 The Phase 4S local-only golden and file-output regression coverage is documented in `docs/mlb-manual-week-lock-file-output-golden-tests.md`; it locks the exact valid artifact body and file-mode stdout summary while preserving the Phase 4R implementation and Phase 4P no-flag goldens.
-The Phase 4T planning-only locked-week-to-prospective-construction handoff is documented in `docs/mlb-weekly-prospective-research-construction-plan.md`; it does not implement construction or change Phase 4R/4S lock behavior or goldens.
-Generated lock artifacts are local files and must not be committed. The recommended next safe phase is Phase 4U: implement local, stdout-only deterministic research skeleton construction from a validated locked artifact, with no file output, no live/API/web use, no network schedule ingestion, no generated run artifacts committed, and no historical fixture changes.
+The Phase 4T planning-only locked-week-to-prospective-construction handoff is documented in `docs/mlb-weekly-prospective-research-construction-plan.md`.
+Phase 4U implements that handoff with `npm run prospective:mlb:construct-week -- <locked-week-artifact-json>`. The command consumes the exact `lockedSnapshot` artifact rather than a raw manual schedule, validates it locally, and emits a deterministic stdout package containing one pre-game `pending-research` `FULL` stub per locked game.
+Generated lock artifacts are local files and must not be committed.
+Phase 4U adds no construction file output and leaves the Phase 4P no-flag lock goldens and Phase 4S file-output lock goldens unchanged. The recommended next safe phase is Phase 4V: add local-only, fixture-only exact construction stdout package regression tests, with no file output, no live/API/web use, no network schedule ingestion, no generated run artifacts committed, and no historical fixture changes.
 
 ## Architecture
 
