@@ -75,7 +75,7 @@ Phase 4T is planning-only and defines how the exact validated lock artifact will
 
 ## Phase 4U stdout-only construction
 
-Phase 4U uses this exact valid lock artifact fixture as its local construction input. It validates the `lockedSnapshot` and emits a deterministic stdout package with one pre-game `pending-research` `FULL` stub per locked game. It adds no construction file output and does not change the Phase 4P no-flag or Phase 4S file-output lock goldens.
+Phase 4U used this exact valid lock artifact fixture as its local construction input. Its no-flag form validates the `lockedSnapshot` and emits a deterministic stdout package with one pre-game `pending-research` `FULL` stub per locked game. Phase 4U itself added no construction file output and did not change the Phase 4P no-flag or Phase 4S file-output lock goldens.
 
 ## Phase 4V construction stdout golden tests
 
@@ -83,21 +83,19 @@ Phase 4V adds separate exact construction stdout fixtures for the valid package 
 
 ## Phase 4W construction file-output plan
 
-Phase 4W is planning-only and is documented in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`. It plans a separate future construction file mode without implementing it. Phase 4U remains unchanged, the Phase 4V construction stdout goldens remain unchanged, and these Phase 4S file-output lock goldens plus the Phase 4P no-flag lock goldens remain unchanged.
+Phase 4W planned a separate construction file mode in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`. Phase 4X implements it with double opt-in, an exact inner-package artifact, summary-only file-mode stdout, and overwrite refusal. Phase 4U no-flag behavior, the Phase 4V construction stdout goldens, these Phase 4S file-output lock goldens, and the Phase 4P no-flag lock goldens remain unchanged.
 
 ## Recommended next safe phase
 
-Phase 4X — implement file-output mode for constructed weekly research packages.
+Phase 4Y — add exact construction file-output golden tests.
 
 State:
 
 - local-only
-- implementation
-- double opt-in `--write-file` + `--output-dir`
-- no-flag stdout goldens unchanged
-- writes the exact construction package artifact only
-- validates before writing
-- refuses overwrite
+- fixture-only
+- exact file artifact golden
+- exact file-mode stdout summary golden
+- no new file-output behavior
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

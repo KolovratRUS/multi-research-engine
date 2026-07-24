@@ -52,6 +52,12 @@ const goldenPaths = [
   invalidEmptyGamesGoldenPath,
 ] as const;
 const tempRoot = join(projectRoot, 'tmp', 'prospective-phase4u-weekly-research-construction');
+const artifactFilename = [
+  '2024-07-01',
+  '2024-07-07',
+  'manual-schedule-fixture-week-1',
+  'weekly-research-construction-v1.json',
+].join('__');
 
 function readValidArtifact(): Record<string, unknown> {
   return JSON.parse(readFileSync(fixturePath, 'utf8')) as Record<string, unknown>;
@@ -148,7 +154,7 @@ function expectNoAbsolutePathStrings(input: unknown): void {
   }
 }
 
-describe('Phase 4U/4V MLB weekly prospective research construction', () => {
+describe('Phase 4U/4V/4X MLB weekly prospective research construction', () => {
   afterEach(() => {
     rmSync(tempRoot, { recursive: true, force: true });
     expect(existsSync(tempRoot)).toBe(false);
@@ -276,10 +282,10 @@ describe('Phase 4U/4V MLB weekly prospective research construction', () => {
     expectNoPackage(summary);
   });
 
-  it('exits 1 for missing, multiple, and unknown CLI arguments', () => {
+  it('exits 1 for missing, multiple, and unknown no-flag CLI arguments', () => {
     const missing = runConstructWeekExpectingFailure([]).summary;
     const multiple = runConstructWeekExpectingFailure([fixturePath, fixturePath]).summary;
-    const unknown = runConstructWeekExpectingFailure([fixturePath, '--write-file']).summary;
+    const unknown = runConstructWeekExpectingFailure([fixturePath, '--unknown']).summary;
 
     expect(missing.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_PATH_REQUIRED');
     expect(multiple.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_SINGLE_PATH_ONLY');
@@ -287,6 +293,316 @@ describe('Phase 4U/4V MLB weekly prospective research construction', () => {
     expectNoPackage(missing);
     expectNoPackage(multiple);
     expectNoPackage(unknown);
+  });
+
+  it('writes one deterministic exact package artifact in explicit file mode', () => {
+    const outputDir = join(tempRoot, 'valid-file-mode');
+    const noFlagSummary = JSON.parse(runConstructWeek([fixturePath])) as {
+      package: Record<string, unknown>;
+    };
+    const stdout = runConstructWeek([
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+    const artifactPath = join(outputDir, artifactFilename);
+    const artifactText = readFileSync(artifactPath, 'utf8');
+    const artifact = JSON.parse(artifactText) as Record<string, unknown>;
+
+    expect(readdirSync(outputDir)).toEqual([artifactFilename]);
+    expect(summary.ok).toBe(true);
+    expect(summary.runId).toBe('manual-schedule-fixture-week-1');
+    expect(summary.lockId).toBe('manual-week-lock:manual-schedule-fixture-week-1');
+    expect(summary.sourceMode).toBe('manual-schedule');
+    expect(summary.weekStart).toBe('2024-07-01');
+    expect(summary.weekEnd).toBe('2024-07-07');
+    expect(summary.constructedAt).toBe('2024-07-01T00:00:00Z');
+    expect(summary.lockedAt).toBe('2024-07-01T00:00:00Z');
+    expect(summary.gameCount).toBe(2);
+    expect(summary.validationMessageCount).toBe(0);
+    expect(summary.validationErrorCount).toBe(0);
+    expect(summary.validationWarningCount).toBe(0);
+    expect(summary.validationMessages).toEqual([]);
+    expect(summary.outputMode).toBe('file');
+    expect(summary.artifactWritten).toBe(true);
+    expect(summary.artifactFilename).toBe(artifactFilename);
+    expect(summary.artifactPath).toBe(
+      `tmp/prospective-phase4u-weekly-research-construction/valid-file-mode/${artifactFilename}`,
+    );
+    expect('package' in summary).toBe(false);
+    expect(artifact).toEqual(noFlagSummary.package);
+    expect(artifactText).toBe(`${JSON.stringify(artifact, null, 2)}\n`);
+    expect(artifactText.endsWith('\n')).toBe(true);
+  });
+
+  it('accepts file flags before the positional input path', () => {
+    const outputDir = join(tempRoot, 'flags-first');
+    const summary = JSON.parse(runConstructWeek([
+      '--write-file',
+      '--output-dir',
+      outputDir,
+      fixturePath,
+    ])) as Record<string, unknown>;
+
+    expect(summary.ok).toBe(true);
+    expect(summary.outputMode).toBe('file');
+    expect(summary.artifactWritten).toBe(true);
+    expect(readdirSync(outputDir)).toEqual([artifactFilename]);
+  });
+
+  it('keeps outer summary fields out of the file artifact', () => {
+    const outputDir = join(tempRoot, 'inner-package-only');
+    const summary = JSON.parse(runConstructWeek([
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ])) as Record<string, unknown>;
+    const artifact = JSON.parse(
+      readFileSync(join(outputDir, artifactFilename), 'utf8'),
+    ) as Record<string, unknown>;
+
+    for (const field of [
+      'ok',
+      'validationMessageCount',
+      'validationErrorCount',
+      'validationWarningCount',
+      'artifactWritten',
+      'artifactPath',
+      'artifactFilename',
+      'usage',
+      'error',
+    ]) {
+      expect(field in artifact).toBe(false);
+    }
+    expect('package' in summary).toBe(false);
+  });
+
+  it('keeps absolute paths out of file-mode stdout and artifact JSON', () => {
+    const outputDir = join(tempRoot, 'path-free');
+    const stdout = runConstructWeek([
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+    const artifact = JSON.parse(
+      readFileSync(join(outputDir, artifactFilename), 'utf8'),
+    ) as Record<string, unknown>;
+
+    expect(stdout).not.toContain(projectRoot);
+    expectNoAbsolutePathStrings(summary);
+    expectNoAbsolutePathStrings(artifact);
+  });
+
+  it('refuses overwrite and leaves the existing artifact unchanged', () => {
+    const outputDir = join(tempRoot, 'no-overwrite');
+    const args = [fixturePath, '--write-file', '--output-dir', outputDir];
+    runConstructWeek(args);
+    const artifactPath = join(outputDir, artifactFilename);
+    const before = readFileSync(artifactPath, 'utf8');
+
+    const { summary } = runConstructWeekExpectingFailure(args);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.outputMode).toBe('file');
+    expect(summary.artifactWritten).toBe(false);
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_OUTPUT_PATH_EXISTS');
+    expectNoPackage(summary);
+    expect(readFileSync(artifactPath, 'utf8')).toBe(before);
+    expect(readdirSync(outputDir)).toEqual([artifactFilename]);
+  });
+
+  it('requires --output-dir with --write-file and writes nothing', () => {
+    const { summary } = runConstructWeekExpectingFailure([
+      fixturePath,
+      '--write-file',
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_OUTPUT_DIR_REQUIRED');
+    expectNoPackage(summary);
+    expect(existsSync(tempRoot)).toBe(false);
+  });
+
+  it('requires --write-file with --output-dir and writes nothing', () => {
+    const outputDir = join(tempRoot, 'missing-write-file');
+    const { summary } = runConstructWeekExpectingFailure([
+      fixturePath,
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_WRITE_FILE_REQUIRED');
+    expectNoPackage(summary);
+    expect(existsSync(outputDir)).toBe(false);
+  });
+
+  it('requires a value after --output-dir and writes nothing', () => {
+    const { summary } = runConstructWeekExpectingFailure([
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_OUTPUT_DIR_VALUE_REQUIRED');
+    expectNoPackage(summary);
+    expect(existsSync(tempRoot)).toBe(false);
+  });
+
+  it('rejects an unknown file-mode flag and writes nothing', () => {
+    const outputDir = join(tempRoot, 'unknown-flag');
+    const { summary } = runConstructWeekExpectingFailure([
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+      '--unknown',
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_UNKNOWN_ARGUMENT');
+    expectNoPackage(summary);
+    expect(existsSync(outputDir)).toBe(false);
+  });
+
+  it('rejects multiple input paths with file flags and writes nothing', () => {
+    const outputDir = join(tempRoot, 'multiple-inputs');
+    const { summary } = runConstructWeekExpectingFailure([
+      fixturePath,
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_SINGLE_PATH_ONLY');
+    expectNoPackage(summary);
+    expect(existsSync(outputDir)).toBe(false);
+  });
+
+  it('rejects a missing input path with file flags and writes nothing', () => {
+    const outputDir = join(tempRoot, 'missing-input');
+    const { summary } = runConstructWeekExpectingFailure([
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_PATH_REQUIRED');
+    expectNoPackage(summary);
+    expect(existsSync(outputDir)).toBe(false);
+  });
+
+  it('writes nothing for an invalid locked artifact in file mode', () => {
+    const inputPath = writeTemporaryArtifact('file-mode-invalid.json', (artifact) => {
+      artifact.lockVersion = 'wrong-lock-version';
+    });
+    const outputDir = join(tempRoot, 'invalid-output');
+    const { summary } = runConstructWeekExpectingFailure([
+      inputPath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expectValidationCode(summary, 'WEEKLY_RESEARCH_LOCK_VERSION_INVALID');
+    expectNoPackage(summary);
+    expect(existsSync(outputDir)).toBe(false);
+  });
+
+  it('writes nothing for malformed JSON in file mode', () => {
+    mkdirSync(tempRoot, { recursive: true });
+    const malformedPath = join(tempRoot, 'file-mode-malformed.json');
+    const outputDir = join(tempRoot, 'malformed-output');
+    writeFileSync(malformedPath, 'not-json');
+
+    const { summary } = runConstructWeekExpectingFailure([
+      malformedPath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_READ_OR_PARSE_FAILED');
+    expectNoPackage(summary);
+    expect(existsSync(outputDir)).toBe(false);
+  });
+
+  it('rejects unsafe filename components before creating the output directory', () => {
+    const inputPath = writeTemporaryArtifact('unsafe-run-id.json', (artifact) => {
+      artifact.runId = '../unsafe-run-id';
+      const snapshot = artifact.snapshot as Record<string, unknown>;
+      snapshot.runId = '../unsafe-run-id';
+    });
+    const outputDir = join(tempRoot, 'unsafe-filename-output');
+    const { summary } = runConstructWeekExpectingFailure([
+      inputPath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_OUTPUT_DIR_UNSAFE');
+    expect(summary.artifactWritten).toBe(false);
+    expectNoPackage(summary);
+    expect(existsSync(outputDir)).toBe(false);
+  });
+
+  it.each([
+    'src',
+    'scripts',
+    'tests',
+    'docs',
+    'prisma',
+  ])('refuses the repository %s directory as an output root', (directory) => {
+    const outputDir = join(projectRoot, directory, 'phase4x-unsafe-output');
+    const { summary } = runConstructWeekExpectingFailure([
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_OUTPUT_DIR_UNSAFE');
+    expect(summary.artifactWritten).toBe(false);
+    expectNoPackage(summary);
+    expect(existsSync(outputDir)).toBe(false);
+  });
+
+  it('refuses a normalized output traversal into a protected directory', () => {
+    const outputDir = join(tempRoot, '..', '..', 'tests', 'phase4x-unsafe-output');
+    const { summary } = runConstructWeekExpectingFailure([
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+      outputDir,
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_OUTPUT_DIR_UNSAFE');
+    expect(summary.artifactWritten).toBe(false);
+    expectNoPackage(summary);
+    expect(existsSync(join(projectRoot, 'tests', 'phase4x-unsafe-output'))).toBe(false);
+  });
+
+  it('reports a stable write failure and leaves no temporary artifact', () => {
+    mkdirSync(tempRoot, { recursive: true });
+    const outputPath = join(tempRoot, 'output-is-a-file');
+    writeFileSync(outputPath, 'not-a-directory');
+
+    const { summary } = runConstructWeekExpectingFailure([
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+      outputPath,
+    ]);
+
+    expect(summary.error).toBe('WEEKLY_RESEARCH_CONSTRUCTION_WRITE_FAILED');
+    expect(summary.artifactWritten).toBe(false);
+    expectNoPackage(summary);
+    expect(readFileSync(outputPath, 'utf8')).toBe('not-a-directory');
+    expect(readdirSync(tempRoot)).toEqual(['output-is-a-file']);
   });
 
   it('rejects the wrong lock version', () => {

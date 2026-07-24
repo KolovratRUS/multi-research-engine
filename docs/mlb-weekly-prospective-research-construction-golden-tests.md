@@ -4,8 +4,8 @@
 
 Local-only.
 Fixture-only.
-Exact stdout package regression tests.
-No file output.
+Exact no-flag stdout package regression tests.
+Phase 4X file-output behavior implemented separately without changing these goldens.
 No generated prospective run artifact committed.
 No live source used.
 No real MLB API request made.
@@ -17,7 +17,9 @@ No model-quality or predictive-performance claim.
 
 ## Purpose
 
-Phase 4V locks the exact stdout package shape for the Phase 4U construction command. It adds byte-for-byte regression coverage for one valid locked artifact and three representative invalid locked artifacts without changing construction behavior or adding file output.
+Phase 4V locks the exact no-flag stdout package shape for the Phase 4U construction command. It adds byte-for-byte regression coverage for one valid locked artifact and three representative invalid locked artifacts.
+
+Phase 4X adds construction file-output behavior without modifying these fixtures. Its behavioral tests compare the generated artifact with the existing valid no-flag `package`; exact file artifact and file-mode stdout summary goldens are deferred to Phase 4Y.
 
 ## Golden fixtures
 
@@ -52,41 +54,39 @@ npm run prospective:mlb:construct-week -- tests/prospective/fixtures/manual-sche
 
 ## Validation
 
-- Preflight confirmed `/Users/samkassirov/multi-research-engine`, clean `main`, and `HEAD`, local `main`, and the locally recorded `origin/main` at `285c4a253c75ecb8a12e3dec2bb967e433efdb84`.
+- Phase 4X preflight confirmed `/Users/samkassirov/multi-research-engine`, clean `main`, and `HEAD`, local `main`, and the locally recorded `origin/main` at `56511017aafa55ecf973b973d721fa558a31afcc`.
 - The fixture inventory guard remains 29 games from 2024-06-01 through 2024-07-21: June 17 and July 12.
-- The prospective dry-run, valid manual validator, snapshot, no-flag lock, explicit file-mode lock, and construction behaviors pass through the existing local `tsx/cjs` loader.
+- The prospective dry-run, valid manual validator, snapshot, no-flag lock, no-flag construction, and construction file-mode behaviors pass.
 - Phase 4P valid and invalid no-flag lock stdout remains byte-identical to its committed goldens.
 - The Phase 4S artifact body and stable-directory file-mode stdout remain byte-identical to their committed goldens.
-- The valid construction stdout is deterministic across repeated runs and byte-identical to the new valid golden.
+- The valid no-flag construction stdout remains deterministic and byte-identical to its Phase 4V golden.
 - The three deterministic invalid construction cases exit 1, match their goldens byte-for-byte, contain their required validation codes, and contain no package or absolute input path.
-- The focused Phase 4V construction suite passes: 36 tests.
+- The focused Phase 4U/4V/4X construction suite passes: 57 tests.
 - Historical export review behavior passes in all four modes through the local loader, and the focused rollout review suite passes: 154 tests.
-- The prospective suite passes: 115 tests.
+- The prospective suite passes: 136 tests.
 - The backtesting suite passes: 699 tests.
-- Full Vitest and `npm test` pass: 871 tests across 57 files.
+- Full Vitest and `npm test` pass: 892 tests across 57 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
-- During final validation, direct npm entry points that invoke the `tsx` launcher were blocked by managed-sandbox IPC `EPERM` before script execution. The equivalent entry points passed through the existing local `tsx/cjs` loader; package scripts remain unchanged.
-- Generated manual lock and invalid-input temp files and directories were removed after validation. No construction file, export, review, or other generated prospective artifact remains.
+- During final validation, affected direct npm entry points that invoke the `tsx` launcher were blocked by managed-sandbox IPC `EPERM` before script execution. The equivalent entry points passed through the existing local `tsx/cjs` loader; package scripts remain unchanged.
+- Generated construction and invalid-input temporary files and directories were removed after validation. No construction, lock, export, review, or other generated prospective artifact remains.
 - No live source, MLB API request, web lookup, or network schedule ingestion was used.
-- No historical fixture game record, package lock, dependency, protected lock golden, or Phase 4U implementation file changed.
+- No historical fixture game record, package lock, dependency, protected construction/lock golden, or Phase 4U package-construction module changed.
 
 ## Recommended next safe phase
 
-Phase 4W is the planning-only future file-output design in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`. It does not implement construction file output. Phase 4U remains unchanged, these Phase 4V construction stdout goldens remain unchanged, and the Phase 4P no-flag and Phase 4S file-output lock goldens remain unchanged.
+Phase 4W planned the file-output design in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`; Phase 4X implements it. Phase 4U no-flag behavior, these Phase 4V construction stdout goldens, and the Phase 4P/4S lock goldens remain unchanged.
 
-Phase 4X — implement file-output mode for constructed weekly research packages.
+Phase 4Y — add exact construction file-output golden tests.
 
 State:
 
 - local-only
-- implementation
-- double opt-in `--write-file` + `--output-dir`
-- no-flag stdout goldens unchanged
-- writes the exact construction package artifact only
-- validates before writing
-- refuses overwrite
+- fixture-only
+- exact file artifact golden
+- exact file-mode stdout summary golden
+- no new file-output behavior
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed

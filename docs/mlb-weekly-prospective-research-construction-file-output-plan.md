@@ -2,9 +2,9 @@
 
 ## Status
 
-Phase 4W planning-only record.
-No implementation.
-No construction file output yet.
+Phase 4W planning record.
+Phase 4X implementation complete.
+Explicit construction file-output mode implemented.
 No generated prospective run artifact committed.
 No live source used.
 No real MLB API request made.
@@ -16,15 +16,15 @@ No model-quality or predictive-performance claim.
 
 ## Purpose
 
-Phase 4W plans explicit file-output mode for the existing Phase 4U construction command.
+Phase 4W planned explicit file-output mode for the existing Phase 4U construction command.
 It follows:
 
 - Phase 4U, which implemented stdout-only construction from an exact locked week artifact; and
 - Phase 4V, which added exact valid and invalid construction stdout goldens.
 
-This phase does not implement file output or alter current stdout behavior. The Phase 4U implementation remains unchanged, the Phase 4V construction stdout goldens remain unchanged, and the Phase 4P no-flag and Phase 4S file-output lock goldens remain unchanged.
+Phase 4X implements that plan without altering the existing no-flag stdout contract. The Phase 4V construction stdout goldens, Phase 4P no-flag lock goldens, and Phase 4S file-output lock goldens remain unchanged.
 
-## Future command
+## Implemented command
 
 The existing command remains:
 
@@ -32,13 +32,13 @@ The existing command remains:
 npm run prospective:mlb:construct-week -- <locked-week-artifact-json>
 ```
 
-A future explicit file-output mode should be:
+The explicit file-output mode is:
 
 ```bash
 npm run prospective:mlb:construct-week -- <locked-week-artifact-json> --write-file --output-dir <directory>
 ```
 
-Both `--write-file` and `--output-dir` must be required together. File output is double opt-in.
+Both `--write-file` and `--output-dir` are required together. File output is double opt-in. The flags may precede or follow the single positional input path.
 
 Argument behavior:
 
@@ -76,7 +76,7 @@ The filename must be based only on validated package metadata. It must not depen
 
 ## Artifact body
 
-The file artifact should be the exact inner construction package, not the outer CLI summary.
+The file artifact is the exact inner construction package, not the outer CLI summary.
 
 Required artifact fields:
 
@@ -119,11 +119,11 @@ The artifact must exclude:
 - `price`
 - `modelProbability` unless it is calibrated and explicitly introduced in a separate phase
 
-The artifact should use the same deterministic pretty-JSON serialization and trailing newline convention as the lock artifact. Serialization must not mutate, enrich, or reconstruct the validated package.
+The artifact uses deterministic pretty-JSON serialization with a trailing newline. Serialization does not mutate, enrich, or reconstruct the validated package.
 
 ## File-mode stdout
 
-In file-output mode, stdout should remain a summary and should not duplicate the full package after that package is written.
+In file-output mode, stdout remains a summary and does not duplicate the full package after that package is written.
 
 Recommended stdout fields:
 
@@ -172,7 +172,7 @@ No-flag stdout remains a separate protected contract: it continues to include th
 
 No write should occur in or beneath tracked areas such as `src/`, `tests/`, or committed fixture directories.
 
-## Future error codes
+## Implemented error codes
 
 - `WEEKLY_RESEARCH_CONSTRUCTION_OUTPUT_DIR_REQUIRED`
 - `WEEKLY_RESEARCH_CONSTRUCTION_WRITE_FILE_REQUIRED`
@@ -183,7 +183,7 @@ No write should occur in or beneath tracked areas such as `src/`, `tests/`, or c
 
 The existing `WEEKLY_RESEARCH_CONSTRUCTION_UNKNOWN_ARGUMENT`, missing-path, single-path, read/parse, and locked-artifact validation codes remain applicable. Error output must remain deterministic and contain no stack trace or absolute path.
 
-## Testing plan
+## Phase 4X behavioral coverage
 
 - No-flag valid stdout remains byte-identical to the Phase 4V valid golden.
 - No-flag invalid stdout remains byte-identical to all Phase 4V invalid goldens.
@@ -238,7 +238,7 @@ Historical behavior remains outside this construction step and unchanged:
 
 - Phase 4U no-flag stdout behavior remains unchanged.
 - Phase 4V stdout goldens remain unchanged.
-- Future file mode writes only the exact construction package.
+- File mode writes only the exact construction package.
 - File-output behavior is double opt-in.
 - Invalid input never writes.
 - The output path is deterministic, relative in stdout, and ignored.
@@ -249,40 +249,38 @@ Historical behavior remains outside this construction step and unchanged:
 
 ## Validation
 
-- Preflight confirmed `/Users/samkassirov/multi-research-engine`, clean `main`, and `HEAD`, local `main`, and the locally recorded `origin/main` at `0f47f7bdc9343873d6f5259303ad44cdd28cda1b`.
+- Preflight confirmed `/Users/samkassirov/multi-research-engine`, clean `main`, and `HEAD`, local `main`, and the locally recorded `origin/main` at `56511017aafa55ecf973b973d721fa558a31afcc`.
 - The fixture inventory guard passes with 29 games from 2024-06-01 through 2024-07-21: June 17 and July 12.
 - The prospective dry-run check passes with zero validation errors and warnings.
-- The valid manual validator, snapshot, no-flag lock, and Phase 4U construction behaviors pass through the existing local `tsx/cjs` loader. The valid construction result contains two games and zero validation messages.
+- The valid manual validator, snapshot, no-flag lock, no-flag construction, and explicit construction file-mode behaviors pass. The constructed package contains two games and zero validation messages.
+- The file-mode artifact has the deterministic planned filename, equals the exact no-flag `package`, is pretty JSON with a trailing newline, and has no absolute path. File-mode stdout is summary-only and reports a relative `artifactPath`.
 - Pre-edit construction and lock regression validation passes: 60 tests. This covers the exact Phase 4V valid and invalid construction stdout goldens, Phase 4P no-flag lock goldens, and Phase 4S file-output lock goldens.
-- The focused Phase 4U/4V construction suite passes after the documentation changes: 36 tests.
-- Historical export release behavior passes in all four modes through the local loader, including passing threshold checks.
-- The focused historical rollout review suite passes: 154 tests.
-- The prospective suite passes: 115 tests.
+- The focused Phase 4U/4V/4X construction suite passes: 57 tests.
+- Historical export release behavior passes in all four modes through the local loader, including passing threshold checks. The focused rollout review suite passes: 154 tests.
+- The prospective suite passes: 136 tests.
 - The backtesting suite passes: 699 tests.
-- Full Vitest and `npm test` pass: 871 tests across 57 files.
+- Full Vitest and `npm test` pass: 892 tests across 57 files.
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
-- Direct npm entry points for the validator, snapshot, lock, construction, historical release-check, and historical rollout commands were blocked by managed-sandbox `tsx` launcher IPC `EPERM` before script execution. Equivalent script behavior and rollout components passed through the existing local `tsx/cjs` loader pattern; package scripts remain unchanged.
-- Safety searches find restricted terms only in the planned negative artifact exclusions. `modelProbability` appears only as absent or unavailable until calibrated, and `source=live` appears only as a prohibition.
-- Protected-file diff and hash checks confirm that Phase 4U implementation files, all Phase 4V construction stdout goldens, Phase 4P no-flag lock goldens, Phase 4S file-output lock goldens, historical fixture data, `package.json`, and `package-lock.json` remain unchanged.
-- Test cleanup succeeded. No generated lock, construction, prospective, export, review, cache, or temporary artifact remains.
+- Direct npm entry points for the validator, construction file mode, and historical rollout were blocked by managed-sandbox `tsx` launcher IPC `EPERM` before script execution. Equivalent validator, snapshot, lock, construction, and historical release behavior passed through the existing local `tsx/cjs` loader pattern; package scripts remain unchanged.
+- Added-line safety searches find no newly introduced restricted terminology. Added `modelProbability` and `source=live` mentions are limited to this validation record’s absence/prohibition statement; full changed-file hits remain pre-existing negative safety language, deliberate invalid field names, absence assertions, or existing project context.
+- Protected hashes confirm that all Phase 4V construction stdout goldens, Phase 4P no-flag lock goldens, Phase 4S file-output lock goldens, historical fixture data, `package.json`, and `package-lock.json` remain unchanged.
+- Test and manual cleanup succeeded. No generated lock, construction, prospective, export, review, cache, or temporary artifact remains.
 - No live source, MLB API request, web lookup, or network schedule ingestion was used.
-- Phase 4W changes documentation only. No dependency was added, and no construction file-output flag or implementation was introduced.
+- No dependency, historical fixture record, construction package semantic, or lock behavior changed.
 
 ## Recommended next safe phase
 
-Phase 4X — implement file-output mode for constructed weekly research packages.
+Phase 4Y — add exact construction file-output golden tests.
 
 State:
 
 - local-only
-- implementation
-- double opt-in `--write-file` + `--output-dir`
-- no-flag stdout goldens unchanged
-- writes the exact construction package artifact only
-- validates before writing
-- refuses overwrite
+- fixture-only
+- exact file artifact golden
+- exact file-mode stdout summary golden
+- no new file-output behavior
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
