@@ -45,13 +45,31 @@ const invalidEmptyGamesGoldenPath = join(
   fixtureRoot,
   'invalid-weekly-prospective-research-construction-empty-games-output-v1.json',
 );
+const fileArtifactGoldenPath = join(
+  fixtureRoot,
+  'valid-weekly-prospective-research-construction-file-artifact-v1.json',
+);
+const fileSummaryGoldenPath = join(
+  fixtureRoot,
+  'valid-weekly-prospective-research-construction-file-summary-v1.json',
+);
 const goldenPaths = [
   validGoldenPath,
   invalidLockVersionGoldenPath,
   invalidForbiddenFieldGoldenPath,
   invalidEmptyGamesGoldenPath,
+  fileArtifactGoldenPath,
+  fileSummaryGoldenPath,
 ] as const;
 const tempRoot = join(projectRoot, 'tmp', 'prospective-phase4u-weekly-research-construction');
+const stableFileOutputDir = join(
+  projectRoot,
+  'tmp',
+  'prospective',
+  'mlb',
+  'weekly-research-packages',
+);
+const stableFileOutputDirArgument = 'tmp/prospective/mlb/weekly-research-packages';
 const artifactFilename = [
   '2024-07-01',
   '2024-07-07',
@@ -154,10 +172,12 @@ function expectNoAbsolutePathStrings(input: unknown): void {
   }
 }
 
-describe('Phase 4U/4V/4X MLB weekly prospective research construction', () => {
+describe('Phase 4U/4V/4X/4Y MLB weekly prospective research construction', () => {
   afterEach(() => {
     rmSync(tempRoot, { recursive: true, force: true });
+    rmSync(stableFileOutputDir, { recursive: true, force: true });
     expect(existsSync(tempRoot)).toBe(false);
+    expect(existsSync(stableFileOutputDir)).toBe(false);
   });
 
   it('constructs one deterministic pending pre-game FULL stub per locked game', () => {
@@ -335,6 +355,56 @@ describe('Phase 4U/4V/4X MLB weekly prospective research construction', () => {
     expect(artifact).toEqual(noFlagSummary.package);
     expect(artifactText).toBe(`${JSON.stringify(artifact, null, 2)}\n`);
     expect(artifactText.endsWith('\n')).toBe(true);
+  });
+
+  it('matches the exact Phase 4Y file-mode stdout and artifact goldens byte-for-byte', () => {
+    const stdout = runConstructWeek([
+      fixturePath,
+      '--write-file',
+      '--output-dir',
+      stableFileOutputDirArgument,
+    ]);
+    const summaryGoldenText = readGolden(fileSummaryGoldenPath);
+    const artifactGoldenText = readGolden(fileArtifactGoldenPath);
+    const artifactPath = join(stableFileOutputDir, artifactFilename);
+    const artifactText = readFileSync(artifactPath, 'utf8');
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+    const artifact = JSON.parse(artifactText) as Record<string, unknown>;
+    const noFlagGolden = JSON.parse(readGolden(validGoldenPath)) as {
+      package: Record<string, unknown>;
+    };
+
+    expect(stdout).toBe(summaryGoldenText);
+    expect(artifactText).toBe(artifactGoldenText);
+    expect(readdirSync(stableFileOutputDir)).toEqual([artifactFilename]);
+    expect(summary.artifactFilename).toBe(artifactFilename);
+    expect(summary.artifactPath).toBe(
+      `${stableFileOutputDirArgument}/${artifactFilename}`,
+    );
+    expect('package' in summary).toBe(false);
+    expect(artifact).toEqual(noFlagGolden.package);
+
+    for (const field of [
+      'ok',
+      'validationMessageCount',
+      'validationErrorCount',
+      'validationWarningCount',
+      'validationMessages',
+      'outputMode',
+      'artifactWritten',
+      'artifactFilename',
+      'artifactPath',
+      'package',
+      'usage',
+      'error',
+    ]) {
+      expect(field in artifact).toBe(false);
+    }
+
+    expect(stdout).not.toContain(projectRoot);
+    expect(artifactText).not.toContain(projectRoot);
+    expectNoAbsolutePathStrings(summary);
+    expectNoAbsolutePathStrings(artifact);
   });
 
   it('accepts file flags before the positional input path', () => {

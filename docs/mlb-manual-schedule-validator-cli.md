@@ -153,16 +153,17 @@ Phase 4W planned construction file output in `docs/mlb-weekly-prospective-resear
 
 ## Recommended next safe phase
 
-Phase 4Y — add exact construction file-output golden tests.
+Phase 4Y adds exact static construction file artifact and file-mode stdout summary goldens without changing Phase 4X file output, Phase 4V no-flag construction stdout goldens, or Phase 4P/4S lock goldens. Generated `tmp` artifacts remain ignored, uncommitted, and cleaned.
+
+Phase 4Z — plan first real research module handoff.
 
 State:
 
-- local-only
-- fixture-only
-- exact file artifact golden
-- exact file-mode stdout summary golden
-- no new file-output behavior
+- planning-only
+- no implementation
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
 - no historical fixture data changes
+- no `modelProbability` yet
+- identify module inputs and outputs only

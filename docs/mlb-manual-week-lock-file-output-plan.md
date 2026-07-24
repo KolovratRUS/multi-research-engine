@@ -267,18 +267,19 @@ Phase 4W applied this lock file-mode precedent to the construction file-output d
 
 ## Recommended next safe phase
 
-Phase 4Y — add exact construction file-output golden tests.
+Phase 4Y adds exact static construction file artifact and file-mode stdout summary goldens without changing Phase 4X construction file output, Phase 4V no-flag construction stdout goldens, or Phase 4P/4S lock goldens. Generated `tmp` artifacts remain ignored, uncommitted, and cleaned.
+
+Phase 4Z — plan first real research module handoff.
 
 State:
 
-- local-only
-- fixture-only
-- exact file artifact golden
-- exact file-mode stdout summary golden
-- no new file-output behavior
+- planning-only
+- no implementation
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
 - no historical fixture data changes
+- no `modelProbability` yet
+- identify module inputs and outputs only
 
 Phase 4S regression details are documented in `docs/mlb-manual-week-lock-file-output-golden-tests.md`. Generated file artifacts remain local and uncommitted.

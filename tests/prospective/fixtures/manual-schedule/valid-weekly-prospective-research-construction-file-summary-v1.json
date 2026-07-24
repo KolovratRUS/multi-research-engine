@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "runId": "manual-schedule-fixture-week-1",
+  "lockId": "manual-week-lock:manual-schedule-fixture-week-1",
+  "sourceMode": "manual-schedule",
+  "weekStart": "2024-07-01",
+  "weekEnd": "2024-07-07",
+  "constructedAt": "2024-07-01T00:00:00Z",
+  "lockedAt": "2024-07-01T00:00:00Z",
+  "gameCount": 2,
+  "validationMessageCount": 0,
+  "validationErrorCount": 0,
+  "validationWarningCount": 0,
+  "validationMessages": [],
+  "outputMode": "file",
+  "artifactWritten": true,
+  "artifactFilename": "2024-07-01__2024-07-07__manual-schedule-fixture-week-1__weekly-research-construction-v1.json",
+  "artifactPath": "tmp/prospective/mlb/weekly-research-packages/2024-07-01__2024-07-07__manual-schedule-fixture-week-1__weekly-research-construction-v1.json"
+}

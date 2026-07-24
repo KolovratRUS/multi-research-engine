@@ -4,6 +4,7 @@
 
 Phase 4W planning record.
 Phase 4X implementation complete.
+Phase 4Y exact file-output golden tests complete.
 Explicit construction file-output mode implemented.
 No generated prospective run artifact committed.
 No live source used.
@@ -23,6 +24,8 @@ It follows:
 - Phase 4V, which added exact valid and invalid construction stdout goldens.
 
 Phase 4X implements that plan without altering the existing no-flag stdout contract. The Phase 4V construction stdout goldens, Phase 4P no-flag lock goldens, and Phase 4S file-output lock goldens remain unchanged.
+
+Phase 4Y adds exact static artifact and file-mode stdout summary goldens without changing this implementation. Generated `tmp` artifacts remain ignored, uncommitted, and cleaned.
 
 ## Implemented command
 
@@ -249,13 +252,13 @@ Historical behavior remains outside this construction step and unchanged:
 
 ## Validation
 
-- Preflight confirmed `/Users/samkassirov/multi-research-engine`, clean `main`, and `HEAD`, local `main`, and the locally recorded `origin/main` at `56511017aafa55ecf973b973d721fa558a31afcc`.
+- Preflight confirmed `/Users/samkassirov/multi-research-engine`, branch `main`, and `HEAD`, local `main`, and the locally recorded `origin/main` at `dbca2fa10318c53bae3fdcb812b500ff0b84b255`.
 - The fixture inventory guard passes with 29 games from 2024-06-01 through 2024-07-21: June 17 and July 12.
 - The prospective dry-run check passes with zero validation errors and warnings.
 - The valid manual validator, snapshot, no-flag lock, no-flag construction, and explicit construction file-mode behaviors pass. The constructed package contains two games and zero validation messages.
 - The file-mode artifact has the deterministic planned filename, equals the exact no-flag `package`, is pretty JSON with a trailing newline, and has no absolute path. File-mode stdout is summary-only and reports a relative `artifactPath`.
 - Pre-edit construction and lock regression validation passes: 60 tests. This covers the exact Phase 4V valid and invalid construction stdout goldens, Phase 4P no-flag lock goldens, and Phase 4S file-output lock goldens.
-- The focused Phase 4U/4V/4X construction suite passes: 57 tests.
+- The focused Phase 4U/4V/4X/4Y construction suite passes: 58 tests.
 - Historical export release behavior passes in all four modes through the local loader, including passing threshold checks. The focused rollout review suite passes: 154 tests.
 - The prospective suite passes: 136 tests.
 - The backtesting suite passes: 699 tests.
@@ -272,16 +275,16 @@ Historical behavior remains outside this construction step and unchanged:
 
 ## Recommended next safe phase
 
-Phase 4Y — add exact construction file-output golden tests.
+Phase 4Z — plan first real research module handoff.
 
 State:
 
-- local-only
-- fixture-only
-- exact file artifact golden
-- exact file-mode stdout summary golden
-- no new file-output behavior
+- planning-only
+- no implementation
 - no live/API/web
 - no network schedule ingestion
 - no generated run artifacts committed
 - no historical fixture data changes
+- no `modelProbability` yet
+- no odds/market/betting language except safety exclusions
+- identify module inputs and outputs only
