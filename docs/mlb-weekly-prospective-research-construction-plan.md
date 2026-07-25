@@ -372,7 +372,7 @@ The Phase 4Z plan is `docs/mlb-first-research-module-handoff-plan.md`. The propo
 
 ## Recommended next safe phase
 
-Phase 5C — plan local fixture evidence wiring and leakage guards for the MLB team recent form research module. Phase 5B now locks the Phase 5A valid and representative invalid stdout exactly without changing Phase 5A behavior. Phase 5C remains planning-only and adds no implementation, file output, pitcher evidence, actual starters, `modelProbability`, live/API/web access, network schedule ingestion, generated run artifact, or historical fixture change.
+Phase 5D — implement the local fixture evidence provider for the MLB team recent form research module. Phase 5C plans that provider in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`. The exact construction artifact remains the target schedule/game input; existing local historical fixtures are optional evidence only. Phase 5D should preserve Phase 5B default stdout goldens unless evidence mode is explicit and add no file output, pitcher evidence, actual starters, `modelProbability`, prediction output, live/API/web access, network schedule ingestion, generated committed artifact, or historical fixture change.
 
 ## Phase 5A research handoff validation
 
@@ -383,3 +383,7 @@ Phase 5C — plan local fixture evidence wiring and leakage guards for the MLB t
 - TypeScript, production build, and Git diff check pass.
 - No construction behavior, construction golden, lock behavior, lock golden, historical fixture, package lock, or dependency changed.
 - Generated construction output was removed, and the research command created no file artifact.
+
+## Phase 5C local fixture evidence plan
+
+Phase 5C is planning-only and changes no construction behavior. It plans a pure local fixture evidence provider, deterministic lookback, safe-completion filtering, and per-target leakage guards for the Phase 5A/5B research module. `TEAM_ONLY` remains no-pitcher, the construction artifact remains the sole target schedule/game handoff, and the Phase 4V/4Y construction plus Phase 4P/4S lock goldens remain unchanged.

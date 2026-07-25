@@ -237,4 +237,8 @@ Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-h
 
 ## Recommended next safe phase
 
-Phase 5C — plan local fixture evidence wiring and leakage guards for the MLB team recent form research module. Phase 5B now locks Phase 5A exact valid and representative invalid stdout without changing research behavior. Phase 5C remains planning-only and adds no implementation, file output, pitcher evidence, actual starters, `modelProbability`, live/API/web access, network schedule ingestion, generated run artifact, or historical fixture change.
+Phase 5D — implement the local fixture evidence provider for the MLB team recent form research module. Phase 5C now plans that provider and its leakage guards in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`; the exact construction artifact remains the target schedule/game input and existing local historical fixtures are optional evidence only. Phase 5D should preserve Phase 5B default stdout goldens unless evidence mode is explicit and add no file output, pitcher evidence, actual starters, `modelProbability`, prediction output, live/API/web access, network schedule ingestion, generated committed artifact, or historical fixture change.
+
+## Phase 5C local fixture evidence plan
+
+Phase 5C is planning-only. It defines a future pure local evidence provider, deterministic three-game/30-day lookback, safe completion derived only from the last completed play end with `LAST_COMPLETED_PLAY_END` provenance, and per-target exclusion of the target game and future games. It changes no Phase 5A behavior or Phase 5B golden.

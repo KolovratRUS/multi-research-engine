@@ -4,6 +4,7 @@
 
 Phase 5A implementation.
 Phase 5B exact stdout golden regression coverage complete.
+Phase 5C local fixture evidence and leakage-guard planning complete.
 Local-only.
 Stdout-only.
 Consumes the exact construction package artifact.
@@ -233,14 +234,15 @@ Phase 5B adds exact valid and representative invalid stdout golden fixtures with
 
 ## Recommended next safe phase
 
-Phase 5C — plan local fixture evidence wiring for the MLB team recent form research module.
+Phase 5D — implement the local fixture evidence provider for the MLB team recent form research module.
 
 State:
 
-- planning-only;
-- fixture-only;
-- no implementation;
-- define the local fixture evidence source and leakage guards;
+- local-only implementation;
+- fixture/local data only;
+- use `src/fixtures/backtesting/mlb/fixture-games.ts` as optional evidence only;
+- keep the exact construction artifact as the target schedule-and-game input;
+- preserve Phase 5B default stdout goldens unless evidence mode is explicit;
 - no file output;
 - no live, API, or web access;
 - no network schedule ingestion;
@@ -249,3 +251,19 @@ State:
 - no actual starters;
 - no generated run artifacts committed; and
 - no historical fixture data changes.
+
+## Phase 5C local fixture evidence plan
+
+Phase 5C is planning-only and is documented in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`. It defines a future pure provider, deterministic three-game/30-day lookback, safe completion based only on the last completed play end with `LAST_COMPLETED_PLAY_END` provenance, per-target leakage guards, safe evidence identifiers, and non-probability data-quality labels. The construction artifact remains the target schedule/game input; historical fixtures are optional local evidence only.
+
+Phase 5C changes no Phase 5A behavior or Phase 5B golden, adds no file output, and introduces no pitcher evidence, actual starters, `modelProbability`, prediction output, live/API/web access, network schedule ingestion, or historical fixture data change.
+
+## Phase 5C validation
+
+- The fixture inventory remains 29 games: June 17 and July 12 across 27 unique dates.
+- The valid local manual pipeline and research output remain exact through the local `tsx/cjs` loader, and the generated construction artifact remains byte-identical to the Phase 4Y golden.
+- The focused Phase 5A/5B suite passes 45 tests; construction passes 58; historical rollout-focused coverage passes 154; prospective passes 182; and backtesting passes 699.
+- Full Vitest and `npm test` pass 938 tests across 58 files. TypeScript, production build, and Git diff check pass.
+- Direct npm aliases using the `tsx` launcher encounter managed-sandbox IPC `EPERM` before script execution; equivalent local-loader behavior passes, including all four historical review modes and threshold checks.
+- Generated output and empty `tmp` directories were removed. No Phase 5A source, Phase 5B golden, earlier construction/lock behavior or golden, historical fixture, package file, or dependency changed.
+- Safety searches confirm Phase 5C additions use restricted terminology only for negative exclusions, keep `modelProbability` absent, and add no executable `source=live` command. No live/API/web request or network schedule ingestion occurred.

@@ -271,6 +271,6 @@ Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-h
 
 ## Recommended next safe phase
 
-Phase 5C — plan local fixture evidence wiring and leakage guards for the implemented team recent form research module. Phase 5B now locks exact Phase 5A stdout without changing Phase 5A behavior or this file-output plan. Phase 5C remains planning-only and adds no implementation, file output, `modelProbability`, pitcher evidence, actual starters, live/API/web access, network schedule ingestion, generated run artifact, or historical fixture change.
+Phase 5D — implement the local fixture evidence provider for the team recent form research module. Phase 5C is the planning-only provider and leakage-guard design in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`. It leaves this lock file-output plan, Phase 5A behavior, and Phase 5B default stdout goldens unchanged. The construction artifact remains the target schedule/game input; local historical fixtures are optional evidence only. Phase 5D should add no research file output, `modelProbability`, pitcher evidence, actual starters, prediction output, live/API/web access, network schedule ingestion, generated committed artifact, or historical fixture change.
 
 Phase 4S regression details are documented in `docs/mlb-manual-week-lock-file-output-golden-tests.md`. Generated file artifacts remain local and uncommitted.

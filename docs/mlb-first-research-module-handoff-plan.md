@@ -322,15 +322,16 @@ The future implementation should prove that it:
 
 ## Recommended next safe phase
 
-Phase 5C — plan local fixture evidence wiring for the implemented MLB team recent form research module.
+Phase 5D — implement the local fixture evidence provider for the implemented MLB team recent form research module.
 
 State:
 
 - local-only;
 - fixture-only;
-- planning-only;
-- no implementation;
-- define the local fixture evidence source and leakage guards;
+- implementation;
+- local historical fixtures are optional evidence only;
+- the construction artifact remains the target schedule-and-game input;
+- preserve Phase 5B default stdout goldens unless evidence mode is explicit;
 - no live, API, or web access;
 - no network schedule ingestion;
 - no file output;
@@ -367,3 +368,20 @@ Phase 5B adds exact valid stdout and representative wrong-construction-version, 
 - Direct npm entry points using the `tsx` launcher encounter managed-sandbox IPC `EPERM` before script execution; equivalent local-loader behavior passes.
 - Protected hashes and Git checks confirm no Phase 5A implementation change, historical fixture change, earlier golden change, package-file change, or dependency addition.
 - Generated construction output and invalid-input temporary files were removed. No live source, MLB API request, web lookup, or network schedule ingestion was used.
+
+## Phase 5C local fixture evidence plan
+
+Phase 5C is the planning-only continuation in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`. It defines local historical fixture records from `src/fixtures/backtesting/mlb/fixture-games.ts` as optional evidence, keeps the construction artifact as the sole target schedule/game input, and plans a pure provider with deterministic lookback plus strict target/future exclusion. Safe completion remains based only on the last completed play end with `LAST_COMPLETED_PLAY_END` provenance.
+
+It changes no Phase 5A behavior or Phase 5B stdout golden and adds no file output, pitcher evidence, actual starters, `modelProbability`, prediction output, live/API/web access, network schedule ingestion, or historical fixture data change. The recommended implementation phase is Phase 5D.
+
+## Phase 5C validation
+
+- Preflight confirmed the requested repository, clean baseline, `main`, and `HEAD`, local `main`, and the local `origin/main` ref at `6b70c2dcdecf53803aa13dbf92b5646d80e1e94c`.
+- Inventory remains 29 games from 2024-06-01 through 2024-07-21: June 17 and July 12. The prospective dry-run passes with zero errors and warnings.
+- The local loader verifies the complete manual pipeline and research output against their valid exact goldens. The generated Phase 4X artifact equals the Phase 4Y golden and was removed.
+- Research passes 45 tests, construction passes 58, historical rollout-focused coverage passes 154, prospective passes 182, and backtesting passes 699.
+- Full Vitest and `npm test` pass 938 tests across 58 files. TypeScript, production build, and Git diff check pass.
+- Direct npm aliases that invoke `tsx` are blocked by managed-sandbox IPC `EPERM` before script execution. Equivalent pipeline and four historical release modes pass through `node --require tsx/cjs`, including threshold checks.
+- Safety searches and protected-file checks confirm a docs-only change: no Phase 5A behavior, Phase 5B golden, construction/lock behavior or golden, historical fixture, package file, dependency, live/API/web source, or network schedule ingestion changed.
+- Generated output and empty `tmp` directories were removed; no generated lock, construction, research, prospective, export, review, or temporary artifact remains.

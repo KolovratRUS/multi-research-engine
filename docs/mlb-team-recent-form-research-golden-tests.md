@@ -77,13 +77,15 @@ The invalid tests create deterministic mutated construction inputs only under ig
 
 ## Recommended next safe phase
 
-Phase 5C — plan local fixture evidence wiring for MLB team recent form.
+Phase 5D — implement the local fixture evidence provider for MLB team recent form.
 
 State:
 
-- planning-only;
-- no implementation;
-- define the local fixture evidence source and leakage guards;
+- local-only implementation;
+- fixture/local data only;
+- construction artifact remains the target schedule-and-game input;
+- local historical fixtures are optional evidence only;
+- preserve these Phase 5B default stdout goldens unless evidence mode is explicit;
 - no live, API, or web access;
 - no network schedule ingestion;
 - no file output;
@@ -92,3 +94,17 @@ State:
 - no actual starters;
 - no generated run artifacts committed; and
 - no historical fixture data changes.
+
+## Phase 5C local fixture evidence plan
+
+Phase 5C is planning-only and is documented in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`. It plans local historical fixture evidence from `src/fixtures/backtesting/mlb/fixture-games.ts`, a pure provider boundary, deterministic lookback, safe-completion filtering, and target/future-game leakage guards. `TEAM_ONLY` remains no-pitcher. Phase 5A behavior and every Phase 5B stdout golden remain unchanged, with no file output, `modelProbability`, actual starters, live/API/web access, network schedule ingestion, or historical fixture change.
+
+## Phase 5C validation
+
+- The focused research suite passes 45 tests, including all Phase 5B byte-for-byte valid and invalid stdout checks.
+- Valid research stdout also matches its committed golden through the local `tsx/cjs` loader.
+- Protected construction and lock coverage passes: Phase 4V, Phase 4Y, Phase 4P, and Phase 4S goldens remain exact.
+- Historical rollout-focused coverage passes 154 tests, prospective passes 182, backtesting passes 699, and full Vitest plus `npm test` pass 938 tests across 58 files.
+- TypeScript, production build, inventory, dry-run, and Git diff checks pass.
+- Direct npm aliases using `tsx` encounter managed-sandbox IPC `EPERM` before script execution; equivalent local-loader behavior passes.
+- Generated construction output, invalid-input mutations, and empty `tmp` directories were removed. No Phase 5A behavior, Phase 5B fixture, protected earlier golden, historical fixture, package file, dependency, live/API/web source, or network schedule ingestion changed.
