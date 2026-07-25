@@ -231,20 +231,10 @@ Phase 4W planned construction file output in `docs/mlb-weekly-prospective-resear
 
 Phase 4X implements double-opt-in construction file output with `--write-file` plus `--output-dir`. It writes the exact inner construction package using a deterministic filename, prints a summary without `package`, reports only a relative artifact path, and refuses overwrite. Generated artifacts remain local, ignored, and uncommitted. Phase 4U no-flag behavior, the Phase 4V construction stdout goldens, and the Phase 4P/4S lock goldens remain unchanged.
 
+## Phase 4Z first research module handoff plan
+
+Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-handoff-plan.md`. It proposes the MLB team recent form module, consuming the exact Phase 4X/4Y construction package artifact and enriching pregame research without predicting. It introduces no `modelProbability`, pitcher evidence, live/API/web access, network schedule ingestion, or historical fixture change. The Phase 4V/4Y construction goldens and Phase 4P/4S lock goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4Y adds exact static construction file artifact and file-mode stdout summary goldens without changing Phase 4X file output, Phase 4V no-flag construction stdout goldens, or Phase 4P/4S lock goldens. Generated `tmp` artifacts remain ignored, uncommitted, and cleaned.
-
-Phase 4Z — plan first real research module handoff.
-
-State:
-
-- planning-only
-- no implementation
-- no live/API/web
-- no network schedule ingestion
-- no generated run artifacts committed
-- no historical fixture changes
-- no `modelProbability` yet
-- no odds/market/betting language except safety exclusions
-- identify module inputs and outputs only
+Phase 5A — implement a local-only, stdout-only MLB team recent form research module skeleton. It should consume the exact construction package artifact, use fixture/local data only, add no file output, pitcher evidence, actual starters, `modelProbability`, or generated committed artifacts, and use no live/API/web or network schedule source.

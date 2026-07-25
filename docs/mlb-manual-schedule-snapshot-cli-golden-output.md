@@ -118,19 +118,10 @@ Phase 4V added separate byte-for-byte no-flag construction stdout goldens for th
 
 Phase 4W planned construction file output in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`. Phase 4X implements the double-opt-in mode without changing these snapshot goldens. It writes the exact inner construction package, emits summary-only file-mode stdout, refuses overwrite, and leaves Phase 4U no-flag behavior plus the Phase 4V, Phase 4P, and Phase 4S goldens unchanged.
 
+## Phase 4Z first research module handoff plan
+
+Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-handoff-plan.md`. It proposes the MLB team recent form module from the exact Phase 4X/4Y construction package artifact, not from this snapshot output directly. It enriches pregame research without predicting and adds no `modelProbability`, pitcher evidence, live/API/web access, or network schedule ingestion. These snapshot goldens, Phase 4V/4Y construction goldens, and Phase 4P/4S lock goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4Y adds exact static construction file artifact and file-mode stdout summary goldens without changing Phase 4X file output, Phase 4V no-flag construction stdout goldens, or Phase 4P/4S lock goldens. Generated `tmp` artifacts remain ignored, uncommitted, and cleaned.
-
-Phase 4Z — plan first real research module handoff.
-
-State:
-
-- planning-only
-- no implementation
-- no live/API/web
-- no network schedule ingestion
-- no generated run artifacts committed
-- no historical fixture data changes
-- no `modelProbability` yet
-- identify module inputs and outputs only
+Phase 5A — implement a local-only, stdout-only MLB team recent form research module skeleton from the exact construction artifact, using fixture/local evidence only, with no file output, pitcher evidence, actual starters, `modelProbability`, generated committed artifact, live/API/web access, or network schedule ingestion.

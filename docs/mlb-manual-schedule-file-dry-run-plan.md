@@ -227,22 +227,13 @@ Phase 4V adds exact byte-for-byte construction stdout goldens for the valid pack
 
 Phase 4W planned construction file output in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`. Phase 4X implements the double-opt-in mode, writes the exact inner construction package, emits summary-only file-mode stdout, and refuses overwrite. Phase 4U no-flag behavior and the Phase 4V, Phase 4P, and Phase 4S goldens remain unchanged. Generated artifacts remain local, ignored, and uncommitted.
 
+## Phase 4Z first research module handoff plan
+
+Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-handoff-plan.md`. It proposes the team recent form module, consuming the exact Phase 4X/4Y construction package artifact and enriching pregame research without predicting. It adds no `modelProbability`, pitcher evidence, live/API/web access, network schedule ingestion, or historical fixture change. The Phase 4V/4Y construction and Phase 4P/4S lock goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4Y adds exact static construction file artifact and file-mode stdout summary goldens without changing Phase 4X file output, Phase 4V no-flag construction stdout goldens, or Phase 4P/4S lock goldens. Generated `tmp` artifacts remain ignored, uncommitted, and cleaned.
-
-Phase 4Z — plan first real research module handoff.
-
-State:
-
-- planning-only
-- no implementation
-- no live/API/web
-- no network schedule ingestion
-- no generated run artifacts committed
-- no historical fixture data changes
-- no `modelProbability` yet
-- identify module inputs and outputs only
+Phase 5A — implement a local-only, stdout-only MLB team recent form research module skeleton from the exact construction package artifact, using fixture/local evidence only, with no file output, pitcher evidence, actual starters, `modelProbability`, generated committed artifact, live/API/web access, or network schedule ingestion.
 
 See `docs/mlb-manual-schedule-validator-cli.md` for the validator CLI documentation.
 See `docs/mlb-manual-schedule-validator-cli-golden-output.md` for the Phase 4J golden-output documentation.

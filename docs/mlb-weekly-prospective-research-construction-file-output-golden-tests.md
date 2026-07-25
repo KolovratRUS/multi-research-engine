@@ -53,25 +53,21 @@ npm run prospective:mlb:construct-week -- tests/prospective/fixtures/manual-sche
 
 ## Validation
 
-- Preflight confirmed `/Users/samkassirov/multi-research-engine`, branch `main`, and `HEAD`, local `main`, and the locally recorded `origin/main` at `dbca2fa10318c53bae3fdcb812b500ff0b84b255`.
+- Phase 4Z preflight confirmed `/Users/samkassirov/multi-research-engine`, branch `main`, a clean starting worktree, and `HEAD`, local `main`, and the locally recorded `origin/main` at `ed84f9628c93125d999811fc5e7d8d03975c156b`.
 - Fixture inventory and prospective dry-run guards passed: 29 historical fixture games, zero dry-run validation errors and warnings.
 - Valid manual schedule validation, snapshot creation, lock creation, no-flag construction, and file-mode construction passed through the local `node --require tsx/cjs` loader. The direct `npm`/`tsx` launcher was blocked by managed-sandbox IPC `EPERM` before script execution.
-- The focused construction suite passes: 58 tests, including byte-for-byte file artifact and file-mode summary goldens. The artifact equals the Phase 4V no-flag package and the summary has a stable relative `artifactPath`.
-- Generated `tmp` output was removed after validation; no generated artifact remains.
-- No live source, MLB API request, web lookup, network schedule ingestion, dependency change, or historical fixture change was made.
+- Pre-edit focused lock and construction regression coverage passes: 82 tests, including unchanged Phase 4P, Phase 4S, Phase 4V, and Phase 4Y exact goldens.
+- The focused construction suite passes: 58 tests, including byte-for-byte file artifact and file-mode summary goldens. The artifact equals the Phase 4V no-flag package, has the same SHA-1 as this Phase 4Y artifact golden, and the summary has a stable relative `artifactPath`.
+- The historical rollout review suite passes: 154 tests. Prospective passes 137 tests, backtesting passes 699 tests, and full Vitest plus `npm test` pass 893 tests across 57 files.
+- TypeScript, production build, and Git diff check pass.
+- Generated `tmp` output and empty directories were removed after validation; no generated lock, construction, research, prospective, export, review, or temporary artifact remains.
+- Added-line safety searches contain only negative safety exclusions and `modelProbability` absence/prohibition statements. No executable `source=live` command was added.
+- No live source, MLB API request, web lookup, network schedule ingestion, dependency change, implementation change, historical fixture change, protected golden change, or package-file change was made.
+
+## Phase 4Z first research module handoff plan
+
+Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-handoff-plan.md`. It proposes team recent form research from the exact Phase 4X/4Y construction package artifact. The module enriches pregame research and does not predict. No `modelProbability`, pitcher evidence, live/API/web access, or network schedule ingestion is introduced. These Phase 4Y goldens, Phase 4X behavior, the Phase 4V construction goldens, and Phase 4P/4S lock goldens remain unchanged.
 
 ## Recommended next safe phase
 
-Phase 4Z — plan first real research module handoff.
-
-State:
-
-- planning-only
-- no implementation
-- no live/API/web
-- no network schedule ingestion
-- no generated run artifacts committed
-- no historical fixture data changes
-- no `modelProbability` yet
-- no odds/market/betting language except safety exclusions
-- identify module inputs and outputs only
+Phase 5A — implement a local-only, stdout-only MLB team recent form research module skeleton that consumes the exact construction artifact and uses fixture/local evidence only. It should add no file output, pitcher evidence, actual starters, `modelProbability`, generated committed artifact, live/API/web access, or network schedule ingestion.

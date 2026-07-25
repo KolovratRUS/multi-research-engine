@@ -207,7 +207,8 @@ The Phase 4W construction file-output contract and Phase 4X implementation are d
 Phase 4Y exact construction file-output goldens are documented in `docs/mlb-weekly-prospective-research-construction-file-output-golden-tests.md`; they lock the static artifact body and stable file-mode stdout summary byte-for-byte without changing Phase 4X behavior.
 Generated lock artifacts are local files and must not be committed.
 Generated construction artifacts are also local, ignored files and must not be committed. Phase 4Y leaves Phase 4X file-output behavior, Phase 4U no-flag behavior, the Phase 4V construction stdout goldens, the Phase 4P no-flag lock goldens, and the Phase 4S file-output lock goldens unchanged. Generated `tmp` output is cleaned after tests and remains uncommitted.
-The recommended next safe phase is Phase 4Z: plan the first real research module handoff, identify module inputs and outputs only, and make no implementation, live/API/web access, network schedule ingestion, generated run artifact, historical fixture, or `modelProbability` change.
+Phase 4Z is the planning-only first real MLB research-module handoff in `docs/mlb-first-research-module-handoff-plan.md`. It proposes the team recent form module, consuming the exact Phase 4X/4Y construction package artifact and enriching pregame research without predicting. It adds no `modelProbability`, pitcher evidence, live/API/web access, network schedule ingestion, generated run artifact, or historical fixture change. The Phase 4V/4Y construction goldens and Phase 4P/4S lock goldens remain unchanged.
+The recommended next safe phase is Phase 5A: implement a local-only, stdout-only MLB team recent form research module skeleton that uses fixture/local data, consumes the exact construction package artifact, adds no file output, `modelProbability`, pitcher evidence, actual starters, or generated committed artifacts, and uses no live/API/web or network schedule source.
 
 ## Architecture
 

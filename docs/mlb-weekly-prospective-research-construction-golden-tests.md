@@ -74,21 +74,14 @@ npm run prospective:mlb:construct-week -- tests/prospective/fixtures/manual-sche
 - No live source, MLB API request, web lookup, or network schedule ingestion was used.
 - No historical fixture game record, package lock, dependency, protected construction/lock golden, or Phase 4U package-construction module changed.
 
-## Recommended next safe phase
-
 Phase 4W planned the file-output design in `docs/mlb-weekly-prospective-research-construction-file-output-plan.md`; Phase 4X implements it. Phase 4U no-flag behavior, these Phase 4V construction stdout goldens, and the Phase 4P/4S lock goldens remain unchanged.
 
 Phase 4Y exact construction file-output golden tests are documented in `docs/mlb-weekly-prospective-research-construction-file-output-golden-tests.md`. Phase 4X behavior and all Phase 4V, Phase 4P, and Phase 4S goldens remain unchanged. Generated `tmp` artifacts are ignored, uncommitted, and cleaned.
 
-Phase 4Z — plan first real research module handoff.
+## Phase 4Z first research module handoff plan
 
-State:
+Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-handoff-plan.md`. It proposes team recent form research from the exact Phase 4X/4Y construction package artifact. The module enriches pregame research and does not predict. No `modelProbability`, pitcher evidence, live/API/web access, or network schedule ingestion is introduced. These Phase 4V goldens, the Phase 4Y file-output goldens, and the Phase 4P/4S lock goldens remain unchanged.
 
-- planning-only
-- no implementation
-- no live/API/web
-- no network schedule ingestion
-- no generated run artifacts committed
-- no historical fixture data changes
-- no `modelProbability` yet
-- identify module inputs and outputs only
+## Recommended next safe phase
+
+Phase 5A — implement a local-only, stdout-only MLB team recent form research module skeleton that consumes the exact construction artifact and uses fixture/local evidence only. It should add no file output, pitcher evidence, actual starters, `modelProbability`, generated committed artifact, live/API/web access, or network schedule ingestion.

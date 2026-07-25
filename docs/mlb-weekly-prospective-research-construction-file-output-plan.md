@@ -273,18 +273,10 @@ Historical behavior remains outside this construction step and unchanged:
 - No live source, MLB API request, web lookup, or network schedule ingestion was used.
 - No dependency, historical fixture record, construction package semantic, or lock behavior changed.
 
+## Phase 4Z first research module handoff plan
+
+Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-handoff-plan.md`. It proposes team recent form research from this exact Phase 4X/4Y construction package artifact. The module enriches pregame research and does not predict. No `modelProbability`, pitcher evidence, live/API/web access, or network schedule ingestion is introduced. Phase 4X behavior and the Phase 4V/4Y construction plus Phase 4P/4S lock goldens remain unchanged.
+
 ## Recommended next safe phase
 
-Phase 4Z — plan first real research module handoff.
-
-State:
-
-- planning-only
-- no implementation
-- no live/API/web
-- no network schedule ingestion
-- no generated run artifacts committed
-- no historical fixture data changes
-- no `modelProbability` yet
-- no odds/market/betting language except safety exclusions
-- identify module inputs and outputs only
+Phase 5A — implement a local-only, stdout-only MLB team recent form research module skeleton that consumes the exact construction artifact and uses fixture/local evidence only. It should add no file output, pitcher evidence, actual starters, `modelProbability`, generated committed artifact, live/API/web access, or network schedule ingestion.

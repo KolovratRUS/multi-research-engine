@@ -1,0 +1,342 @@
+# MLB First Research Module Handoff Plan
+
+## Status
+
+Phase 4Z planning-only.
+No implementation.
+No module source files.
+No generated prospective run artifact committed.
+No live source used.
+No real MLB API request made.
+No web lookup used.
+No network schedule ingestion.
+No historical fixture data added or modified.
+No model-quality or predictive-performance claim.
+`modelProbability` remains null/absent/not available until calibrated and is absent from constructed and researched packages.
+No odds, market, or betting language is introduced except as a negative safety exclusion.
+
+## Purpose
+
+Phase 4Z defines the handoff from the constructed weekly prospective research package to the first real MLB research module. It follows:
+
+- Phase 4U stdout construction;
+- Phase 4V no-flag construction stdout goldens;
+- Phase 4W construction file-output planning;
+- Phase 4X construction file output; and
+- Phase 4Y file-output goldens.
+
+This phase documents the future input, enrichment output, safety boundary, validation behavior, command shape, and test plan. It does not implement a research module.
+
+## Proposed first module
+
+The proposed first module is the **MLB Team Recent Form Research Module**.
+
+Its scope is:
+
+- team-level only;
+- no pitcher evidence;
+- no actual starters;
+- no odds, market, or betting inputs;
+- no `modelProbability`;
+- no prediction output; and
+- pregame research enrichment only.
+
+This is the recommended first module because it can work from the currently available constructed game stubs, does not require pitcher availability, keeps `TEAM_ONLY` semantics simple, can later be tested with local fixture-derived evidence, and can produce useful research features without claiming a calibrated probability.
+
+## Handoff input
+
+The sole schedule-and-game handoff input is the exact Phase 4X/4Y construction package artifact with:
+
+```text
+constructionVersion = "mlb-weekly-prospective-research-construction-v1"
+```
+
+Each constructed game supplies:
+
+- `gameId`
+- `officialDate`
+- `scheduledStartTime`
+- `awayTeam`
+- `homeTeam`
+- `snapshotTimestamp`
+- `sourceProvenance`
+- `constructionStatus`
+- `researchMode`
+- `researchScope`
+- `constructionMessages`
+- `warnings`
+
+The module must not accept a raw manual schedule or a lock artifact directly. It must not depend on the construction artifact's source filename, an absolute path, file metadata, environment metadata, or machine state.
+
+A future implementation may use an explicitly configured local fixture or local historical-data provider as evidence. That evidence source is not a replacement schedule handoff and must:
+
+- be explicit and local-only;
+- use no live, API, web, or network schedule source;
+- exclude outcome leakage into target prospective games;
+- exclude post-game fields from researched package output; and
+- provide only evidence dated before the target game's `scheduledStartTime`.
+
+## Output contract
+
+The module should return a new enriched research package and must not mutate the construction artifact in place.
+
+Proposed top-level fields:
+
+- `researchPackageVersion`
+- `constructionVersion`
+- `researchRunId`
+- `sourceConstructionRunId`
+- `sourceConstructionLockId`
+- `sourceMode`
+- `weekStart`
+- `weekEnd`
+- `researchedAt`
+- `sourceConstructedAt`
+- `sourceLockedAt`
+- `inputConstructionPackage`
+- `games`
+- `researchModules`
+- `researchWarnings`
+- `researchMessages`
+
+Recommended initial values and rules:
+
+- `researchPackageVersion`: `"mlb-team-recent-form-research-package-v1"`
+- `researchRunId`: a deterministic, path-independent identity derived from the source construction `runId`
+- `researchedAt`: equal to the deterministic source `constructedAt` in test mode
+- `researchModules`: one completed `TEAM_RECENT_FORM` entry with module version `"mlb-team-recent-form-v1"` and scope `"TEAM_ONLY"`
+- `researchWarnings`: `[]` initially
+- `researchMessages`: `[]` initially
+
+`researchedAt` must never read the current clock in test mode.
+
+The recommended first implementation should preserve the exact input construction package in `inputConstructionPackage`. This makes the handoff transparent, proves that construction was not mutated, and supports exact local golden testing. A later planning phase may replace the embedded package with a stable content hash/reference only after defining canonical serialization, reference resolution, and validation rules.
+
+`sourceConstructionRunId`, `sourceConstructionLockId`, `sourceConstructedAt`, and `sourceLockedAt` must copy the corresponding construction metadata exactly. The module must preserve input game order and produce exactly one researched game for each constructed game.
+
+## Per-game output
+
+Preserve these schedule and identity fields exactly:
+
+- `gameId`
+- `officialDate`
+- `scheduledStartTime`
+- `awayTeam`
+- `homeTeam`
+- `snapshotTimestamp`
+- `sourceProvenance`
+
+Preserve these construction fields exactly:
+
+- `constructionStatus`
+- `researchMode`
+- `researchScope`
+- `constructionMessages`
+- `warnings`
+
+Add:
+
+- `researchStatus`: `"researched"`
+- `completedResearchModules`: `["TEAM_RECENT_FORM"]`
+- `researchFindings`
+- `researchMessages`: `[]`
+- `researchWarnings`: `[]`
+
+`researchStatus` means that this named module completed for the game. It does not claim that every possible MLB research module completed, that a prediction exists, or that `FULL` research is complete. The preserved construction `researchScope` remains distinct from the module finding's `TEAM_ONLY` scope.
+
+The researched game must contain no:
+
+- `finalScore`;
+- `completedGameState`;
+- `actualStartingPitchers`;
+- `outcome`;
+- `outcomeStatus`;
+- `finalStatus`;
+- odds, market, betting, or external price fields; or
+- `modelProbability`.
+
+## Team recent form finding
+
+The suggested `researchFindings` key is `teamRecentForm`.
+
+Suggested fields:
+
+- `moduleVersion`
+- `scope`: `"TEAM_ONLY"`
+- `awayTeam`
+- `homeTeam`
+- `lookbackWindowGames`
+- `lookbackWindowDays`
+- `awayRecentGamesFound`
+- `homeRecentGamesFound`
+- `awaySummary`
+- `homeSummary`
+- `dataQuality`
+- `volatility`
+- `confidence`
+- `warnings`
+- `evidence`
+
+`researchStrengthScore`, `confidence`, `matchConfidence`, `dataQuality`, `volatility`, and `modelProbability` remain conceptually separate. This first finding does not need to introduce `researchStrengthScore` or `matchConfidence`. `confidence` is confidence in the module finding and evidence completeness; it is not match probability and is not `modelProbability`.
+
+Initial evidence must be sourced from local fixtures. It must not contain odds, market, or betting information, actual-starter evidence, or pitcher-availability evidence. Safe evidence should identify local provenance and prior game IDs/dates only as needed to audit the finding.
+
+## TEAM_ONLY boundary
+
+The module finding is strictly `TEAM_ONLY`.
+
+- `TEAM_ONLY` means no pitcher evidence.
+- Phase 1G-b observations must remain unread and unused.
+- Pitcher availability must not be inferred.
+- Actual starters must not be used.
+- Probable-pitcher fields must not be used unless a later planning phase explicitly permits schedule probable data while retaining strict warning rules.
+- Team research must remain separate from any later pitcher module.
+
+The construction package currently preserves its existing game `researchScope`. The team recent form module adds a `TEAM_ONLY` finding and must not reinterpret a preserved `FULL` construction scope as permission to use pitcher evidence.
+
+## Leakage rules
+
+- The prospective research package must not include completed-game results for target games.
+- Historical fixture records may be used only as prior evidence when their dates and completion evidence are before the target game's `scheduledStartTime`.
+- Do not copy `finalScore`, `completedGameState`, or `outcome` into prospective game output.
+- Historical schedule probable information must not be retrospectively promoted.
+- Actual starters remain evaluation-only.
+- Historical completion remains based only on `liveData.plays.allPlays[last].about.endTime`.
+- Historical completion provenance remains `LAST_COMPLETED_PLAY_END`.
+- Strict schedule probable handling continues to require `SCHEDULE_PROBABLE_TIMESTAMP_UNKNOWN`.
+
+Evidence selection must be evaluated separately for each target game so that a later game cannot make unavailable evidence appear available for an earlier target game.
+
+## Future command plan
+
+Do not implement these commands in Phase 4Z.
+
+Proposed first command:
+
+```bash
+npm run prospective:mlb:research-team-form -- <construction-package-json>
+```
+
+A possible later explicit file mode is:
+
+```bash
+npm run prospective:mlb:research-team-form -- <construction-package-json> --write-file --output-dir <directory>
+```
+
+File-output planning should be a separate later phase. The first implementation should remain stdout-only unless an intervening plan explicitly changes that decision.
+
+Recommended ignored output root for future researched packages:
+
+```text
+tmp/prospective/mlb/research-packages/
+```
+
+## Validation and errors
+
+The future implementation should reject:
+
+- a missing input path;
+- multiple input paths;
+- malformed JSON;
+- an unsupported `constructionVersion`;
+- a missing or invalid construction package;
+- a construction package containing validation messages or errors;
+- forbidden fields anywhere in the package;
+- absolute paths or environment metadata;
+- an empty game list;
+- a non-`pregame` `researchMode`;
+- a `researchScope` other than `FULL` or `TEAM_ONLY`; and
+- generated output-directory arguments unless a later explicit file-output mode exists.
+
+Stable future error-code examples:
+
+- `TEAM_FORM_RESEARCH_INPUT_PATH_REQUIRED`
+- `TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY`
+- `TEAM_FORM_RESEARCH_READ_OR_PARSE_FAILED`
+- `TEAM_FORM_RESEARCH_CONSTRUCTION_VERSION_INVALID`
+- `TEAM_FORM_RESEARCH_CONSTRUCTION_PACKAGE_INVALID`
+- `TEAM_FORM_RESEARCH_FORBIDDEN_FIELD`
+- `TEAM_FORM_RESEARCH_ABSOLUTE_PATH`
+- `TEAM_FORM_RESEARCH_ENVIRONMENT_METADATA`
+- `TEAM_FORM_RESEARCH_EMPTY_GAMES`
+- `TEAM_FORM_RESEARCH_SCOPE_UNSUPPORTED`
+
+Validation must finish before research enrichment begins. Invalid input must not produce a research package.
+
+## Testing plan
+
+The future implementation should prove that it:
+
+- validates the construction package input;
+- preserves `inputConstructionPackage` exactly;
+- preserves game order;
+- produces one researched game per constructed game;
+- marks `completedResearchModules` with `TEAM_RECENT_FORM`;
+- keeps the `TEAM_ONLY` no-pitcher boundary;
+- keeps `modelProbability` absent;
+- keeps outcome and post-game fields absent;
+- rejects forbidden fields;
+- rejects absolute paths and environment metadata;
+- rejects malformed input;
+- rejects an unsupported `constructionVersion`;
+- rejects empty games;
+- uses deterministic `researchedAt` in test mode;
+- adds a stdout golden in a later implementation/golden phase;
+- defers file-output planning and goldens;
+- performs no live, API, or web access;
+- performs no network schedule ingestion; and
+- commits no generated artifacts.
+
+## Success criteria
+
+- The construction package remains the sole schedule-and-game handoff input.
+- The first research module enriches research and does not predict.
+- The `TEAM_ONLY` boundary is explicit.
+- `modelProbability` is not introduced.
+- No odds, market, or betting input or language is introduced except negative safety exclusions.
+- No pitcher-availability logic is introduced.
+- A future implementation can be tested locally with fixtures.
+
+## Validation
+
+- Preflight confirmed `/Users/samkassirov/multi-research-engine`, branch `main`, a clean starting worktree, and `HEAD`, local `main`, and the locally recorded `origin/main` at `ed84f9628c93125d999811fc5e7d8d03975c156b`.
+- The fixture inventory guard passes with 29 games from 2024-06-01 through 2024-07-21: June 17 and July 12.
+- The prospective dry-run guard passes with zero validation errors and warnings.
+- Valid manual schedule validation, snapshot creation, no-flag lock, no-flag construction, and explicit construction file mode pass through the existing local `tsx/cjs` loader. Each pipeline stage preserves the expected two-game deterministic fixture data with zero validation messages.
+- The generated Phase 4X construction artifact has the same SHA-1 as the exact Phase 4Y artifact golden. The no-flag construction stdout and file-mode summary also match their exact goldens.
+- Pre-edit focused lock and construction regression coverage passes: 82 tests. This covers the Phase 4P no-flag lock goldens, Phase 4S file-output lock goldens, Phase 4V construction stdout goldens, and Phase 4Y construction file-output goldens.
+- The focused construction suite passes: 58 tests.
+- Historical export release behavior passes in all four modes through the local loader, including threshold checks. The focused rollout review suite passes: 154 tests.
+- The prospective suite passes: 137 tests.
+- The backtesting suite passes: 699 tests.
+- Full Vitest and `npm test` pass: 893 tests across 57 files.
+- TypeScript passes.
+- Production build passes.
+- Git diff check passes.
+- Direct npm entry points for the manual validator, snapshot, lock, construction, and historical review commands were blocked by managed-sandbox `tsx` launcher IPC `EPERM` before script execution. Equivalent command behavior passed through the repository's existing `node --require tsx/cjs` loader pattern; package scripts remain unchanged. Inventory and dry-run npm entry points ran directly.
+- Added-line safety searches find restricted terminology only in negative safety exclusions. Added `modelProbability` mentions state that it is absent, null, not available until calibrated, or not introduced. No executable `source=live` command was added.
+- Protected-file checks confirm that Phase 4V/4Y construction goldens, Phase 4P/4S lock goldens, historical fixture data, `package.json`, and `package-lock.json` remain unchanged.
+- Generated construction output and empty `tmp` directories were removed. No generated lock, construction, research, prospective, export, review, or temporary artifact remains.
+- No live source, MLB API request, web lookup, or network schedule ingestion was used.
+- No dependency, implementation file, historical fixture record, construction behavior, lock behavior, or protected golden changed.
+
+## Recommended next safe phase
+
+Phase 5A — implement the stdout-only MLB team recent form research module skeleton.
+
+State:
+
+- local-only;
+- implementation;
+- stdout-only;
+- consumes the exact construction package artifact;
+- fixture/local-data only;
+- no live, API, or web access;
+- no network schedule ingestion;
+- no file output yet;
+- no `modelProbability`;
+- no odds, market, or betting language except negative safety exclusions;
+- no pitcher evidence;
+- no actual starters;
+- no generated run artifacts committed; and
+- no historical fixture data changes.
