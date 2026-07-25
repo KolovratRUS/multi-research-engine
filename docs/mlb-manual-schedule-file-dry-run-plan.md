@@ -233,7 +233,7 @@ Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-h
 
 ## Recommended next safe phase
 
-Phase 5A — implement a local-only, stdout-only MLB team recent form research module skeleton from the exact construction package artifact, using fixture/local evidence only, with no file output, pitcher evidence, actual starters, `modelProbability`, generated committed artifact, live/API/web access, or network schedule ingestion.
+Phase 5B — add fixture-only exact stdout golden tests for the implemented Phase 5A team recent form research module. Phase 5A consumes the exact downstream construction package and enriches it without predicting. It adds no file output, `modelProbability`, pitcher evidence, actual starters, live/API/web access, network schedule ingestion, or historical fixture change; Phase 5B adds no new research behavior.
 
 See `docs/mlb-manual-schedule-validator-cli.md` for the validator CLI documentation.
 See `docs/mlb-manual-schedule-validator-cli-golden-output.md` for the Phase 4J golden-output documentation.

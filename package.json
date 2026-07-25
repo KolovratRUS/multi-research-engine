@@ -23,6 +23,7 @@
     "prospective:mlb:create-manual-snapshot": "tsx scripts/mlb-manual-schedule-create-snapshot.ts",
     "prospective:mlb:lock-manual-week": "tsx scripts/mlb-manual-week-lock.ts",
     "prospective:mlb:construct-week": "tsx scripts/mlb-weekly-prospective-research-construct.ts",
+    "prospective:mlb:research-team-form": "tsx scripts/mlb-team-recent-form-research.ts",
     "review:historical-export:full": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json",
     "review:historical-export:batch": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json",
     "review:historical-export:ci": "npm run backtest:mlb -- --review-export-json tests/backtesting/fixtures/historical-research-export/full-export-v1.json --review-export-json tests/backtesting/fixtures/historical-research-export/team-only-export-v1.json --review-thresholds-json tests/backtesting/fixtures/historical-research-threshold-presets/passing-ci-thresholds-v1.json",

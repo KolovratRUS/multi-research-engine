@@ -322,21 +322,33 @@ The future implementation should prove that it:
 
 ## Recommended next safe phase
 
-Phase 5A — implement the stdout-only MLB team recent form research module skeleton.
+Phase 5B — add exact stdout golden tests for the implemented MLB team recent form research module.
 
 State:
 
 - local-only;
-- implementation;
-- stdout-only;
-- consumes the exact construction package artifact;
-- fixture/local-data only;
+- fixture-only;
+- exact stdout golden;
+- no new research behavior;
 - no live, API, or web access;
 - no network schedule ingestion;
-- no file output yet;
+- no file output;
 - no `modelProbability`;
 - no odds, market, or betting language except negative safety exclusions;
 - no pitcher evidence;
-- no actual starters;
-- no generated run artifacts committed; and
+- no generated run artifacts committed;
+- no actual starters; and
 - no historical fixture data changes.
+
+## Phase 5A implementation
+
+Phase 5A implements the local-only, stdout-only MLB team recent form skeleton described by this handoff. The command consumes the exact Phase 4X/4Y construction artifact, preserves it as `inputConstructionPackage`, and adds one deterministic `TEAM_ONLY` not-evaluated `TEAM_RECENT_FORM` finding per game. It enriches research and does not predict. It introduces no file output, `modelProbability`, pitcher evidence, actual starters, live/API/web access, or network schedule ingestion. See `docs/mlb-team-recent-form-research-module.md`.
+
+## Phase 5A validation
+
+- The fixture inventory remains 29 games: June 17 and July 12.
+- The new focused research suite passes 37 tests; protected construction passes 58; historical rollout review passes 154; prospective passes 174; and backtesting passes 699.
+- Full Vitest and `npm test` pass 930 tests across 58 files.
+- TypeScript, production build, and Git diff check pass.
+- The local loader verifies the manual pipeline and new research CLI because affected direct npm/`tsx` launchers encounter managed-sandbox IPC `EPERM` before script execution.
+- No generated artifact, historical fixture change, protected golden change, package-lock change, dependency addition, live/API/web request, or network schedule ingestion occurred.

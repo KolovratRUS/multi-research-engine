@@ -372,4 +372,14 @@ The Phase 4Z plan is `docs/mlb-first-research-module-handoff-plan.md`. The propo
 
 ## Recommended next safe phase
 
-Phase 5A — implement a local-only, stdout-only MLB team recent form research module skeleton. It should consume the exact construction artifact, use fixture/local evidence only, add no file output, pitcher evidence, actual starters, `modelProbability`, or generated committed artifacts, and use no live/API/web or network schedule source.
+Phase 5B — add fixture-only exact stdout golden tests for the Phase 5A MLB team recent form research module. Phase 5A consumes the exact construction artifact, preserves it unchanged in the research package, and adds a deterministic `TEAM_ONLY` not-evaluated finding without predicting. Phase 5B adds no new research behavior, file output, pitcher evidence, actual starters, `modelProbability`, live/API/web access, network schedule ingestion, or historical fixture change.
+
+## Phase 5A research handoff validation
+
+- The exact Phase 4Y construction artifact validates as Phase 5A input and produces two deterministic researched games with zero validation messages.
+- The generated Phase 4X artifact remains byte-identical to the Phase 4Y artifact golden.
+- Protected lock/construction regression coverage passes 82 tests, and the focused construction suite passes 58 tests.
+- The new Phase 5A research suite passes 37 tests; prospective passes 174; backtesting passes 699; and full Vitest plus `npm test` pass 930 tests across 58 files.
+- TypeScript, production build, and Git diff check pass.
+- No construction behavior, construction golden, lock behavior, lock golden, historical fixture, package lock, or dependency changed.
+- Generated construction output was removed, and the research command created no file artifact.
