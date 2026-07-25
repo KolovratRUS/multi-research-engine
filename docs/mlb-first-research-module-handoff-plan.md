@@ -322,14 +322,15 @@ The future implementation should prove that it:
 
 ## Recommended next safe phase
 
-Phase 5B — add exact stdout golden tests for the implemented MLB team recent form research module.
+Phase 5C — plan local fixture evidence wiring for the implemented MLB team recent form research module.
 
 State:
 
 - local-only;
 - fixture-only;
-- exact stdout golden;
-- no new research behavior;
+- planning-only;
+- no implementation;
+- define the local fixture evidence source and leakage guards;
 - no live, API, or web access;
 - no network schedule ingestion;
 - no file output;
@@ -352,3 +353,17 @@ Phase 5A implements the local-only, stdout-only MLB team recent form skeleton de
 - TypeScript, production build, and Git diff check pass.
 - The local loader verifies the manual pipeline and new research CLI because affected direct npm/`tsx` launchers encounter managed-sandbox IPC `EPERM` before script execution.
 - No generated artifact, historical fixture change, protected golden change, package-lock change, dependency addition, live/API/web request, or network schedule ingestion occurred.
+
+## Phase 5B stdout goldens
+
+Phase 5B adds exact valid stdout and representative wrong-construction-version, forbidden-field, and empty-games stdout goldens for the Phase 5A command. Phase 5A behavior remains unchanged. The goldens add no research behavior, file output, `modelProbability`, pitcher evidence, actual starters, live/API/web access, network schedule ingestion, generated research artifact, or historical fixture change. See `docs/mlb-team-recent-form-research-golden-tests.md`.
+
+## Phase 5B validation
+
+- The focused research suite passes 45 tests: 37 preserved Phase 5A tests and 8 Phase 5B exact stdout tests.
+- The protected construction suite passes 58 tests, historical rollout-focused coverage passes 154, prospective passes 182, backtesting passes 699, and full Vitest plus `npm test` pass 938 tests across 58 files.
+- TypeScript, production build, and Git diff check pass.
+- The valid research stdout and three representative invalid stdout cases match the new fixtures byte-for-byte through the local `tsx/cjs` loader.
+- Direct npm entry points using the `tsx` launcher encounter managed-sandbox IPC `EPERM` before script execution; equivalent local-loader behavior passes.
+- Protected hashes and Git checks confirm no Phase 5A implementation change, historical fixture change, earlier golden change, package-file change, or dependency addition.
+- Generated construction output and invalid-input temporary files were removed. No live source, MLB API request, web lookup, or network schedule ingestion was used.

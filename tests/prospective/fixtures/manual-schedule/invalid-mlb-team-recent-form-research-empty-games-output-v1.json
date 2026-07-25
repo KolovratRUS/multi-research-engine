@@ -1,0 +1,15 @@
+{
+  "ok": false,
+  "validationMessageCount": 1,
+  "validationErrorCount": 1,
+  "validationWarningCount": 0,
+  "validationMessages": [
+    {
+      "code": "TEAM_FORM_RESEARCH_EMPTY_GAMES",
+      "level": "error",
+      "path": "$.games",
+      "message": "construction package games must not be empty"
+    }
+  ],
+  "error": "TEAM_FORM_RESEARCH_EMPTY_GAMES"
+}

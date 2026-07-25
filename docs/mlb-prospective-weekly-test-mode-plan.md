@@ -237,4 +237,4 @@ Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-h
 
 ## Recommended next safe phase
 
-Phase 5B — add fixture-only exact stdout golden tests for the Phase 5A MLB team recent form research module. Phase 5A now consumes the exact construction artifact and enriches each game with a deterministic `TEAM_ONLY` skeleton without predicting. Phase 5B must add no new research behavior, file output, pitcher evidence, actual starters, `modelProbability`, live/API/web access, network schedule ingestion, or historical fixture change.
+Phase 5C — plan local fixture evidence wiring and leakage guards for the MLB team recent form research module. Phase 5B now locks Phase 5A exact valid and representative invalid stdout without changing research behavior. Phase 5C remains planning-only and adds no implementation, file output, pitcher evidence, actual starters, `modelProbability`, live/API/web access, network schedule ingestion, generated run artifact, or historical fixture change.

@@ -29,6 +29,29 @@ const fixturePath = join(
   'manual-schedule',
   'valid-weekly-prospective-research-construction-file-artifact-v1.json',
 );
+const goldenFixtureDirectory = join(
+  projectRoot,
+  'tests',
+  'prospective',
+  'fixtures',
+  'manual-schedule',
+);
+const validStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'valid-mlb-team-recent-form-research-cli-output-v1.json',
+);
+const constructionVersionStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'invalid-mlb-team-recent-form-research-construction-version-output-v1.json',
+);
+const forbiddenFieldStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'invalid-mlb-team-recent-form-research-forbidden-field-output-v1.json',
+);
+const emptyGamesStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'invalid-mlb-team-recent-form-research-empty-games-output-v1.json',
+);
 const tempRoot = join(
   projectRoot,
   'tmp',
@@ -538,5 +561,159 @@ describe('Phase 5A MLB team recent form research module', () => {
     runResearch([localInputPath]);
 
     expect(readdirSync(tempRoot)).toEqual(before);
+  });
+});
+
+describe('Phase 5B MLB team recent form research stdout goldens', () => {
+  afterEach(() => {
+    rmSync(tempRoot, { recursive: true, force: true });
+    expect(existsSync(tempRoot)).toBe(false);
+  });
+
+  it('matches the exact valid stdout golden byte-for-byte across repeated runs', () => {
+    const expected = readFileSync(validStdoutGoldenPath, 'utf8');
+    const first = runResearch([fixturePath]);
+    const second = runResearch([fixturePath]);
+
+    expect(first).toBe(expected);
+    expect(second).toBe(expected);
+    expect(first).toBe(second);
+    expect(expected.endsWith('\n')).toBe(true);
+  });
+
+  it('locks the exact embedded construction package and two TEAM_RECENT_FORM findings', () => {
+    const constructionPackage = readValidConstructionPackage();
+    const summary = JSON.parse(readFileSync(validStdoutGoldenPath, 'utf8')) as {
+      package: {
+        inputConstructionPackage: Record<string, unknown>;
+        games: Array<{
+          completedResearchModules: string[];
+          researchFindings: {
+            teamRecentForm: {
+              moduleVersion: string;
+              scope: string;
+              awaySummary: { status: string };
+              homeSummary: { status: string };
+            };
+          };
+        }>;
+      };
+    };
+
+    expect(summary.package.inputConstructionPackage).toEqual(constructionPackage);
+    expect(summary.package.games).toHaveLength(2);
+    for (const game of summary.package.games) {
+      expect(game.completedResearchModules).toEqual([TEAM_RECENT_FORM_MODULE_NAME]);
+      expect(game.researchFindings.teamRecentForm).toMatchObject({
+        moduleVersion: TEAM_RECENT_FORM_MODULE_VERSION,
+        scope: 'TEAM_ONLY',
+        awaySummary: { status: 'not-evaluated' },
+        homeSummary: { status: 'not-evaluated' },
+      });
+    }
+  });
+
+  it('keeps target outcome, starter, external price, and uncalibrated fields and absolute paths out of the valid golden', () => {
+    const stdout = readFileSync(validStdoutGoldenPath, 'utf8');
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+    const keys = collectKeys(summary);
+
+    for (const field of [
+      'modelProbability',
+      'finalScore',
+      'completedGameState',
+      'actualStartingPitchers',
+      'outcome',
+      'outcomeStatus',
+      'finalStatus',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(keys).not.toContain(field);
+    }
+    expect(stdout).not.toContain(projectRoot);
+    expectNoAbsolutePaths(summary);
+  });
+
+  it('matches the exact wrong-constructionVersion stdout golden byte-for-byte', () => {
+    const inputPath = writeTemporaryPackage('golden-wrong-version.json', (input) => {
+      input.constructionVersion = 'wrong-construction-version';
+    });
+    const { stdout, summary } = runResearchExpectingFailure([inputPath]);
+
+    expect(stdout).toBe(readFileSync(constructionVersionStdoutGoldenPath, 'utf8'));
+    expect(summary.error).toBe('TEAM_FORM_RESEARCH_CONSTRUCTION_VERSION_INVALID');
+    expectNoPackage(summary);
+  });
+
+  it('matches the exact forbidden-field stdout golden byte-for-byte', () => {
+    const inputPath = writeTemporaryPackage('golden-forbidden-field.json', (input) => {
+      const games = input.games as Array<Record<string, unknown>>;
+      games[0].nested = {
+        modelProbability: 'deliberate-invalid-fixture-value',
+      };
+    });
+    const { stdout, summary } = runResearchExpectingFailure([inputPath]);
+
+    expect(stdout).toBe(readFileSync(forbiddenFieldStdoutGoldenPath, 'utf8'));
+    expect(summary.error).toBe('TEAM_FORM_RESEARCH_FORBIDDEN_FIELD');
+    expectNoPackage(summary);
+  });
+
+  it('matches the exact empty-games stdout golden byte-for-byte', () => {
+    const inputPath = writeTemporaryPackage('golden-empty-games.json', (input) => {
+      input.games = [];
+    });
+    const { stdout, summary } = runResearchExpectingFailure([inputPath]);
+
+    expect(stdout).toBe(readFileSync(emptyGamesStdoutGoldenPath, 'utf8'));
+    expect(summary.error).toBe('TEAM_FORM_RESEARCH_EMPTY_GAMES');
+    expectNoPackage(summary);
+  });
+
+  it('keeps every invalid golden package-free, path-free, stack-free, pretty, and newline-terminated', () => {
+    for (const goldenPath of [
+      constructionVersionStdoutGoldenPath,
+      forbiddenFieldStdoutGoldenPath,
+      emptyGamesStdoutGoldenPath,
+    ]) {
+      const stdout = readFileSync(goldenPath, 'utf8');
+      const summary = JSON.parse(stdout) as Record<string, unknown>;
+
+      expect(summary.ok).toBe(false);
+      expectNoPackage(summary);
+      expect(stdout).toBe(`${JSON.stringify(summary, null, 2)}\n`);
+      expect(stdout).not.toContain(projectRoot);
+      expect(stdout).not.toContain(' at ');
+      expectNoAbsolutePaths(summary);
+    }
+  });
+
+  it('leaves only deterministic temporary input files before afterEach cleanup', () => {
+    const cases = [
+      writeTemporaryPackage('golden-cleanup-version.json', (input) => {
+        input.constructionVersion = 'wrong-construction-version';
+      }),
+      writeTemporaryPackage('golden-cleanup-forbidden.json', (input) => {
+        const games = input.games as Array<Record<string, unknown>>;
+        games[0].nested = {
+          modelProbability: 'deliberate-invalid-fixture-value',
+        };
+      }),
+      writeTemporaryPackage('golden-cleanup-empty.json', (input) => {
+        input.games = [];
+      }),
+    ];
+    const before = readdirSync(tempRoot).sort();
+
+    runResearch([fixturePath]);
+    for (const inputPath of cases) {
+      runResearchExpectingFailure([inputPath]);
+    }
+
+    expect(readdirSync(tempRoot).sort()).toEqual(before);
   });
 });

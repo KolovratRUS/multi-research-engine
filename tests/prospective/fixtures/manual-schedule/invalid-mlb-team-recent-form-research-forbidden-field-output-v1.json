@@ -1,0 +1,15 @@
+{
+  "ok": false,
+  "validationMessageCount": 1,
+  "validationErrorCount": 1,
+  "validationWarningCount": 0,
+  "validationMessages": [
+    {
+      "code": "TEAM_FORM_RESEARCH_FORBIDDEN_FIELD",
+      "level": "error",
+      "path": "$.games[0].nested.modelProbability",
+      "message": "construction package must not contain forbidden field modelProbability"
+    }
+  ],
+  "error": "TEAM_FORM_RESEARCH_FORBIDDEN_FIELD"
+}

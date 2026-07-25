@@ -3,6 +3,7 @@
 ## Status
 
 Phase 5A implementation.
+Phase 5B exact stdout golden regression coverage complete.
 Local-only.
 Stdout-only.
 Consumes the exact construction package artifact.
@@ -195,7 +196,7 @@ Phase 5A tests cover:
 - the package script; and
 - absence of generated output files.
 
-Exact stdout golden fixtures are deliberately deferred to Phase 5B.
+Phase 5B adds exact valid and representative invalid stdout golden fixtures without changing this Phase 5A behavior. See `docs/mlb-team-recent-form-research-golden-tests.md`.
 
 ## Validation
 
@@ -219,18 +220,32 @@ Exact stdout golden fixtures are deliberately deferred to Phase 5B.
 - Protected hashes and Git checks confirm no change to historical fixture data, Phase 4V/4Y construction goldens, Phase 4P/4S lock goldens, Phase 4X behavior, `package-lock.json`, or dependencies.
 - No live source, MLB API request, web lookup, or network schedule ingestion was used.
 
+## Phase 5B validation
+
+- Phase 5B adds four static exact stdout fixtures and 8 regression tests without changing this module implementation.
+- The focused suite passes 45 tests, including all 37 existing Phase 5A tests.
+- Construction passes 58 tests, historical rollout-focused coverage passes 154, prospective passes 182, backtesting passes 699, and full Vitest plus `npm test` pass 938 tests across 58 files.
+- TypeScript, production build, and Git diff check pass.
+- The valid stdout and three representative invalid stdout cases match their Phase 5B goldens byte-for-byte through the local `tsx/cjs` loader.
+- Direct npm entry points using the `tsx` launcher encounter managed-sandbox IPC `EPERM` before script execution; equivalent local-loader behavior passes.
+- Generated construction output, invalid-input mutations, and empty `tmp` directories were removed.
+- No Phase 5A behavior, historical fixture, protected lock/construction golden, package file, dependency, live/API/web source, or network schedule ingestion changed.
+
 ## Recommended next safe phase
 
-Phase 5B — add exact stdout golden tests for the MLB team recent form research module.
+Phase 5C — plan local fixture evidence wiring for the MLB team recent form research module.
 
 State:
 
+- planning-only;
 - fixture-only;
-- exact stdout golden;
-- no new research behavior;
+- no implementation;
+- define the local fixture evidence source and leakage guards;
 - no file output;
 - no live, API, or web access;
 - no network schedule ingestion;
 - no `modelProbability`;
-- no pitcher evidence; and
+- no pitcher evidence;
+- no actual starters;
+- no generated run artifacts committed; and
 - no historical fixture data changes.
