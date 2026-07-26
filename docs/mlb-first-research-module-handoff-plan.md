@@ -322,24 +322,20 @@ The future implementation should prove that it:
 
 ## Recommended next safe phase
 
-Phase 5D — implement the local fixture evidence provider for the implemented MLB team recent form research module.
+Phase 5F — plan aggregate-only team recent form summaries.
 
 State:
 
-- local-only;
-- fixture-only;
-- implementation;
-- local historical fixtures are optional evidence only;
-- the construction artifact remains the target schedule-and-game input;
-- preserve Phase 5B default stdout goldens unless evidence mode is explicit;
-- no live, API, or web access;
-- no network schedule ingestion;
-- no file output;
-- no `modelProbability`;
-- no odds, market, or betting language except negative safety exclusions;
+- planning-only;
+- no implementation;
+- aggregate-only;
+- no raw finalScore/outcome output;
+- no modelProbability;
 - no pitcher evidence;
-- no generated run artifacts committed;
-- no actual starters; and
+- no actual starters;
+- no file output;
+- no live/API/web;
+- no network schedule ingestion;
 - no historical fixture data changes.
 
 ## Phase 5A implementation

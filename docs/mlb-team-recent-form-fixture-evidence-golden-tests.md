@@ -77,42 +77,33 @@ npx tsx scripts/mlb-team-recent-form-research.ts tests/prospective/fixtures/manu
 
 ## Validation
 
-To be filled after final Phase 5E validation run.
-
-Expected guard commands:
-
-```bash
-npm run inventory:mlb-fixtures
-npm run prospective:mlb:dry-run-check
-npm run prospective:mlb:research-team-form -- tests/prospective/fixtures/manual-schedule/valid-weekly-prospective-research-construction-file-artifact-v1.json
-npm run prospective:mlb:research-team-form -- tests/prospective/fixtures/manual-schedule/valid-weekly-prospective-research-construction-file-artifact-v1.json --fixture-evidence-local
-npx vitest run tests/prospective/mlb-team-recent-form-research.test.ts --reporter=verbose
-npx vitest run tests/prospective/mlb-weekly-prospective-research-construction.test.ts --reporter=verbose
-npx vitest run tests/prospective --reporter=verbose
-npx vitest run tests/backtesting --reporter=verbose
-npx vitest run --reporter=verbose
-npx tsc --noEmit --incremental false --pretty false
-npm test
-npm run build
-git diff --check
-```
-
 Leave this section as evidence-only text; do not add placeholder results.
+
+## Phase 5E validation
+
+- Phase 5E locks exact `--fixture-evidence-local` stdout golden in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json`.
+- Golden contains `fixtureEvidenceLocal: true`, deterministic insufficient evidence for current local fixtures, exact `inputConstructionPackage` embedding, no `modelProbability`, no `finalScore`, no `completedGameState`, no `actualStartingPitchers`, no absolute paths, and no stack traces.
+- Phase 5D provider behavior unchanged.
+- No new research behavior, file output, dependency, or fixture data change introduced.
+
+## Phase 5F aggregate summary plan
+
+Phase 5F adds planning-only aggregate summary design in `docs/mlb-team-recent-form-aggregate-summary-plan.md`. It does not add implementation, file output, research behavior, or any live/API/web access.
 
 ## Recommended next safe phase
 
-Phase 5F — plan aggregate-only team recent form summaries.
+Phase 5G — implement aggregate-only coverage/completeness summaries.
 
 State:
-
-- planning-only;
-- no implementation;
-- aggregate-only;
-- no raw finalScore/outcome output;
+- local-only implementation;
+- aggregate-only coverage/completeness first;
+- no raw finalScore, outcome, completedGameState, or finalStatus output;
 - no modelProbability;
 - no pitcher evidence;
 - no actual starters;
 - no file output;
 - no live/API/web;
 - no network schedule ingestion;
-- no historical fixture data changes.
+- no historical fixture data changes;
+- preserve Phase 5B default goldens;
+- preserve Phase 5E evidence-enabled golden unless a new explicit aggregate mode is added.

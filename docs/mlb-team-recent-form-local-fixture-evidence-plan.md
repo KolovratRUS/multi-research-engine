@@ -286,6 +286,10 @@ State:
 - no network schedule ingestion;
 - no historical fixture data changes.
 
+## Phase 5F aggregate summary plan
+
+Phase 5F adds planning-only aggregate summary design in `docs/mlb-team-recent-form-aggregate-summary-plan.md`. It does not add implementation, file output, research behavior, or any live/API/web access.
+
 ## Phase 5E validation
 
 - Phase 5E locks exact `--fixture-evidence-local` stdout golden in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json`.

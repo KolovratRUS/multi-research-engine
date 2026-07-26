@@ -80,22 +80,27 @@ The invalid tests create deterministic mutated construction inputs only under ig
 
 ## Recommended next safe phase
 
-Phase 5E — add exact stdout goldens for `--fixture-evidence-local` mode.
+Phase 5F — plan aggregate-only team recent form summaries.
 
 State:
 
-- local-only;
-- exact stdout golden;
-- no new research behavior;
-- no file output;
-- no live, API, or web access;
-- no network schedule ingestion;
-- no `modelProbability`;
+- planning-only;
+- no implementation;
+- aggregate-only;
+- no raw finalScore/outcome output;
+- no modelProbability;
 - no pitcher evidence;
 - no actual starters;
-- no generated run artifacts committed;
-- no historical fixture data changes; and
-- preserve default Phase 5B stdout goldens when evidence mode is absent.
+- no file output;
+- no live/API/web;
+- no network schedule ingestion;
+- no historical fixture data changes.
+
+## Phase 5F aggregate summary plan
+
+Phase 5F adds planning-only aggregate summary design in `docs/mlb-team-recent-form-aggregate-summary-plan.md`. It does not add implementation, file output, research behavior, or any live/API/web access.
+
+## Phase 5E validation
 
 ## Phase 5D validation
 

@@ -1,6 +1,7 @@
 # MLB Prospective Weekly Team Recent Form Fixture Evidence Provider
 
-Status: Phase 5D implementation. Phase 5E adds exact evidence-enabled stdout golden coverage in `docs/mlb-team-recent-form-fixture-evidence-golden-tests.md`. Local-only. Pure provider. Explicit evidence-enabled mode. Default Phase 5B stdout goldens unchanged. No file output. No live/API/web. No network schedule ingestion. No modelProbability. No pitcher evidence. No actual starters. No prediction output. No historical fixture data changes.
+- Phase 5E completed: exact --fixture-evidence-local stdout golden locked. Phase 5D provider behavior, default Phase 5B goldens, and Phase 4/5 protected goldens remain unchanged.
+- Phase 5F is planning-only aggregate summary planning in `docs/mlb-team-recent-form-aggregate-summary-plan.md`. It does not add implementation, file output, or any live/API/web access.
 
 ## Command
 
