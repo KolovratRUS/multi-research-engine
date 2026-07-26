@@ -236,22 +236,28 @@ Phase 5B adds exact valid and representative invalid stdout golden fixtures with
 
 ## Recommended next safe phase
 
-Phase 5E — add exact stdout goldens for `--fixture-evidence-local` mode.
+Phase 5F — plan aggregate-only team recent form summaries.
 
 State:
 
-- local-only;
-- exact stdout golden;
-- no new research behavior;
-- no file output;
-- no live, API, or web access;
-- no network schedule ingestion;
-- no `modelProbability`;
+- planning-only;
+- no implementation;
+- aggregate-only;
+- no raw finalScore/outcome output;
+- no modelProbability;
 - no pitcher evidence;
 - no actual starters;
-- no generated run artifacts committed;
-- no historical fixture data changes; and
-- preserve default Phase 5B stdout goldens when evidence mode is absent.
+- no file output;
+- no live/API/web;
+- no network schedule ingestion;
+- no historical fixture data changes.
+
+## Phase 5E validation
+
+- Phase 5E locks exact `--fixture-evidence-local` stdout golden in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json`.
+- Golden contains `fixtureEvidenceLocal: true`, deterministic insufficient evidence for current local fixtures, exact `inputConstructionPackage` embedding, no `modelProbability`, no `finalScore`, no `completedGameState`, no `actualStartingPitchers`, no absolute paths, and no stack traces.
+- Phase 5D provider behavior unchanged.
+- No new research behavior, file output, dependency, or fixture data change introduced.
 
 ## Phase 5D validation
 
@@ -298,26 +304,38 @@ Phase 5D implemented the planned local fixture evidence provider in `src/prospec
 
 ## Phase 5D validation
 
-- The pure local fixture evidence provider passes 59 tests in `tests/prospective/mlb-team-recent-form-research.test.ts`.
+- The pure local fixture evidence provider passes 62 tests in `tests/prospective/mlb-team-recent-form-research.test.ts`.
 - The protected construction suite passes 58 tests.
-- Full Vitest and `npm test` pass 952 tests across 58 files.
+- Full Vitest and `npm test` pass 958 tests across 72 files.
 - TypeScript, production build, and Git diff check pass.
 - Default valid stdout remains byte-for-byte equal to the Phase 5B valid golden.
 - Default invalid stdout remains byte-for-byte equal to the Phase 5B invalid goldens.
-- `--fixture-evidence-local` is accepted and emits deterministic output across repeated runs.
+- `--fixture-evidence-local` stdout is exact equal to the committed evidence-enabled golden: `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json`.
+- `--fixture-evidence-local` emits deterministic output across repeated runs.
+- `--fixture-evidence-local` keeps same package identity and construction artifact embedding.
 - The CLI still rejects unknown arguments and multiple input paths alongside `--fixture-evidence-local`.
 - npm run inventory:mlb-fixtures -> PASS (29 games, 2024-06-01 to 2024-07-21)
 - npm run prospective:mlb:dry-run-check -> PASS
+- npm run prospective:mlb:research-team-form -- valid fixture -> PASS (default mode unchanged)
 - npx vitest run tests/prospective/mlb-weekly-prospective-research-construction.test.ts -> 58 passed
-- npx vitest run --reporter=verbose -> 952 passed
+- npx vitest run tests/prospective --reporter=verbose -> 199 passed
+- npx vitest run tests/backtesting --reporter=verbose -> 699 passed
+- npx vitest run --reporter=verbose -> 958 passed
 - npx tsc --noEmit --incremental false --pretty false -> exit 0
-- npm test -> 952 passed
+- npm test -> 958 passed
 - npm run build -> exit 0
 - git diff --check -> exit 0
 - No generated tmp/export/review/prospective artifact remains.
 - No historical fixture data changed.
 - No dependency, package-lock, or package change was made.
 - No live/API/web/network schedule ingestion occurred.
+
+## Phase 5E validation
+
+- Phase 5E locks exact `--fixture-evidence-local` stdout golden in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json`.
+- Golden contains `fixtureEvidenceLocal: true`, deterministic insufficient evidence for current local fixtures, exact `inputConstructionPackage` embedding, no `modelProbability`, no `finalScore`, no `completedGameState`, no `actualStartingPitchers`, no absolute paths, and no stack traces.
+- Phase 5D provider behavior unchanged.
+- No new research behavior, file output, dependency, or fixture data change introduced.
 
 ## Phase 5C validation
 

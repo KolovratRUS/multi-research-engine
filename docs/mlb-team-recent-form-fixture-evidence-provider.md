@@ -1,6 +1,6 @@
 # MLB Prospective Weekly Team Recent Form Fixture Evidence Provider
 
-Status: Phase 5D implementation. Local-only. Pure provider. Explicit evidence-enabled mode. Default Phase 5B stdout goldens unchanged. No file output. No live/API/web. No network schedule ingestion. No modelProbability. No pitcher evidence. No actual starters. No prediction output. No historical fixture data changes.
+Status: Phase 5D implementation. Phase 5E adds exact evidence-enabled stdout golden coverage in `docs/mlb-team-recent-form-fixture-evidence-golden-tests.md`. Local-only. Pure provider. Explicit evidence-enabled mode. Default Phase 5B stdout goldens unchanged. No file output. No live/API/web. No network schedule ingestion. No modelProbability. No pitcher evidence. No actual starters. No prediction output. No historical fixture data changes.
 
 ## Command
 
@@ -80,38 +80,42 @@ Tests added in tests/prospective/mlb-team-recent-form-research.test.ts:
 - Provider exposes safe-evidence-only fields on evidence items.
 - Default valid stdout remains byte-for-byte equal to Phase 5B valid golden.
 - Default invalid stdout remains byte-for-byte equal to Phase 5B invalid goldens.
-- --fixture-evidence-local is accepted and emits deterministic output across repeated runs.
-- --fixture-evidence-local keeps same package identity and construction artifact embedding.
-- --fixture-evidence-local never outputs forbidden fields or absolute paths.
-- --fixture-evidence-local still rejects unknown arguments and multiple paths.
+- `--fixture-evidence-local` is accepted and emits deterministic output across repeated runs.
+- `--fixture-evidence-local` stdout is exact equal to the committed evidence-enabled golden.
+- `--fixture-evidence-local` keeps same package identity and construction artifact embedding.
+- `--fixture-evidence-local` never outputs forbidden fields or absolute paths.
+- `--fixture-evidence-local` still rejects unknown arguments and multiple paths.
 
 ## Validation
 
-Validation results after Phase 5D implementation:
+Validation results after Phase 5E implementation:
 - npm run inventory:mlb-fixtures -> PASS (29 games, 2024-06-01 to 2024-07-21)
 - npm run prospective:mlb:dry-run-check -> PASS
 - npm run prospective:mlb:research-team-form -- valid fixture -> PASS (default mode unchanged)
-- npm run prospective:mlb:research-team-form -- valid fixture --fixture-evidence-local -> PASS (evidence mode deterministic)
-- npx vitest run tests/prospective/mlb-team-recent-form-research.test.ts -> 59 tests passed
+- npm run prospective:mlb:research-team-form -- valid fixture --fixture-evidence-local -> PASS (evidenced golden exact)
+- npx vitest run tests/prospective/mlb-team-recent-form-research.test.ts -> 62 tests passed
 - npx vitest run tests/prospective/mlb-weekly-prospective-research-construction.test.ts -> 58 tests passed
-- npx vitest run --reporter=verbose -> 952 tests passed
+- npx vitest run tests/prospective --reporter=verbose -> 199 tests passed
+- npx vitest run tests/backtesting --reporter=verbose -> 699 tests passed
+- npx vitest run --reporter=verbose -> 958 tests passed
 - npx tsc --noEmit --incremental false --pretty false -> exit 0
-- npm test -> 952 tests passed
+- npm test -> 958 tests passed
 - npm run build -> exit 0
 - git diff --check -> exit 0
 
 ## Recommended Next Safe Phase
 
-Phase 5E - add exact stdout goldens for evidence-enabled fixture mode
+Phase 5F — plan aggregate-only team recent form summaries
 
 State:
-- fixture-only
-- exact stdout golden
-- no new research behavior
-- no file output
-- no live/API/web
-- no network schedule ingestion
+- planning-only
+- no implementation
+- aggregate-only
+- no raw finalScore/outcome output
 - no modelProbability
 - no pitcher evidence
 - no actual starters
+- no file output
+- no live/API/web
+- no network schedule ingestion
 - no historical fixture data changes

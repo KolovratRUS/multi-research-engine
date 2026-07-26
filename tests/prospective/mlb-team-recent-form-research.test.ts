@@ -66,6 +66,10 @@ const emptyGamesStdoutGoldenPath = join(
   goldenFixtureDirectory,
   'invalid-mlb-team-recent-form-research-empty-games-output-v1.json',
 );
+const fixtureEvidenceLocalStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json',
+);
 const tempRoot = join(
   projectRoot,
   'tmp',
@@ -968,5 +972,101 @@ describe('Phase 5D MLB team recent form fixture evidence provider', () => {
 
     expect(summary.error).toBe('TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY');
     expectNoPackage(summary);
+  });
+
+  it('matches the exact evidence-enabled stdout golden byte-for-byte across repeated runs', () => {
+    const expected = readFileSync(fixtureEvidenceLocalStdoutGoldenPath, 'utf8');
+    const first = runResearch([fixturePath, '--fixture-evidence-local']);
+    const second = runResearch([fixturePath, '--fixture-evidence-local']);
+
+    expect(first).toBe(expected);
+    expect(second).toBe(expected);
+    expect(first).toBe(second);
+    expect(expected.endsWith('\n')).toBe(true);
+  });
+
+  it('preserves package identity and exact construction embedding in evidence mode', () => {
+    const constructionPackage = readValidConstructionPackage();
+    const summary = JSON.parse(readFileSync(fixtureEvidenceLocalStdoutGoldenPath, 'utf8')) as {
+      ok: boolean;
+      fixtureEvidenceLocal: boolean;
+      researchRunId: string;
+      sourceConstructionRunId: string;
+      sourceMode: string;
+      weekStart: string;
+      weekEnd: string;
+      gameCount: number;
+      validationErrorCount: number;
+      validationWarningCount: number;
+      package: {
+        inputConstructionPackage: Record<string, unknown>;
+        games: Array<{
+          gameId: string;
+          researchFindings: {
+            teamRecentForm: {
+              moduleVersion: string;
+              scope: string;
+              awaySummary: { status: string };
+              homeSummary: { status: string };
+              warnings: string[];
+              evidence: unknown[];
+              modelProbability?: unknown;
+            };
+          };
+        }>;
+      };
+    };
+
+    expect(summary.ok).toBe(true);
+    expect(summary.fixtureEvidenceLocal).toBe(true);
+    expect(summary.researchRunId).toBe('team-recent-form:manual-schedule-fixture-week-1');
+    expect(summary.sourceConstructionRunId).toBe('manual-schedule-fixture-week-1');
+    expect(summary.sourceMode).toBe('manual-schedule');
+    expect(summary.weekStart).toBe('2024-07-01');
+    expect(summary.weekEnd).toBe('2024-07-07');
+    expect(summary.gameCount).toBe(2);
+    expect(summary.validationErrorCount).toBe(0);
+    expect(summary.validationWarningCount).toBe(0);
+    expect(summary.package.inputConstructionPackage).toEqual(constructionPackage);
+    expect(summary.package.games).toHaveLength(2);
+    for (const game of summary.package.games) {
+      expect(game.researchFindings.teamRecentForm.moduleVersion).toBe('mlb-team-recent-form-v1');
+      expect(game.researchFindings.teamRecentForm.scope).toBe('TEAM_ONLY');
+      expect(game.researchFindings.teamRecentForm.awaySummary.status).toBe('insufficient');
+      expect(game.researchFindings.teamRecentForm.homeSummary.status).toBe('insufficient');
+      expect(game.researchFindings.teamRecentForm.warnings).toEqual(
+        expect.arrayContaining([
+          'TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED',
+          'TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES',
+          'TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION',
+        ]),
+      );
+      expect(game.researchFindings.teamRecentForm.evidence).toEqual([]);
+      expect(game.researchFindings.teamRecentForm).not.toHaveProperty('modelProbability');
+    }
+  });
+
+  it('keeps forbidden and absolute-path fields out of the evidence-enabled golden', () => {
+    const stdout = readFileSync(fixtureEvidenceLocalStdoutGoldenPath, 'utf8');
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+
+    for (const field of [
+      'modelProbability',
+      'finalScore',
+      'completedGameState',
+      'actualStartingPitchers',
+      'outcome',
+      'outcomeStatus',
+      'finalStatus',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(collectKeys(summary)).not.toContain(field);
+    }
+    expect(stdout).not.toContain(projectRoot);
+    expectNoAbsolutePaths(summary);
   });
 });

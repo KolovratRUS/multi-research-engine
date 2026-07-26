@@ -233,7 +233,7 @@ Phase 5D implemented the pure local fixture evidence provider behind an explicit
 
 ### Phase 5E
 
-Add exact stdout goldens for the evidence-enabled local fixture mode.
+Exact stdout golden for the evidence-enabled local fixture mode in `docs/mlb-team-recent-form-fixture-evidence-golden-tests.md`.
 
 ### Phase 5F
 
@@ -270,22 +270,28 @@ Add exact stdout goldens for the evidence-enabled local fixture mode.
 
 ## Recommended next safe phase
 
-Phase 5E — add exact stdout goldens for `--fixture-evidence-local` mode.
+Phase 5F — plan aggregate-only team recent form summaries.
 
 State:
 
-- local-only;
-- exact stdout golden;
-- no new research behavior;
-- no file output;
-- no live, API, or web access;
-- no network schedule ingestion;
-- no `modelProbability`;
+- planning-only;
+- no implementation;
+- aggregate-only;
+- no raw finalScore/outcome output;
+- no modelProbability;
 - no pitcher evidence;
 - no actual starters;
-- no generated run artifacts committed;
-- no historical fixture data changes; and
-- preserve default Phase 5B stdout goldens when evidence mode is absent.
+- no file output;
+- no live/API/web;
+- no network schedule ingestion;
+- no historical fixture data changes.
+
+## Phase 5E validation
+
+- Phase 5E locks exact `--fixture-evidence-local` stdout golden in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json`.
+- Golden contains `fixtureEvidenceLocal: true`, deterministic insufficient evidence for current local fixtures, exact `inputConstructionPackage` embedding, no `modelProbability`, no `finalScore`, no `completedGameState`, no `actualStartingPitchers`, no absolute paths, and no stack traces.
+- Phase 5D provider behavior unchanged.
+- No new research behavior, file output, dependency, or fixture data change introduced.
 
 ## Phase 5D validation
 
