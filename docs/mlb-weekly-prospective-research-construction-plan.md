@@ -372,7 +372,7 @@ The Phase 4Z plan is `docs/mlb-first-research-module-handoff-plan.md`. The propo
 
 ## Recommended next safe phase
 
-Phase 5D — implement the local fixture evidence provider for the MLB team recent form research module. Phase 5C plans that provider in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`. The exact construction artifact remains the target schedule/game input; existing local historical fixtures are optional evidence only. Phase 5D should preserve Phase 5B default stdout goldens unless evidence mode is explicit and add no file output, pitcher evidence, actual starters, `modelProbability`, prediction output, live/API/web access, network schedule ingestion, generated committed artifact, or historical fixture change.
+Phase 5D — implement the local fixture evidence provider for the MLB team recent form research module. Phase 5C plans that provider and its leakage guards in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`; the exact construction artifact remains the target schedule/game input and existing local historical fixtures are optional evidence only. Phase 5D should preserve Phase 5B default stdout goldens unless evidence mode is explicit and add no file output, pitcher evidence, actual starters, `modelProbability`, prediction output, live/API/web access, network schedule ingestion, generated committed artifact, or historical fixture change.
 
 ## Phase 5A research handoff validation
 

@@ -18,6 +18,20 @@ import {
   type MLBTeamRecentFormConstructionPackage,
   validateMLBTeamRecentFormConstructionPackage,
 } from '@/prospective/mlb/team-recent-form-research';
+import {
+  buildMLBTeamRecentFormFixtureEvidence,
+  TEAM_FORM_EVIDENCE_DEFAULT_LOOKBACK_GAMES,
+  TEAM_FORM_EVIDENCE_DEFAULT_LOOKBACK_DAYS,
+  TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES,
+  TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION,
+  TEAM_FORM_EVIDENCE_TARGET_GAME_EXCLUDED,
+  TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED,
+  TEAM_FORM_EVIDENCE_PITCHER_FIELDS_EXCLUDED,
+  TEAM_FORM_EVIDENCE_FORBIDDEN_FIELD_EXCLUDED,
+  type TeamRecentFormEvidenceRecord,
+  type TeamRecentFormEvidenceTarget,
+  type TeamRecentFormFixtureEvidenceLookback,
+} from '@/prospective/mlb/team-recent-form-fixture-evidence';
 
 const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-team-recent-form-research.ts');
@@ -391,7 +405,7 @@ describe('Phase 5A MLB team recent form research module', () => {
     expect(multiple.error).toBe('TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY');
     expect(unknown.error).toBe('TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT');
     expect(missing.usage).toBe(
-      'npm run prospective:mlb:research-team-form -- <construction-package-json>',
+      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local]',
     );
     expect(multiple.usage).toBe(missing.usage);
     expect(unknown.usage).toBe(missing.usage);
@@ -715,5 +729,244 @@ describe('Phase 5B MLB team recent form research stdout goldens', () => {
     }
 
     expect(readdirSync(tempRoot).sort()).toEqual(before);
+  });
+});
+
+describe('Phase 5D MLB team recent form fixture evidence provider', () => {
+  const target: TeamRecentFormEvidenceTarget = {
+    gameId: 'target-game-1',
+    scheduledStartTime: '2024-07-05T19:15:00Z',
+    awayTeam: 'AWAY_1',
+    homeTeam: 'HOME_1',
+  };
+
+  const syntheticSafeRecord: TeamRecentFormEvidenceRecord = {
+    gameId: 'synthetic-1',
+    officialDate: '2024-07-04',
+    scheduledStartTime: '2024-07-04T19:00:00Z',
+    awayTeam: 'AWAY_1',
+    homeTeam: 'HOME_1',
+    liveData: {
+      plays: {
+        allPlays: [
+          {
+            about: {
+              endTime: '2024-07-04T21:30:00Z',
+            },
+          },
+        ],
+      },
+    },
+    provenance: {
+      lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END',
+    },
+  };
+
+  function buildEvidence(
+    input: readonly TeamRecentFormEvidenceRecord[],
+    lookback?: TeamRecentFormFixtureEvidenceLookback,
+  ): ReturnType<typeof buildMLBTeamRecentFormFixtureEvidence> {
+    return buildMLBTeamRecentFormFixtureEvidence(target, input, lookback);
+  }
+
+  it('returns deterministic insufficient evidence when fixtures lack safe completion', () => {
+    const fixtures: TeamRecentFormEvidenceRecord[] = [
+      {
+        gameId: 'historical-1',
+        officialDate: '2024-07-01',
+        scheduledStartTime: '2024-07-01T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const result = buildEvidence(fixtures);
+
+    expect(result.lookbackWindowGames).toBe(TEAM_FORM_EVIDENCE_DEFAULT_LOOKBACK_GAMES);
+    expect(result.lookbackWindowDays).toBe(TEAM_FORM_EVIDENCE_DEFAULT_LOOKBACK_DAYS);
+    expect(result.awayRecentGamesFound).toBe(0);
+    expect(result.homeRecentGamesFound).toBe(0);
+    expect(result.dataQuality).toBe('insufficient');
+    expect(result.confidence).toBe('low');
+    expect(result.volatility).toBe('not-evaluated');
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION,
+      TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES,
+    ]));
+    expect(result.evidence).toEqual([]);
+  });
+
+  it('excludes the target game even when it appears in fixtures', () => {
+    const fixtures: TeamRecentFormEvidenceRecord[] = [
+      { ...syntheticSafeRecord, gameId: 'target-game-1' },
+      syntheticSafeRecord,
+    ];
+    const result = buildEvidence(fixtures);
+
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0].sourceGameId).toBe('synthetic-1');
+    expect(result.warnings).toContain(TEAM_FORM_EVIDENCE_TARGET_GAME_EXCLUDED);
+  });
+
+  it('excludes future games relative to target scheduled start time', () => {
+    const futureRecord: TeamRecentFormEvidenceRecord = {
+      ...syntheticSafeRecord,
+      gameId: 'future-safe',
+      officialDate: '2024-07-06',
+      scheduledStartTime: '2024-07-06T19:00:00Z',
+      liveData: {
+        plays: {
+          allPlays: [
+            {
+              about: {
+                endTime: '2024-07-06T20:00:00Z',
+              },
+            },
+          ],
+        },
+      },
+    };
+    const result = buildEvidence([futureRecord, syntheticSafeRecord]);
+
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0].sourceGameId).toBe('synthetic-1');
+    expect(result.warnings).toContain(TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED);
+  });
+
+  it('truncates to lookbackWindowGames and sorts newest-first', () => {
+    const fixtures: TeamRecentFormEvidenceRecord[] = [
+      { ...syntheticSafeRecord, gameId: 'older', officialDate: '2024-07-01', scheduledStartTime: '2024-07-01T19:00:00Z', liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-01T18:00:00Z' } }] } } },
+      syntheticSafeRecord,
+      { ...syntheticSafeRecord, gameId: 'newer', officialDate: '2024-07-04', scheduledStartTime: '2024-07-04T19:00:00Z', liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-04T22:00:00Z' } }] } } },
+    ];
+    const result = buildEvidence(fixtures, { lookbackWindowGames: 2 });
+
+    expect(result.evidence).toHaveLength(2);
+    expect(result.evidence.map((item) => item.sourceGameId)).toEqual(['newer', 'synthetic-1']);
+  });
+
+  it('respects the 30-day lookback window', () => {
+    const oldRecord: TeamRecentFormEvidenceRecord = {
+      ...syntheticSafeRecord,
+      gameId: 'old-safe',
+      officialDate: '2024-05-20',
+      scheduledStartTime: '2024-05-20T19:00:00Z',
+      liveData: {
+        plays: {
+          allPlays: [
+            {
+              about: {
+                endTime: '2024-05-20T18:00:00Z',
+              },
+            },
+          ],
+        },
+      },
+    };
+    const result = buildEvidence([oldRecord, syntheticSafeRecord], { lookbackWindowDays: 30 });
+
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0].sourceGameId).toBe('synthetic-1');
+  });
+
+  it('does not include forbidden fields in evidence output', () => {
+    const result = buildEvidence([syntheticSafeRecord], { lookbackWindowGames: 3 });
+
+    expect(result).not.toHaveProperty('modelProbability');
+    expect(result.evidence[0]).not.toHaveProperty('finalScore');
+    expect(result.evidence[0]).not.toHaveProperty('completedGameState');
+    expect(result.evidence[0]).not.toHaveProperty('actualStartingPitchers');
+    expect(result.evidence[0]).not.toHaveProperty('outcome');
+    expect(result.evidence[0]).not.toHaveProperty('closingOdds');
+  });
+
+  it('exposes safe-evidence-only fields on evidence items', () => {
+    const result = buildEvidence([syntheticSafeRecord]);
+
+    expect(result.evidence[0]).toMatchObject({
+      sourceGameId: 'synthetic-1',
+      officialDate: '2024-07-04',
+      completedAt: '2024-07-04T21:30:00Z',
+      team: 'AWAY_1',
+      teamRole: 'AWAY',
+      opponent: 'HOME_1',
+      sourceProvenance: 'LAST_COMPLETED_PLAY_END',
+    });
+  });
+
+  it('defaults to insufficient confidence when evidence is weak', () => {
+    const result = buildEvidence([]);
+
+    expect(result.dataQuality).toBe('insufficient');
+    expect(result.confidence).toBe('low');
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES, TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION]),
+    );
+  });
+
+  it('accepts --fixture-evidence-local and keeps deterministic output', () => {
+    const first = runResearch([fixturePath, '--fixture-evidence-local']);
+    const second = runResearch([fixturePath, '--fixture-evidence-local']);
+
+    expect(first).toBe(second);
+    expect(first).toContain('"fixtureEvidenceLocal": true');
+  });
+
+  it('keeps package identity and construction embedding under --fixture-evidence-local', () => {
+    const summary = JSON.parse(
+      runResearch([fixturePath, '--fixture-evidence-local']),
+    ) as Record<string, unknown>;
+
+    expect(summary.researchRunId).toBe('team-recent-form:manual-schedule-fixture-week-1');
+    expect(summary.sourceConstructionRunId).toBe('manual-schedule-fixture-week-1');
+    expect(summary.sourceMode).toBe('manual-schedule');
+    expect(summary.weekStart).toBe('2024-07-01');
+    expect(summary.weekEnd).toBe('2024-07-07');
+    expect(summary.gameCount).toBe(2);
+    expect(summary.validationErrorCount).toBe(0);
+  });
+
+  it('never outputs forbidden evidence or binary outcome fields under --fixture-evidence-local', () => {
+    const stdout = runResearch([fixturePath, '--fixture-evidence-local']);
+    const keys = collectKeys(JSON.parse(stdout));
+
+    for (const field of [
+      'modelProbability',
+      'finalScore',
+      'completedGameState',
+      'actualStartingPitchers',
+      'outcome',
+      'outcomeStatus',
+      'finalStatus',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(keys).not.toContain(field);
+    }
+  });
+
+  it('never outputs absolute paths under --fixture-evidence-local', () => {
+    const stdout = runResearch([fixturePath, '--fixture-evidence-local']);
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+
+    expect(stdout).not.toContain(projectRoot);
+    expectNoAbsolutePaths(summary);
+  });
+
+  it('still rejects unknown arguments alongside --fixture-evidence-local', () => {
+    const { summary } = runResearchExpectingFailure([fixturePath, '--fixture-evidence-local', '--unknown']);
+
+    expect(summary.error).toBe('TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT');
+    expectNoPackage(summary);
+  });
+
+  it('still rejects multiple input paths alongside --fixture-evidence-local', () => {
+    const { summary } = runResearchExpectingFailure([fixturePath, fixturePath, '--fixture-evidence-local']);
+
+    expect(summary.error).toBe('TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY');
+    expectNoPackage(summary);
   });
 });

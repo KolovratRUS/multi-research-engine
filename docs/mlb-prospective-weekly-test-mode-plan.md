@@ -237,8 +237,25 @@ Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-h
 
 ## Recommended next safe phase
 
-Phase 5D — implement the local fixture evidence provider for the MLB team recent form research module. Phase 5C now plans that provider and its leakage guards in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`; the exact construction artifact remains the target schedule/game input and existing local historical fixtures are optional evidence only. Phase 5D should preserve Phase 5B default stdout goldens unless evidence mode is explicit and add no file output, pitcher evidence, actual starters, `modelProbability`, prediction output, live/API/web access, network schedule ingestion, generated committed artifact, or historical fixture change.
+Phase 5E — add exact stdout goldens for `--fixture-evidence-local` mode.
+
+State:
+
+- local-only;
+- exact stdout golden;
+- no new research behavior;
+- no file output;
+- no live, API, or web access;
+- no network schedule ingestion;
+- no `modelProbability`;
+- no pitcher evidence;
+- no actual starters;
+- no generated run artifacts committed;
+- no historical fixture data changes; and
+- preserve default Phase 5B stdout goldens when evidence mode is absent.
+
+Phase 5D implemented the local fixture evidence provider in `docs/mlb-team-recent-form-fixture-evidence-provider.md`. It adds no real schedule ingestion, no live source, no network access, no historical fixture changes, and no `modelProbability` prediction output.
 
 ## Phase 5C local fixture evidence plan
 
-Phase 5C is planning-only. It defines a future pure local evidence provider, deterministic three-game/30-day lookback, safe completion derived only from the last completed play end with `LAST_COMPLETED_PLAY_END` provenance, and per-target exclusion of the target game and future games. It changes no Phase 5A behavior or Phase 5B golden.
+Phase 5C is planning-only. It defined a future pure local evidence provider, deterministic three-game/30-day lookback, safe completion derived only from the last completed play end with `LAST_COMPLETED_PLAY_END` provenance, and per-target exclusion of the target game and future games. It changes no Phase 5A behavior or Phase 5B golden.

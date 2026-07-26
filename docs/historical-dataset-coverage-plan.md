@@ -289,4 +289,6 @@ Phase 5B adds fixture-only exact stdout goldens for that module without changing
 
 Phase 5C is the planning-only local fixture evidence and leakage-guard design in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`. It keeps the construction artifact as the target schedule/game input and limits optional evidence to existing local historical records from `src/fixtures/backtesting/mlb/fixture-games.ts`. `TEAM_ONLY` remains no-pitcher. Phase 5A behavior and Phase 5B stdout goldens remain unchanged, with no file output, `modelProbability`, live/API/web access, network schedule ingestion, or historical fixture change.
 
-The recommended next safe phase is Phase 5D: implement a pure local fixture evidence provider behind explicit local input or test injection. It should retain the safe-completion rule, target/future leakage guards, no-file-output and no-prediction boundaries, make no historical fixture changes, and preserve the default Phase 5B stdout goldens unless evidence mode is explicit.
+Phase 5D implemented the pure local fixture evidence provider in `docs/mlb-team-recent-form-fixture-evidence-provider.md`. It wires evidence behind the explicit `--fixture-evidence-local` CLI flag, preserves default Phase 5B stdout goldens, and retains the `TEAM_ONLY`, no-pitcher, no-file-output, no-prediction safety boundary.
+
+The recommended next safe phase is Phase 5E: add exact stdout goldens for `--fixture-evidence-local` mode.

@@ -1,11 +1,25 @@
 import { readFileSync } from 'node:fs';
+import { buildMLBFixtures } from '../src/fixtures/backtesting/mlb/fixture-games';
+import type { HistoricalMLBGame } from '../src/lib/backtesting/types';
+import {
+  TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES,
+  TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION,
+  TEAM_FORM_EVIDENCE_TARGET_GAME_EXCLUDED,
+  TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED,
+  TEAM_FORM_EVIDENCE_PITCHER_FIELDS_EXCLUDED,
+  TEAM_FORM_EVIDENCE_FORBIDDEN_FIELD_EXCLUDED,
+  TEAM_FORM_EVIDENCE_INVALID_TARGET,
+  type TeamRecentFormEvidenceRecord,
+  type TeamRecentFormEvidenceTarget,
+  buildMLBTeamRecentFormFixtureEvidence,
+} from '../src/prospective/mlb/team-recent-form-fixture-evidence';
 import {
   buildMLBTeamRecentFormResearchPackage,
   type MLBTeamRecentFormConstructionPackage,
   validateMLBTeamRecentFormConstructionPackage,
-} from '@/prospective/mlb/team-recent-form-research';
+} from '../src/prospective/mlb/team-recent-form-research';
 
-const USAGE = 'npm run prospective:mlb:research-team-form -- <construction-package-json>';
+const USAGE = 'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local]';
 
 type ArgumentError =
   | 'TEAM_FORM_RESEARCH_PATH_REQUIRED'
@@ -14,17 +28,28 @@ type ArgumentError =
 
 interface ParsedArguments {
   readonly path: string;
+  readonly fixtureEvidenceLocal: boolean;
   readonly error: ArgumentError | null;
 }
+
+const ALLOWED_FLAGS = new Set(['--fixture-evidence-local']);
 
 function parseArguments(argv: string[]): ParsedArguments {
   const args = argv.slice(2);
   const positionalPaths: string[] = [];
+  let fixtureEvidenceLocal = false;
 
   for (const argument of args) {
     if (argument.startsWith('-')) {
+      if (ALLOWED_FLAGS.has(argument)) {
+        if (argument === '--fixture-evidence-local') {
+          fixtureEvidenceLocal = true;
+        }
+        continue;
+      }
       return {
         path: '',
+        fixtureEvidenceLocal: false,
         error: 'TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT',
       };
     }
@@ -34,18 +59,21 @@ function parseArguments(argv: string[]): ParsedArguments {
   if (positionalPaths.length === 0) {
     return {
       path: '',
+      fixtureEvidenceLocal: false,
       error: 'TEAM_FORM_RESEARCH_PATH_REQUIRED',
     };
   }
   if (positionalPaths.length > 1) {
     return {
       path: '',
+      fixtureEvidenceLocal,
       error: 'TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY',
     };
   }
 
   return {
     path: positionalPaths[0],
+    fixtureEvidenceLocal,
     error: null,
   };
 }
@@ -61,6 +89,44 @@ function emptyValidationSummary(): Record<string, unknown> {
     validationWarningCount: 0,
     validationMessages: [],
   };
+}
+
+function normalizedFixtureRecord(game: {
+  readonly gamePk: number;
+  readonly officialDate: string;
+  readonly gameDate: Date;
+  readonly awayTeamName: string;
+  readonly homeTeamName: string;
+}): TeamRecentFormEvidenceRecord {
+  return {
+    gameId: String(game.gamePk),
+    officialDate: game.officialDate,
+    scheduledStartTime: game.gameDate.toISOString(),
+    awayTeam: game.awayTeamName,
+    homeTeam: game.homeTeamName,
+    liveData: { plays: { allPlays: [] } },
+    provenance: {},
+  };
+}
+
+function buildLocalFixtureEvidence(
+  input: MLBTeamRecentFormConstructionPackage,
+): Record<string, { readonly target: TeamRecentFormEvidenceTarget; readonly fixtures: readonly TeamRecentFormEvidenceRecord[] }> {
+  const normalized = buildMLBFixtures().games.map((game: HistoricalMLBGame) => normalizedFixtureRecord(game));
+  return Object.fromEntries(
+    input.games.map((game) => [
+      game.gameId,
+      {
+        target: {
+          gameId: game.gameId,
+          scheduledStartTime: game.scheduledStartTime,
+          awayTeam: game.awayTeam,
+          homeTeam: game.homeTeam,
+        },
+        fixtures: normalized,
+      },
+    ]),
+  );
 }
 
 const parsedArguments = parseArguments(process.argv);
@@ -108,11 +174,24 @@ if (validationErrorCount > 0) {
   process.exit(1);
 }
 
+const typedInput = input as MLBTeamRecentFormConstructionPackage;
+const fixtureEvidenceByGameId = parsedArguments.fixtureEvidenceLocal
+  ? Object.fromEntries(
+      Object.entries(buildLocalFixtureEvidence(typedInput)).map(
+        ([gameId, { target, fixtures }]) => [
+          gameId,
+          buildMLBTeamRecentFormFixtureEvidence(target, fixtures),
+        ],
+      ),
+    )
+  : {};
+
 const researchPackage = buildMLBTeamRecentFormResearchPackage(
-  input as MLBTeamRecentFormConstructionPackage,
+  typedInput,
+  fixtureEvidenceByGameId,
 );
 
-writeSummary({
+const summary: Record<string, unknown> = {
   ok: true,
   researchPackageVersion: researchPackage.researchPackageVersion,
   researchRunId: researchPackage.researchRunId,
@@ -130,4 +209,10 @@ writeSummary({
   validationWarningCount,
   validationMessages,
   package: researchPackage,
-});
+};
+
+if (parsedArguments.fixtureEvidenceLocal) {
+  summary.fixtureEvidenceLocal = true;
+}
+
+writeSummary(summary);

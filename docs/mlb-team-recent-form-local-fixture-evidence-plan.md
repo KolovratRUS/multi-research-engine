@@ -2,9 +2,10 @@
 
 ## Status
 
-Phase 5C.
-Planning-only.
-No implementation.
+Phase 5D implemented.
+Local-only.
+Explicit evidence-enabled mode.
+Default Phase 5B stdout goldens unchanged.
 No new research behavior.
 No file output.
 No generated prospective run artifact committed.
@@ -20,12 +21,13 @@ No historical fixture data added or modified.
 
 ## Purpose
 
-Phase 5C plans how a later Phase 5D will wire local fixture-derived evidence into the Phase 5A/5B MLB team recent form research module. It follows:
+Phase 5C planned how to wire local fixture-derived evidence into the Phase 5A/5B MLB team recent form research module. It followed:
 
 - Phase 5A, the local-only stdout research skeleton; and
 - Phase 5B, the exact valid and representative invalid stdout goldens.
 
-This phase defines the evidence source, provider boundary, deterministic lookback, safe-completion rule, leakage guards, planned output, data-quality labels, tests, and implementation sequence. It does not implement evidence wiring or change the existing module.
+This phase defined the evidence source, provider boundary, deterministic lookback, safe-completion rule, leakage guards, planned output, data-quality labels, tests, and implementation sequence. It did not implement evidence wiring or change the existing module.
+Phase 5D implemented that provider boundary in `src/prospective/mlb/team-recent-form-fixture-evidence.ts` and wired it behind the explicit `--fixture-evidence-local` CLI flag in `scripts/mlb-team-recent-form-research.ts`. The Phase 5A research module accepts optional `fixtureEvidenceByGameId` input and preserves its default no-flag behavior.
 
 ## Evidence source
 
@@ -37,17 +39,17 @@ src/fixtures/backtesting/mlb/fixture-games.ts
 
 Phase 5D must use no live, API, web, or network schedule source. A raw manual schedule and a manual week lock artifact are not evidence sources. The exact Phase 4X/4Y construction artifact remains the sole target schedule-and-game input to the research module. Historical fixtures are optional evidence inputs only and must never replace or mutate that target input.
 
-Existing historical fixture records must not be modified for Phase 5D unless a separate explicit fixture-expansion phase is planned and approved. The current fixture surface must be audited before implementation for the required safe-completion field. If a record does not expose that field, it is ineligible; Phase 5D must not infer completion from its status or separate outcome record merely to create a positive evidence case.
+Existing historical fixture records must not be modified for Phase 5D and later phases unless a separate explicit fixture-expansion phase is planned and approved. The current fixture surface must be audited before implementation for the required safe-completion field. If a record does not expose that field, it is ineligible; evidence providers must not infer completion from its status or separate outcome record merely to create a positive evidence case.
 
 ## Evidence-provider boundary
 
-Plan a future pure provider, likely:
+Phase 5D implemented a pure provider in:
 
 ```text
 src/prospective/mlb/team-recent-form-fixture-evidence.ts
 ```
 
-The provider should accept:
+The provider accepts:
 
 - target game identity and `scheduledStartTime`;
 - `awayTeam`;
@@ -55,16 +57,16 @@ The provider should accept:
 - local historical fixture records; and
 - lookback configuration.
 
-It should return:
+It returns:
 
 - an away evidence list;
 - a home evidence list;
 - warnings; and
 - data-quality metadata.
 
-The provider should not read files itself when avoidable. The caller and tests should pass the fixture records explicitly. It must make no network calls, read no current clock, use no pitcher evidence, read no Phase 1G-b observations, and use no actual starters.
+The provider does not read files itself when avoidable. The caller and tests pass the fixture records explicitly. It makes no network calls, reads no current clock, uses no pitcher evidence, reads no Phase 1G-b observations, and uses no actual starters.
 
-The provider should be deterministic and pure: the same target, fixtures, and lookback configuration must return the same result without depending on source filenames, file metadata, environment state, or machine state.
+The provider is deterministic and pure: the same target, fixtures, and lookback configuration must return the same result without depending on source filenames, file metadata, environment state, or machine state.
 
 ## Lookback plan
 
@@ -102,7 +104,7 @@ The required provenance is:
 LAST_COMPLETED_PLAY_END
 ```
 
-Phase 5D must not use `finalStatus` or another final-state label alone. It must not use schedule probable information to infer completion, and it must not retrospectively promote historical schedule probable information. Actual starters remain evaluation-only.
+Phase 5D does not use `finalStatus` or another final-state label alone. It does not use schedule probable information to infer completion, and it does not retrospectively promote historical schedule probable information. Actual starters remain evaluation-only.
 
 If the last completed play or its `about.endTime` is missing, invalid, not paired with the required provenance, or not strictly before the target start, exclude the fixture and add a warning. A separate historical outcome object does not repair missing completion provenance for this provider.
 
@@ -227,15 +229,11 @@ The Phase 5B exact stdout goldens should remain unchanged when evidence is disab
 
 ### Phase 5D
 
-- Implement the pure local fixture evidence provider behind an explicit local fixture input path or test-only injection.
-- Preserve existing default Phase 5B goldens unless evidence is explicitly enabled.
-- Keep research stdout-only.
-- Add no file output.
-- Change no historical fixture records.
+Phase 5D implemented the pure local fixture evidence provider behind an explicit `--fixture-evidence-local` CLI flag. It preserves existing default Phase 5B goldens unless evidence is explicitly enabled. It keeps research stdout-only. It adds no file output. It changes no historical fixture records.
 
 ### Phase 5E
 
-- Add exact stdout goldens for an evidence-enabled local fixture mode if Phase 5D introduces a new explicit mode.
+Add exact stdout goldens for the evidence-enabled local fixture mode.
 
 ### Phase 5F
 
@@ -272,20 +270,38 @@ The Phase 5B exact stdout goldens should remain unchanged when evidence is disab
 
 ## Recommended next safe phase
 
-Phase 5D — implement the local fixture evidence provider for MLB team recent form.
+Phase 5E — add exact stdout goldens for `--fixture-evidence-local` mode.
 
 State:
 
 - local-only;
-- implementation;
-- fixture/local data only;
+- exact stdout golden;
+- no new research behavior;
+- no file output;
 - no live, API, or web access;
 - no network schedule ingestion;
-- no file output;
 - no `modelProbability`;
 - no pitcher evidence;
 - no actual starters;
-- no prediction output;
 - no generated run artifacts committed;
 - no historical fixture data changes; and
-- preserve Phase 5B default stdout goldens unless evidence mode is explicit.
+- preserve default Phase 5B stdout goldens when evidence mode is absent.
+
+## Phase 5D validation
+
+- The pure local fixture evidence provider passes 59 tests in `tests/prospective/mlb-team-recent-form-research.test.ts`.
+- Default valid stdout remains byte-for-byte equal to the Phase 5B valid golden.
+- Default invalid stdout remains byte-for-byte equal to the Phase 5B invalid goldens.
+- `--fixture-evidence-local` is accepted and emits deterministic output across repeated runs.
+- The CLI still rejects unknown arguments and multiple input paths alongside `--fixture-evidence-local`.
+- npm run inventory:mlb-fixtures -> PASS (29 games, 2024-06-01 to 2024-07-21)
+- npm run prospective:mlb:dry-run-check -> PASS
+- npx vitest run --reporter=verbose -> 952 passed
+- npx tsc --noEmit --incremental false --pretty false -> exit 0
+- npm test -> 952 passed
+- npm run build -> exit 0
+- git diff --check -> exit 0
+- No generated tmp/export/review/prospective artifact remains.
+- No historical fixture data changed.
+- No dependency, package-lock, or package change was made.
+- No live/API/web/network schedule ingestion occurred.

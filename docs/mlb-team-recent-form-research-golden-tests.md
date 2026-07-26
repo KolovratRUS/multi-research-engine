@@ -17,6 +17,8 @@ No actual starters.
 No `modelProbability`.
 No prediction output.
 No historical fixture data added or modified.
+Default Phase 5B stdout goldens remain unchanged.
+Evidence mode is explicit via `--fixture-evidence-local`.
 
 ## Purpose
 
@@ -77,23 +79,45 @@ The invalid tests create deterministic mutated construction inputs only under ig
 
 ## Recommended next safe phase
 
-Phase 5D — implement the local fixture evidence provider for MLB team recent form.
+Phase 5E — add exact stdout goldens for `--fixture-evidence-local` mode.
 
 State:
 
-- local-only implementation;
-- fixture/local data only;
-- construction artifact remains the target schedule-and-game input;
-- local historical fixtures are optional evidence only;
-- preserve these Phase 5B default stdout goldens unless evidence mode is explicit;
+- local-only;
+- exact stdout golden;
+- no new research behavior;
+- no file output;
 - no live, API, or web access;
 - no network schedule ingestion;
-- no file output;
 - no `modelProbability`;
 - no pitcher evidence;
 - no actual starters;
-- no generated run artifacts committed; and
-- no historical fixture data changes.
+- no generated run artifacts committed;
+- no historical fixture data changes; and
+- preserve default Phase 5B stdout goldens when evidence mode is absent.
+
+## Phase 5D validation
+
+- The pure local fixture evidence provider passes 59 tests in `tests/prospective/mlb-team-recent-form-research.test.ts`.
+- The protected construction suite passes 58 tests.
+- Full Vitest and `npm test` pass 952 tests across 58 files.
+- TypeScript, production build, and Git diff check pass.
+- Default valid stdout remains byte-for-byte equal to the Phase 5B valid golden.
+- Default invalid stdout remains byte-for-byte equal to the Phase 5B invalid goldens.
+- `--fixture-evidence-local` is accepted and emits deterministic output across repeated runs.
+- The CLI still rejects unknown arguments and multiple input paths alongside `--fixture-evidence-local`.
+- npm run inventory:mlb-fixtures -> PASS (29 games, 2024-06-01 to 2024-07-21)
+- npm run prospective:mlb:dry-run-check -> PASS
+- npx vitest run tests/prospective/mlb-weekly-prospective-research-construction.test.ts -> 58 passed
+- npx vitest run --reporter=verbose -> 952 passed
+- npx tsc --noEmit --incremental false --pretty false -> exit 0
+- npm test -> 952 passed
+- npm run build -> exit 0
+- git diff --check -> exit 0
+- No generated tmp/export/review/prospective artifact remains.
+- No historical fixture data changed.
+- No dependency, package-lock, or package change was made.
+- No live/API/web/network schedule ingestion occurred.
 
 ## Phase 5C local fixture evidence plan
 

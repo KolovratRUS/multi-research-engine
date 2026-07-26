@@ -1,4 +1,15 @@
 import { isAbsolute, win32 } from 'node:path';
+import {
+  TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES,
+  TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION,
+  TEAM_FORM_EVIDENCE_TARGET_GAME_EXCLUDED,
+  TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED,
+  TEAM_FORM_EVIDENCE_PITCHER_FIELDS_EXCLUDED,
+  TEAM_FORM_EVIDENCE_FORBIDDEN_FIELD_EXCLUDED,
+  TEAM_FORM_EVIDENCE_INVALID_TARGET,
+  type TeamRecentFormEvidenceItem,
+  type TeamRecentFormFixtureEvidenceResult,
+} from './team-recent-form-fixture-evidence';
 
 export const RESEARCH_PACKAGE_VERSION = 'mlb-team-recent-form-research-package-v1';
 export const TEAM_RECENT_FORM_MODULE_VERSION = 'mlb-team-recent-form-v1';
@@ -44,8 +55,19 @@ export interface MLBTeamRecentFormConstructionPackage {
 }
 
 export interface MLBTeamRecentFormSummary {
-  readonly status: 'not-evaluated';
-  readonly reason: 'fixture-evidence-not-wired';
+  readonly status:
+    | 'not-evaluated'
+    | 'complete'
+    | 'partial'
+    | 'insufficient';
+  readonly reason:
+    | 'not-evaluated'
+    | 'fixture-evidence-not-wired'
+    | 'invalid-target-scheduled-start-time'
+    | 'no-safe-completion'
+    | 'insufficient-evidence'
+    | 'partial-evidence'
+    | 'complete-evidence';
 }
 
 export interface MLBTeamRecentFormFinding {
@@ -53,17 +75,21 @@ export interface MLBTeamRecentFormFinding {
   readonly scope: 'TEAM_ONLY';
   readonly awayTeam: string;
   readonly homeTeam: string;
-  readonly lookbackWindowGames: 0;
-  readonly lookbackWindowDays: 0;
-  readonly awayRecentGamesFound: 0;
-  readonly homeRecentGamesFound: 0;
+  readonly lookbackWindowGames: number;
+  readonly lookbackWindowDays: number;
+  readonly awayRecentGamesFound: number;
+  readonly homeRecentGamesFound: number;
   readonly awaySummary: MLBTeamRecentFormSummary;
   readonly homeSummary: MLBTeamRecentFormSummary;
-  readonly dataQuality: 'not-evaluated';
-  readonly volatility: 'not-evaluated';
-  readonly confidence: 'not-evaluated';
-  readonly warnings: readonly never[];
-  readonly evidence: readonly never[];
+  readonly dataQuality:
+    | 'not-evaluated'
+    | 'complete'
+    | 'partial'
+    | 'insufficient';
+  readonly volatility: 'low' | 'medium' | 'high' | 'not-evaluated';
+  readonly confidence: 'high' | 'medium' | 'low' | 'not-evaluated';
+  readonly warnings: readonly string[];
+  readonly evidence: readonly TeamRecentFormEvidenceItem[];
 }
 
 export interface MLBTeamRecentFormResearchedGame extends MLBTeamRecentFormConstructionGame {
@@ -72,8 +98,8 @@ export interface MLBTeamRecentFormResearchedGame extends MLBTeamRecentFormConstr
   readonly researchFindings: {
     readonly teamRecentForm: MLBTeamRecentFormFinding;
   };
-  readonly researchMessages: readonly never[];
-  readonly researchWarnings: readonly never[];
+  readonly researchMessages: readonly unknown[];
+  readonly researchWarnings: readonly unknown[];
 }
 
 export interface MLBTeamRecentFormResearchModuleResult {
@@ -81,8 +107,8 @@ export interface MLBTeamRecentFormResearchModuleResult {
   readonly moduleVersion: 'mlb-team-recent-form-v1';
   readonly scope: 'TEAM_ONLY';
   readonly status: 'completed';
-  readonly messages: readonly never[];
-  readonly warnings: readonly never[];
+  readonly messages: readonly unknown[];
+  readonly warnings: readonly unknown[];
 }
 
 export interface MLBTeamRecentFormResearchPackage {
@@ -100,8 +126,8 @@ export interface MLBTeamRecentFormResearchPackage {
   readonly inputConstructionPackage: MLBTeamRecentFormConstructionPackage;
   readonly games: readonly MLBTeamRecentFormResearchedGame[];
   readonly researchModules: readonly [MLBTeamRecentFormResearchModuleResult];
-  readonly researchWarnings: readonly never[];
-  readonly researchMessages: readonly never[];
+  readonly researchWarnings: readonly unknown[];
+  readonly researchMessages: readonly unknown[];
 }
 
 const FORBIDDEN_FIELDS = new Set([
@@ -379,7 +405,37 @@ export function validateMLBTeamRecentFormConstructionPackage(
 
 function buildTeamRecentFormFinding(
   game: MLBTeamRecentFormConstructionGame,
+  fixtureEvidence?: TeamRecentFormFixtureEvidenceResult | null,
 ): MLBTeamRecentFormFinding {
+  if (fixtureEvidence) {
+    const awaySummary: MLBTeamRecentFormSummary = {
+      status: fixtureEvidence.awaySummary.summary.status,
+      reason: fixtureEvidence.awaySummary.summary.reason,
+    };
+    const homeSummary: MLBTeamRecentFormSummary = {
+      status: fixtureEvidence.homeSummary.summary.status,
+      reason: fixtureEvidence.homeSummary.summary.reason,
+    };
+
+    return {
+      moduleVersion: TEAM_RECENT_FORM_MODULE_VERSION,
+      scope: 'TEAM_ONLY',
+      awayTeam: game.awayTeam,
+      homeTeam: game.homeTeam,
+      lookbackWindowGames: fixtureEvidence.lookbackWindowGames,
+      lookbackWindowDays: fixtureEvidence.lookbackWindowDays,
+      awayRecentGamesFound: fixtureEvidence.awayRecentGamesFound,
+      homeRecentGamesFound: fixtureEvidence.homeRecentGamesFound,
+      awaySummary,
+      homeSummary,
+      dataQuality: fixtureEvidence.dataQuality,
+      volatility: fixtureEvidence.volatility,
+      confidence: fixtureEvidence.confidence,
+      warnings: fixtureEvidence.warnings,
+      evidence: fixtureEvidence.evidence,
+    };
+  }
+
   return {
     moduleVersion: TEAM_RECENT_FORM_MODULE_VERSION,
     scope: 'TEAM_ONLY',
@@ -407,6 +463,7 @@ function buildTeamRecentFormFinding(
 
 export function buildMLBTeamRecentFormResearchPackage(
   input: MLBTeamRecentFormConstructionPackage,
+  fixtureEvidenceByGameId?: Readonly<Record<string, TeamRecentFormFixtureEvidenceResult>> | null,
 ): MLBTeamRecentFormResearchPackage {
   const games = input.games.map<MLBTeamRecentFormResearchedGame>((game) => ({
     gameId: game.gameId,
@@ -424,7 +481,10 @@ export function buildMLBTeamRecentFormResearchPackage(
     researchStatus: 'researched',
     completedResearchModules: [TEAM_RECENT_FORM_MODULE_NAME],
     researchFindings: {
-      teamRecentForm: buildTeamRecentFormFinding(game),
+      teamRecentForm: buildTeamRecentFormFinding(
+        game,
+        fixtureEvidenceByGameId?.[game.gameId],
+      ),
     },
     researchMessages: [],
     researchWarnings: [],
