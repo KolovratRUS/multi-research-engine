@@ -73,6 +73,10 @@ const fixtureEvidenceLocalStdoutGoldenPath = join(
   goldenFixtureDirectory,
   'valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json',
 );
+const aggregateSummariesLocalStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'valid-mlb-team-recent-form-research-aggregate-summaries-local-cli-output-v1.json',
+);
 const tempRoot = join(
   projectRoot,
   'tmp',
@@ -1223,6 +1227,161 @@ describe('Phase 5G MLB team recent form aggregate summary', () => {
     const stdout = runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local']);
     expect(stdout).not.toContain(projectRoot);
     expectNoAbsolutePaths(JSON.parse(stdout));
+  });
+});
+
+describe('Phase 5H MLB team recent form aggregate stdout golden', () => {
+  afterEach(() => {
+    rmSync(tempRoot, { recursive: true, force: true });
+    expect(existsSync(tempRoot)).toBe(false);
+  });
+
+  it('matches the exact aggregate stdout golden byte-for-byte across repeated runs', () => {
+    const expected = readFileSync(aggregateSummariesLocalStdoutGoldenPath, 'utf8');
+    const first = runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local']);
+    const second = runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local']);
+
+    expect(first).toBe(expected);
+    expect(second).toBe(expected);
+    expect(first).toBe(second);
+    expect(expected.endsWith('\n')).toBe(true);
+  });
+
+  it('locks the expected aggregate metadata and exact construction embedding', () => {
+    const constructionPackage = readValidConstructionPackage();
+    const summary = JSON.parse(readFileSync(aggregateSummariesLocalStdoutGoldenPath, 'utf8')) as {
+      ok: boolean;
+      fixtureEvidenceLocal: boolean;
+      aggregateSummariesLocal: boolean;
+      researchPackageVersion: string;
+      researchRunId: string;
+      sourceConstructionRunId: string;
+      sourceMode: string;
+      weekStart: string;
+      weekEnd: string;
+      gameCount: number;
+      validationErrorCount: number;
+      validationWarningCount: number;
+      package: {
+        inputConstructionPackage: Record<string, unknown>;
+        games: Array<{ gameId: string }>;
+      };
+    };
+
+    expect(summary.ok).toBe(true);
+    expect(summary.fixtureEvidenceLocal).toBe(true);
+    expect(summary.aggregateSummariesLocal).toBe(true);
+    expect(summary.researchPackageVersion).toBe('mlb-team-recent-form-research-package-v1');
+    expect(summary.researchRunId).toBe('team-recent-form:manual-schedule-fixture-week-1');
+    expect(summary.sourceConstructionRunId).toBe('manual-schedule-fixture-week-1');
+    expect(summary.sourceMode).toBe('manual-schedule');
+    expect(summary.weekStart).toBe('2024-07-01');
+    expect(summary.weekEnd).toBe('2024-07-07');
+    expect(summary.gameCount).toBe(2);
+    expect(summary.validationErrorCount).toBe(0);
+    expect(summary.validationWarningCount).toBe(0);
+    expect(summary.package.inputConstructionPackage).toEqual(constructionPackage);
+  });
+
+  it('preserves two TEAM_RECENT_FORM findings with insufficient aggregate summaries in the golden', () => {
+    const summary = JSON.parse(readFileSync(aggregateSummariesLocalStdoutGoldenPath, 'utf8')) as {
+      package: {
+        games: Array<{
+          gameId: string;
+          researchFindings: {
+            teamRecentForm: {
+              moduleVersion: string;
+              scope: string;
+              awaySummary: { status: string };
+              homeSummary: { status: string };
+              awayAggregateSummary: Record<string, unknown>;
+              homeAggregateSummary: Record<string, unknown>;
+            };
+          };
+        }>;
+      };
+    };
+
+    expect(summary.package.games).toHaveLength(2);
+    for (const game of summary.package.games) {
+      expect(game.gameId).toBeDefined();
+      expect(game.gameId).toMatch(/^manual-game-/);
+      const finding = game.researchFindings.teamRecentForm;
+      expect(finding.moduleVersion).toBe('mlb-team-recent-form-v1');
+      expect(finding.scope).toBe('TEAM_ONLY');
+      expect(finding.awaySummary.status).toBe('insufficient');
+      expect(finding.homeSummary.status).toBe('insufficient');
+
+      expect(finding.awayAggregateSummary).toMatchObject({
+        status: 'insufficient',
+        reason: 'insufficient-evidence',
+        gamesConsidered: 0,
+        completedGamesConsidered: 0,
+        recencyWindowDays: 30,
+        recencyWindowGames: 3,
+        homeAwaySplitCounts: { home: 0, away: 0 },
+        opponentDiversityCount: 0,
+        dataCompletenessLabel: 'insufficient',
+        recencyCoverageLabel: 'insufficient',
+      });
+      expect(finding.awayAggregateSummary.sourceCompletenessWarnings).toEqual(
+        expect.arrayContaining([
+          'TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED',
+          'TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES',
+          'TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION',
+        ]),
+      );
+
+      expect(finding.homeAggregateSummary).toMatchObject({
+        status: 'insufficient',
+        reason: 'insufficient-evidence',
+        gamesConsidered: 0,
+        completedGamesConsidered: 0,
+        recencyWindowDays: 30,
+        recencyWindowGames: 3,
+        homeAwaySplitCounts: { home: 0, away: 0 },
+        opponentDiversityCount: 0,
+        dataCompletenessLabel: 'insufficient',
+        recencyCoverageLabel: 'insufficient',
+      });
+      expect(finding.homeAggregateSummary.sourceCompletenessWarnings).toEqual(
+        expect.arrayContaining([
+          'TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED',
+          'TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES',
+          'TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION',
+        ]),
+      );
+    }
+  });
+
+  it('keeps forbidden result-derived fields and absolute paths out of the aggregate golden', () => {
+    const stdout = readFileSync(aggregateSummariesLocalStdoutGoldenPath, 'utf8');
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+
+    for (const field of [
+      'modelProbability',
+      'predictedWinner',
+      'pick',
+      'finalScore',
+      'outcome',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'winsCount',
+      'lossesCount',
+      'averageRunsFor',
+      'averageRunsAgainst',
+      'averageRunDifferential',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(collectKeys(summary)).not.toContain(field);
+    }
+    expect(stdout).not.toContain(projectRoot);
+    expectNoAbsolutePaths(summary);
   });
 });
 

@@ -75,26 +75,28 @@ The implementation never outputs:
 
 Aggregate counts are derived only from safe evidence items already emitted by the Phase 5D provider. Completion remains based only on `liveData.plays.allPlays[last].about.endTime` with provenance `LAST_COMPLETED_PLAY_END`.
 
-## Validation Results From Phase 5G Final Validation
+## Validation
+
+Phase 5H validation confirms the exact aggregate-summary stdout golden under `--fixture-evidence-local --aggregate-summaries-local` and preserves existing Phase 5B/5E goldens unchanged.
 
 - npm run inventory:mlb-fixtures -> PASS (29 games, 2024-06-01 to 2024-07-21)
 - npm run prospective:mlb:dry-run-check -> PASS
 - npm run prospective:mlb:research-team-form -- valid fixture -> PASS (default Phase 5B golden exact)
 - npm run prospective:mlb:research-team-form -- valid fixture --fixture-evidence-local -> PASS (Phase 5E evidence golden exact)
 - npm run prospective:mlb:research-team-form -- valid fixture --fixture-evidence-local --aggregate-summaries-local -> PASS
-- npx vitest run tests/prospective/mlb-team-recent-form-research.test.ts -> 74 tests passed
+- npx vitest run tests/prospective/mlb-team-recent-form-research.test.ts -> 78 tests passed
 - npx vitest run tests/prospective/mlb-weekly-prospective-research-construction.test.ts -> 58 tests passed
-- npx vitest run tests/prospective --reporter=verbose -> 211 tests passed
+- npx vitest run tests/prospective --reporter=verbose -> 215 tests passed
 - npx vitest run tests/backtesting --reporter=verbose -> 699 tests passed
-- npx vitest run --reporter=verbose -> 967 tests passed
-- npm test -> 967 tests passed
+- npx vitest run --reporter=verbose -> 971 tests passed
+- npm test -> 971 tests passed
 - npx tsc --noEmit --incremental false --pretty false -> exit 0
 - npm run build -> exit 0
 - git diff --check -> exit 0
 
 ## Recommended Next Safe Phase
 
-Phase 5H — exact stdout golden for aggregate-summary mode.
+Phase 5I — plan safe result-derived aggregate metrics.
 
 State:
 - exact stdout golden only;

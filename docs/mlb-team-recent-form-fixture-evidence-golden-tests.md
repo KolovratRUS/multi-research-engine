@@ -94,14 +94,16 @@ Phase 5F adds planning-only aggregate summary design in `docs/mlb-team-recent-fo
 
 Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode without altering Phase 5D provider behavior, Phase 5B default goldens, or Phase 5E evidence-enabled goldens.
 
+Phase 5H adds exact aggregate-summary stdout golden regression coverage in `docs/mlb-team-recent-form-aggregate-summary-golden-tests.md`. It does not change the Phase 5E evidence-enabled stdout golden, the Phase 5B default golden, the Phase 5D provider behavior, or any research implementation.
+
 ## Recommended next safe phase
 
-Phase 5H — exact stdout golden for aggregate-summary mode.
+Phase 5I — plan safe result-derived aggregate metrics.
 
 State:
-- local-only implementation;
-- aggregate-only coverage/completeness first;
-- no raw finalScore, outcome, completedGameState, or finalStatus output;
+- planning-only;
+- no implementation;
+- no raw finalScore/outcome/completedGameState/finalStatus output;
 - no modelProbability;
 - no pitcher evidence;
 - no actual starters;
@@ -110,4 +112,5 @@ State:
 - no network schedule ingestion;
 - no historical fixture data changes;
 - preserve Phase 5B default goldens;
-- preserve Phase 5E evidence-enabled golden unless a new explicit aggregate mode is added.
+- preserve Phase 5E evidence-enabled golden;
+- preserve aggregate stdout golden added in Phase 5H.

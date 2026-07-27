@@ -5,6 +5,7 @@
 Phase 5G implemented.
 Aggregate-only coverage/completeness summaries.
 No implementation needed for this planning file; implementation is in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`.
+Phase 5H locks exact aggregate-summary stdout regression goldens in `docs/mlb-team-recent-form-aggregate-summary-golden-tests.md`.
 No new research behavior.
 No file output.
 No live/API/web.
@@ -16,6 +17,7 @@ No prediction output.
 No historical fixture data changes.
 Default Phase 5B stdout goldens unchanged.
 Phase 5E evidence-enabled stdout golden unchanged.
+New aggregate stdout golden added for explicit `--fixture-evidence-local --aggregate-summaries-local` mode.
 
 ## Purpose
 
@@ -135,36 +137,26 @@ No calibrated probability.
 
 ## Validation
 
-To be filled after final Phase 5F validation run.
+Phase 5H validation confirms exact aggregate stdout golden and preserves existing Phase 5B/5E goldens.
 
-Expected guard commands:
-
-```bash
-npm run inventory:mlb-fixtures
-npm run prospective:mlb:dry-run-check
-npm run prospective:mlb:research-team-form -- tests/prospective/fixtures/manual-schedule/valid-weekly-prospective-research-construction-file-artifact-v1.json
-npm run prospective:mlb:research-team-form -- tests/prospective/fixtures/manual-schedule/valid-weekly-prospective-research-construction-file-artifact-v1.json --fixture-evidence-local
-npx vitest run tests/prospective/mlb-team-recent-form-research.test.ts --reporter=verbose
-npx vitest run tests/prospective/mlb-weekly-prospective-research-construction.test.ts --reporter=verbose
-npx vitest run tests/prospective --reporter=verbose
-npx vitest run tests/backtesting --reporter=verbose
-npx vitest run --reporter=verbose
-npx tsc --noEmit --incremental false --pretty false
-npm test
-npm run build
-git diff --check
-```
-
-Leave this section as evidence-only text; do not add placeholder results.
+- inventory: 29 total games (June 17, July 12)
+- default stdout golden byte-for-byte match
+- evidence-enabled stdout golden byte-for-byte match
+- aggregate stdout golden byte-for-byte match across repeated local loader runs
+- focused research suite: 78 passed
+- full Vitest: 971 passed
+- TypeScript: passed
+- build: passed
+- git diff --check: passed
 
 ## Recommended next safe phase
 
-Phase 5G — implement aggregate-only coverage/completeness summaries.
+Phase 5I — plan safe result-derived aggregate metrics.
 
 State:
-- local-only implementation;
-- aggregate-only coverage/completeness first;
-- no raw finalScore, outcome, completedGameState, or finalStatus output;
+- planning-only;
+- no implementation;
+- no raw finalScore/outcome/completedGameState/finalStatus output;
 - no modelProbability;
 - no pitcher evidence;
 - no actual starters;
@@ -173,4 +165,5 @@ State:
 - no network schedule ingestion;
 - no historical fixture data changes;
 - preserve Phase 5B default goldens;
-- preserve Phase 5E evidence-enabled golden unless a new explicit aggregate mode is added.
+- preserve Phase 5E evidence-enabled golden;
+- preserve aggregate stdout golden added in Phase 5H.

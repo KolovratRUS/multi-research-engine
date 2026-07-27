@@ -107,13 +107,13 @@ Validation results after Phase 5E implementation:
 
 ## Recommended Next Safe Phase
 
-Phase 5F — plan aggregate-only team recent form summaries
+Phase 5I — plan safe result-derived aggregate metrics.
 
 State:
 - planning-only
 - no implementation
-- aggregate-only
-- no raw finalScore/outcome output
+- aggregate-only coverage/completeness planning
+- no raw finalScore/outcome/completedGameState/finalStatus output
 - no modelProbability
 - no pitcher evidence
 - no actual starters

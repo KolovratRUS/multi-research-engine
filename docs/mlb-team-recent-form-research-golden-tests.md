@@ -81,10 +81,11 @@ The invalid tests create deterministic mutated construction inputs only under ig
 ## Phase 5G aggregate summary implementation
 
 Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode and preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged.
+Phase 5H locks exact aggregate-summary stdout regression goldens in `docs/mlb-team-recent-form-aggregate-summary-golden-tests.md`. It does not add research behavior, file output, `modelProbability`, pitcher evidence, live/API/web access, network schedule ingestion, or historical fixture changes.
 
 ## Recommended next safe phase
 
-Phase 5H — exact stdout golden for aggregate-summary mode.
+Phase 5I — plan safe result-derived aggregate metrics.
 
 State:
 
@@ -155,6 +156,22 @@ Phase 5F adds planning-only aggregate summary design in `docs/mlb-team-recent-fo
 - No generated tmp/export/review/prospective artifact remains.
 - No historical fixture data changed.
 - No dependency, package-lock, or package change was made.
+
+## Phase 5H validation
+
+- Phase 5H locks exact `--fixture-evidence-local --aggregate-summaries-local` stdout golden in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-aggregate-summaries-local-cli-output-v1.json`.
+- Golden contains `fixtureEvidenceLocal: true`, `aggregateSummariesLocal: true`, exact `inputConstructionPackage` embedding, deterministic insufficient/zero-count `awayAggregateSummary`/`homeAggregateSummary` objects, no `modelProbability`, no result-derived fields, no absolute paths, and no stack traces.
+- Phase 5G aggregate implementation behavior unchanged.
+- Default Phase 5B stdout golden unchanged.
+- Phase 5E evidence-enabled stdout golden unchanged.
+- research tests: 78 passed (4 new aggregate golden tests).
+- Full Vitest and `npm test`: 971 passed.
+- TypeScript, production build, and Git diff check pass.
+- No generated tmp/export/review/prospective artifact remains.
+- No historical fixture data changed.
+- No dependency, package-lock, or package change was made.
+- No live/API/web/network schedule ingestion occurred.
+
 ## Phase 5C local fixture evidence plan
 
 Phase 5C is planning-only and is documented in `docs/mlb-team-recent-form-local-fixture-evidence-plan.md`. It plans local historical fixture evidence from `src/fixtures/backtesting/mlb/fixture-games.ts`, a pure provider boundary, deterministic lookback, safe-completion filtering, and target/future-game leakage guards. `TEAM_ONLY` remains no-pitcher. Phase 5A behavior and every Phase 5B stdout golden remain unchanged, with no file output, `modelProbability`, actual starters, live/API/web access, network schedule ingestion, or historical fixture change.

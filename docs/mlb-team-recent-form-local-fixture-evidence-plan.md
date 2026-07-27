@@ -235,13 +235,14 @@ Phase 5D implemented the pure local fixture evidence provider behind an explicit
 
 Exact stdout golden for the evidence-enabled local fixture mode in `docs/mlb-team-recent-form-fixture-evidence-golden-tests.md`.
 
-### Phase 5F
+### Phase 5H
 
-- Plan or implement aggregate-only team summaries if they are still needed after the evidence boundary is proven.
+Locks exact aggregate-summary stdout regression goldens in `docs/mlb-team-recent-form-aggregate-summary-golden-tests.md`. It does not change the Phase 5D provider behavior, Phase 5B default goldens, Phase 5E evidence-enabled goldens, or implementation files.
 
-### Phase 5G
+### Phase 5I
 
-Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode and preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged.
+- Plan safe result-derived aggregate metrics if a separate later phase confirms local-only safe derivation.
+- Keep Phase 5H golden unchanged.
 
 ## Success criteria
 

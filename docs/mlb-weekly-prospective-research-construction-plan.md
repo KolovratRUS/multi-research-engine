@@ -376,14 +376,12 @@ Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb
 
 ## Recommended next safe phase
 
-Phase 5H — exact stdout golden for aggregate-summary mode.
+Phase 5I — plan safe result-derived aggregate metrics.
 
 State:
-
 - planning-only;
 - no implementation;
-- aggregate-only;
-- no raw finalScore/outcome output;
+- no raw finalScore/outcome/completedGameState/finalStatus output;
 - no modelProbability;
 - no pitcher evidence;
 - no actual starters;

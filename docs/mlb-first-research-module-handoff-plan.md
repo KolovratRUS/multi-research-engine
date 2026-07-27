@@ -307,9 +307,11 @@ The future implementation should prove that it:
 - Pre-edit focused lock and construction regression coverage passes: 82 tests. This covers the Phase 4P no-flag lock goldens, Phase 4S file-output lock goldens, Phase 4V construction stdout goldens, and Phase 4Y construction file-output goldens.
 - The focused construction suite passes: 58 tests.
 - Historical export release behavior passes in all four modes through the local loader, including threshold checks. The focused rollout review suite passes: 154 tests.
-- The prospective suite passes: 137 tests.
+- The prospective suite passes: 215 tests.
 - The backtesting suite passes: 699 tests.
-- Full Vitest and `npm test` pass: 893 tests across 57 files.
+- Full Vitest and `npm test` pass: 971 tests across 58 files.
+- Added exact aggregate-summary stdout golden in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-aggregate-summaries-local-cli-output-v1.json`.
+- research tests: 78 passed (4 new aggregate golden tests).
 - TypeScript passes.
 - Production build passes.
 - Git diff check passes.
@@ -326,14 +328,12 @@ Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb
 
 ## Recommended next safe phase
 
-Phase 5H — exact stdout golden for aggregate-summary mode.
+Phase 5I — plan safe result-derived aggregate metrics.
 
 State:
-
 - planning-only;
 - no implementation;
-- aggregate-only;
-- no raw finalScore/outcome output;
+- no raw finalScore/outcome/completedGameState/finalStatus output;
 - no modelProbability;
 - no pitcher evidence;
 - no actual starters;
