@@ -179,3 +179,5 @@ Phase 5C is planning-only and is documented in `docs/mlb-team-recent-form-local-
 ## Phase 5K result-aggregate-metrics golden
 
 Phase 5K added exact stdout golden coverage for the explicit result-metrics mode. The golden is `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json`. It preserves Phase 5B/5E/5H goldens and adds no live/API/web access, network schedule ingestion, historical fixture changes, or `modelProbability`.
+
+Phase 5N adds exact stdout golden coverage for the explicit Phase 5M schedule-context mode in `docs/mlb-team-schedule-context-golden-tests.md`. It locks the current schedule-context CLI output as a regression golden, adds no new research behavior, and preserves Phase 5B/5E/5H/5K goldens. Phase 5J result-metrics behavior and Phase 5M schedule-context behavior remain unchanged.

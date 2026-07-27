@@ -88,6 +88,10 @@ const resultAggregateMetricsLocalStdoutGoldenPath = join(
   goldenFixtureDirectory,
   'valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json',
 );
+const teamScheduleContextLocalStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'valid-mlb-team-schedule-context-local-cli-output-v1.json',
+);
 const tempRoot = join(
   projectRoot,
   'tmp',
@@ -2151,6 +2155,111 @@ describe('Phase 5M MLB team schedule context mode', () => {
       expect(game.researchFindings.teamScheduleContext.awayScheduleContext.previousGameScheduledAt).toBeNull();
       expect(game.researchFindings.teamScheduleContext.awayScheduleContext.nextGameScheduledAt).toBeNull();
     }
+  });
+
+  it('matches exact Phase 5N schedule-context stdout golden', () => {
+    const expected = readFileSync(teamScheduleContextLocalStdoutGoldenPath, 'utf8');
+    expect(
+      runResearch([
+        fixturePathForSchedule,
+        '--fixture-evidence-local',
+        '--team-schedule-context-local',
+      ]),
+    ).toBe(expected);
+  });
+
+  it('parses Phase 5N schedule-context golden with required top-level fields', () => {
+    const expected = readFileSync(teamScheduleContextLocalStdoutGoldenPath, 'utf8');
+    const summary = JSON.parse(expected) as Record<string, unknown>;
+
+    expect(summary.ok).toBe(true);
+    expect(summary.fixtureEvidenceLocal).toBe(true);
+    expect(summary.teamScheduleContextLocal).toBe(true);
+    expect(summary.gameCount).toBe(2);
+
+    const games = (summary.package as { games: unknown[] }).games;
+    expect(games).toHaveLength(2);
+    for (const game of games) {
+      expect(game).toHaveProperty('researchFindings.teamRecentForm');
+      expect(game).toHaveProperty('researchFindings.teamScheduleContext');
+    }
+  });
+
+  it('Phase 5N golden schedule context exposes only TEAM_ONLY scope fields', () => {
+    const expected = readFileSync(teamScheduleContextLocalStdoutGoldenPath, 'utf8');
+    const summary = JSON.parse(expected) as {
+      package: {
+        games: Array<{
+          researchFindings: {
+            teamScheduleContext: {
+              moduleVersion: string;
+              moduleName: string;
+              scope: string;
+              awayScheduleContext: {
+                status: string;
+                reason: string;
+                scheduleContextWarnings: string[];
+              };
+              homeScheduleContext: {
+                status: string;
+                reason: string;
+                scheduleContextWarnings: string[];
+              };
+            };
+          };
+        }>;
+      };
+    };
+
+    for (const game of summary.package.games) {
+      const context = game.researchFindings.teamScheduleContext;
+      expect(context.moduleVersion).toBe('mlb-team-schedule-context-v1');
+      expect(context.moduleName).toBe('TEAM_SCHEDULE_CONTEXT');
+      expect(context.scope).toBe('TEAM_ONLY');
+      expect(context.awayScheduleContext.status).toBe('insufficient');
+      expect(context.awayScheduleContext.reason).toBe('insufficient-schedule-evidence');
+      expect(context.awayScheduleContext.scheduleContextWarnings).toEqual(
+        expect.arrayContaining(['TEAM_SCHEDULE_CONTEXT_NO_RECORDS']),
+      );
+      expect(context.homeScheduleContext.status).toBe('insufficient');
+      expect(context.homeScheduleContext.reason).toBe('insufficient-schedule-evidence');
+      expect(context.homeScheduleContext.scheduleContextWarnings).toEqual(
+        expect.arrayContaining(['TEAM_SCHEDULE_CONTEXT_NO_RECORDS']),
+      );
+    }
+  });
+
+  it('Phase 5N golden does not contain forbidden fields', () => {
+    const expected = readFileSync(teamScheduleContextLocalStdoutGoldenPath, 'utf8');
+    for (const field of [
+      'modelProbability',
+      'predictedWinner',
+      'pick',
+      'finalScore',
+      'outcome',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(expected).not.toContain(`"${field}"`);
+    }
+    expectNoAbsolutePaths(JSON.parse(expected));
+    expect(expected).not.toContain(projectRoot);
+  });
+
+  it('repeated schedule-context mode matches new golden byte-for-byte', () => {
+    const expected = readFileSync(teamScheduleContextLocalStdoutGoldenPath, 'utf8');
+    const first = runResearch([
+      fixturePathForSchedule,
+      '--fixture-evidence-local',
+      '--team-schedule-context-local',
+    ]);
+    expect(first).toBe(expected);
   });
 });
 
