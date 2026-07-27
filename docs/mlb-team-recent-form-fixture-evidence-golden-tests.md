@@ -90,9 +90,13 @@ Leave this section as evidence-only text; do not add placeholder results.
 
 Phase 5F adds planning-only aggregate summary design in `docs/mlb-team-recent-form-aggregate-summary-plan.md`. It does not add implementation, file output, research behavior, or any live/API/web access.
 
+## Phase 5G aggregate summary implementation
+
+Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode without altering Phase 5D provider behavior, Phase 5B default goldens, or Phase 5E evidence-enabled goldens.
+
 ## Recommended next safe phase
 
-Phase 5G — implement aggregate-only coverage/completeness summaries.
+Phase 5H — exact stdout golden for aggregate-summary mode.
 
 State:
 - local-only implementation;

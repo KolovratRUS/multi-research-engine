@@ -370,9 +370,13 @@ The implementation record is `docs/mlb-weekly-prospective-research-construction-
 
 The Phase 4Z plan is `docs/mlb-first-research-module-handoff-plan.md`. The proposed MLB team recent form module consumes the exact Phase 4X/4Y construction package artifact and returns a new enriched pregame research package without mutating construction or producing a prediction. Its finding scope is `TEAM_ONLY`, so it uses no pitcher evidence or actual starters. It introduces no `modelProbability`, live/API/web access, or network schedule ingestion.
 
+Phase 5F adds planning-only aggregate summary design in `docs/mlb-team-recent-form-aggregate-summary-plan.md`. It does not add implementation, file output, research behavior, or any live/API/web access.
+
+Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode and preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged.
+
 ## Recommended next safe phase
 
-Phase 5F — plan aggregate-only team recent form summaries.
+Phase 5H — exact stdout golden for aggregate-summary mode.
 
 State:
 

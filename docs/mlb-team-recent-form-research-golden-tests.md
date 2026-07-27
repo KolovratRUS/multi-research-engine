@@ -78,9 +78,13 @@ The invalid tests create deterministic mutated construction inputs only under ig
 - Protected-file checks confirm no change to Phase 5A behavior, Phase 4X construction behavior, historical fixture data, earlier lock/construction goldens, `package.json`, `package-lock.json`, or dependencies.
 - No live source, MLB API request, web lookup, or network schedule ingestion was used.
 
+## Phase 5G aggregate summary implementation
+
+Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode and preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged.
+
 ## Recommended next safe phase
 
-Phase 5F — plan aggregate-only team recent form summaries.
+Phase 5H — exact stdout golden for aggregate-summary mode.
 
 State:
 

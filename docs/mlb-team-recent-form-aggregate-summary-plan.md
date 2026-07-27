@@ -2,10 +2,9 @@
 
 ## Status
 
-Phase 5F.
-Planning-only.
-No implementation.
-Aggregate-only plan.
+Phase 5G implemented.
+Aggregate-only coverage/completeness summaries.
+No implementation needed for this planning file; implementation is in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`.
 No new research behavior.
 No file output.
 No live/API/web.

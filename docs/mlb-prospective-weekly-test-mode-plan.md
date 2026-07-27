@@ -237,7 +237,7 @@ Phase 4Z is planning-only and is documented in `docs/mlb-first-research-module-h
 
 ## Recommended next safe phase
 
-Phase 5F — plan aggregate-only team recent form summaries.
+Phase 5H — exact stdout golden for aggregate-summary mode.
 
 State:
 

@@ -320,9 +320,13 @@ The future implementation should prove that it:
 - No live source, MLB API request, web lookup, or network schedule ingestion was used.
 - No dependency, implementation file, historical fixture record, construction behavior, lock behavior, or protected golden changed.
 
+## Phase 5G aggregate summary implementation
+
+Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode and preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged.
+
 ## Recommended next safe phase
 
-Phase 5F — plan aggregate-only team recent form summaries.
+Phase 5H — exact stdout golden for aggregate-summary mode.
 
 State:
 

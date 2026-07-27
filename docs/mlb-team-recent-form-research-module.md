@@ -22,6 +22,8 @@ No prediction output.
 No historical fixture data added or modified.
 Default Phase 5B stdout goldens remain unchanged.
 Evidence mode is explicit via `--fixture-evidence-local`.
+Phase 5F is planning-only aggregate summary planning in `docs/mlb-team-recent-form-aggregate-summary-plan.md`. It does not add implementation, file output, or any live/API/web access.
+Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode and preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged.
 
 ## Purpose
 

@@ -239,6 +239,10 @@ Exact stdout golden for the evidence-enabled local fixture mode in `docs/mlb-tea
 
 - Plan or implement aggregate-only team summaries if they are still needed after the evidence boundary is proven.
 
+### Phase 5G
+
+Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode and preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged.
+
 ## Success criteria
 
 - Phase 5D can add local fixture evidence without target or future leakage.

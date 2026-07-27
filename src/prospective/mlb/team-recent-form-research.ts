@@ -8,9 +8,13 @@ import {
   TEAM_FORM_EVIDENCE_FORBIDDEN_FIELD_EXCLUDED,
   TEAM_FORM_EVIDENCE_INVALID_TARGET,
   type TeamRecentFormEvidenceItem,
+  type TeamRecentFormEvidenceTarget,
   type TeamRecentFormFixtureEvidenceResult,
 } from './team-recent-form-fixture-evidence';
-
+import {
+  buildMLBTeamRecentFormAggregateSummary,
+  type MLBTeamRecentFormAggregateSummary,
+} from './team-recent-form-aggregate-summary';
 export const RESEARCH_PACKAGE_VERSION = 'mlb-team-recent-form-research-package-v1';
 export const TEAM_RECENT_FORM_MODULE_VERSION = 'mlb-team-recent-form-v1';
 export const TEAM_RECENT_FORM_MODULE_NAME = 'TEAM_RECENT_FORM';
@@ -90,6 +94,8 @@ export interface MLBTeamRecentFormFinding {
   readonly confidence: 'high' | 'medium' | 'low' | 'not-evaluated';
   readonly warnings: readonly string[];
   readonly evidence: readonly TeamRecentFormEvidenceItem[];
+  readonly awayAggregateSummary?: MLBTeamRecentFormAggregateSummary;
+  readonly homeAggregateSummary?: MLBTeamRecentFormAggregateSummary;
 }
 
 export interface MLBTeamRecentFormResearchedGame extends MLBTeamRecentFormConstructionGame {
@@ -406,64 +412,74 @@ export function validateMLBTeamRecentFormConstructionPackage(
 function buildTeamRecentFormFinding(
   game: MLBTeamRecentFormConstructionGame,
   fixtureEvidence?: TeamRecentFormFixtureEvidenceResult | null,
+  aggregateSummaryEnabled?: boolean,
 ): MLBTeamRecentFormFinding {
-  if (fixtureEvidence) {
-    const awaySummary: MLBTeamRecentFormSummary = {
-      status: fixtureEvidence.awaySummary.summary.status,
-      reason: fixtureEvidence.awaySummary.summary.reason,
-    };
-    const homeSummary: MLBTeamRecentFormSummary = {
-      status: fixtureEvidence.homeSummary.summary.status,
-      reason: fixtureEvidence.homeSummary.summary.reason,
-    };
-
+  if (!fixtureEvidence) {
     return {
       moduleVersion: TEAM_RECENT_FORM_MODULE_VERSION,
       scope: 'TEAM_ONLY',
       awayTeam: game.awayTeam,
       homeTeam: game.homeTeam,
-      lookbackWindowGames: fixtureEvidence.lookbackWindowGames,
-      lookbackWindowDays: fixtureEvidence.lookbackWindowDays,
-      awayRecentGamesFound: fixtureEvidence.awayRecentGamesFound,
-      homeRecentGamesFound: fixtureEvidence.homeRecentGamesFound,
-      awaySummary,
-      homeSummary,
-      dataQuality: fixtureEvidence.dataQuality,
-      volatility: fixtureEvidence.volatility,
-      confidence: fixtureEvidence.confidence,
-      warnings: fixtureEvidence.warnings,
-      evidence: fixtureEvidence.evidence,
+      lookbackWindowGames: 0,
+      lookbackWindowDays: 0,
+      awayRecentGamesFound: 0,
+      homeRecentGamesFound: 0,
+      awaySummary: {
+        status: 'not-evaluated',
+        reason: 'fixture-evidence-not-wired',
+      },
+      homeSummary: {
+        status: 'not-evaluated',
+        reason: 'fixture-evidence-not-wired',
+      },
+      dataQuality: 'not-evaluated',
+      volatility: 'not-evaluated',
+      confidence: 'not-evaluated',
+      warnings: [],
+      evidence: [],
     };
   }
 
-  return {
+  const base: MLBTeamRecentFormFinding = {
     moduleVersion: TEAM_RECENT_FORM_MODULE_VERSION,
     scope: 'TEAM_ONLY',
     awayTeam: game.awayTeam,
     homeTeam: game.homeTeam,
-    lookbackWindowGames: 0,
-    lookbackWindowDays: 0,
-    awayRecentGamesFound: 0,
-    homeRecentGamesFound: 0,
+    lookbackWindowGames: fixtureEvidence.lookbackWindowGames,
+    lookbackWindowDays: fixtureEvidence.lookbackWindowDays,
+    awayRecentGamesFound: fixtureEvidence.awayRecentGamesFound,
+    homeRecentGamesFound: fixtureEvidence.homeRecentGamesFound,
     awaySummary: {
-      status: 'not-evaluated',
-      reason: 'fixture-evidence-not-wired',
+      status: fixtureEvidence.awaySummary.summary.status,
+      reason: fixtureEvidence.awaySummary.summary.reason,
     },
     homeSummary: {
-      status: 'not-evaluated',
-      reason: 'fixture-evidence-not-wired',
+      status: fixtureEvidence.homeSummary.summary.status,
+      reason: fixtureEvidence.homeSummary.summary.reason,
     },
-    dataQuality: 'not-evaluated',
-    volatility: 'not-evaluated',
-    confidence: 'not-evaluated',
-    warnings: [],
-    evidence: [],
+    dataQuality: fixtureEvidence.dataQuality,
+    volatility: fixtureEvidence.volatility,
+    confidence: fixtureEvidence.confidence,
+    warnings: fixtureEvidence.warnings,
+    evidence: fixtureEvidence.evidence,
   };
+
+  if (aggregateSummaryEnabled) {
+    const aggregate = buildMLBTeamRecentFormAggregateSummary(fixtureEvidence);
+    return {
+      ...base,
+      awayAggregateSummary: aggregate.awayAggregateSummary,
+      homeAggregateSummary: aggregate.homeAggregateSummary,
+    };
+  }
+
+  return base;
 }
 
 export function buildMLBTeamRecentFormResearchPackage(
   input: MLBTeamRecentFormConstructionPackage,
   fixtureEvidenceByGameId?: Readonly<Record<string, TeamRecentFormFixtureEvidenceResult>> | null,
+  aggregateSummaryEnabled = false,
 ): MLBTeamRecentFormResearchPackage {
   const games = input.games.map<MLBTeamRecentFormResearchedGame>((game) => ({
     gameId: game.gameId,
@@ -484,6 +500,7 @@ export function buildMLBTeamRecentFormResearchPackage(
       teamRecentForm: buildTeamRecentFormFinding(
         game,
         fixtureEvidenceByGameId?.[game.gameId],
+        aggregateSummaryEnabled,
       ),
     },
     researchMessages: [],

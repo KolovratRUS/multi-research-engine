@@ -292,4 +292,6 @@ Phase 5C is the planning-only local fixture evidence and leakage-guard design in
 Phase 5D implemented the pure local fixture evidence provider in `docs/mlb-team-recent-form-fixture-evidence-provider.md`. It wires evidence behind the explicit `--fixture-evidence-local` CLI flag, preserves default Phase 5B stdout goldens, and retains the `TEAM_ONLY`, no-pitcher, no-file-output, no-prediction safety boundary.
 
 Phase 5E completed: added `docs/mlb-team-recent-form-fixture-evidence-golden-tests.md`, added the exact `--fixture-evidence-local` stdout golden, and preserved Phase 5D provider behavior, default Phase 5B goldens, and Phase 4/5 protected goldens.
-The recommended next safe phase is Phase 5F: plan aggregate-only team recent form summaries.
+Phase 5F added planning-only aggregate summary design in `docs/mlb-team-recent-form-aggregate-summary-plan.md`.
+Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md` with an explicit `--fixture-evidence-local --aggregate-summaries-local` mode. It preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged and does not add file output, `modelProbability`, pitcher evidence, live/API/web access, network schedule ingestion, or historical fixture changes.
+The recommended next safe phase is Phase 5H: add exact stdout golden for aggregate-summary mode.

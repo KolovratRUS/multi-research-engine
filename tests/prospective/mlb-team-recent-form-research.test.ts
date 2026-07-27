@@ -32,6 +32,9 @@ import {
   type TeamRecentFormEvidenceTarget,
   type TeamRecentFormFixtureEvidenceLookback,
 } from '@/prospective/mlb/team-recent-form-fixture-evidence';
+import {
+  buildMLBTeamRecentFormAggregateSummary,
+} from '@/prospective/mlb/team-recent-form-aggregate-summary';
 
 const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-team-recent-form-research.ts');
@@ -409,7 +412,7 @@ describe('Phase 5A MLB team recent form research module', () => {
     expect(multiple.error).toBe('TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY');
     expect(unknown.error).toBe('TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT');
     expect(missing.usage).toBe(
-      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local]',
+      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local]',
     );
     expect(multiple.usage).toBe(missing.usage);
     expect(unknown.usage).toBe(missing.usage);
@@ -1068,5 +1071,301 @@ describe('Phase 5D MLB team recent form fixture evidence provider', () => {
     }
     expect(stdout).not.toContain(projectRoot);
     expectNoAbsolutePaths(summary);
+  });
+});
+
+describe('Phase 5G MLB team recent form aggregate summary', () => {
+  it('rejects --aggregate-summaries-local without --fixture-evidence-local', () => {
+    const { summary } = runResearchExpectingFailure([
+      fixturePath,
+      '--aggregate-summaries-local',
+    ]);
+
+    expect(summary).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: 'TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED',
+      }),
+    );
+    expectNoPackage(summary);
+  });
+
+  it('preserves default no-flag stdout exactly', () => {
+    const expected = readFileSync(validStdoutGoldenPath, 'utf8');
+    expect(runResearch([fixturePath])).toBe(expected);
+  });
+
+  it('preserves evidence-enabled stdout exactly', () => {
+    const expected = readFileSync(fixtureEvidenceLocalStdoutGoldenPath, 'utf8');
+    expect(runResearch([fixturePath, '--fixture-evidence-local'])).toBe(expected);
+  });
+
+  it('produces deterministic aggregate-mode stdout across repeated runs', () => {
+    const first = runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local']);
+    const second = runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local']);
+
+    expect(first).toBe(second);
+  });
+
+  it('preserves exact construction embedding under aggregate mode', () => {
+    const constructionPackage = readValidConstructionPackage();
+    const stdout = runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local']);
+    const summary = JSON.parse(stdout) as {
+      ok: boolean;
+      sourceConstructionRunId: string;
+      sourceMode: string;
+      weekStart: string;
+      weekEnd: string;
+      gameCount: number;
+      package: {
+        inputConstructionPackage: Record<string, unknown>;
+        games: Array<{ gameId: string }>;
+      };
+    };
+
+    expect(summary.ok).toBe(true);
+    expect(summary.sourceConstructionRunId).toBe('manual-schedule-fixture-week-1');
+    expect(summary.sourceMode).toBe('manual-schedule');
+    expect(summary.weekStart).toBe('2024-07-01');
+    expect(summary.weekEnd).toBe('2024-07-07');
+    expect(summary.gameCount).toBe(2);
+    expect(summary.package.inputConstructionPackage).toEqual(constructionPackage);
+    expect(summary.package.games).toHaveLength(2);
+    for (const game of summary.package.games) {
+      expect(game.gameId).toBeDefined();
+      expect(game.gameId).not.toContain(projectRoot);
+    }
+  });
+
+  it('includes aggregate-only coverage/completeness fields in aggregate mode', () => {
+    const stdout = runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local']);
+    const summary = JSON.parse(stdout) as {
+      ok: boolean;
+      package: {
+        games: Array<{
+          researchFindings: {
+            teamRecentForm: {
+              awayAggregateSummary: Record<string, unknown>;
+              homeAggregateSummary: Record<string, unknown>;
+            };
+          };
+        }>;
+      };
+    };
+
+    expect(summary.ok).toBe(true);
+    for (const game of summary.package.games) {
+      const finding = game.researchFindings.teamRecentForm;
+      expect(finding.awayAggregateSummary).toMatchObject({
+        status: 'insufficient',
+        reason: 'insufficient-evidence',
+        gamesConsidered: 0,
+        completedGamesConsidered: 0,
+        recencyWindowDays: 30,
+        recencyWindowGames: 3,
+        homeAwaySplitCounts: { home: 0, away: 0 },
+        opponentDiversityCount: 0,
+        dataCompletenessLabel: 'insufficient',
+        recencyCoverageLabel: 'insufficient',
+        sourceCompletenessWarnings: expect.arrayContaining([
+          'TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED',
+          'TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES',
+          'TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION',
+        ]),
+      });
+      expect(finding.homeAggregateSummary).toMatchObject({
+        status: 'insufficient',
+        reason: 'insufficient-evidence',
+        gamesConsidered: 0,
+        completedGamesConsidered: 0,
+        recencyWindowDays: 30,
+        recencyWindowGames: 3,
+        homeAwaySplitCounts: { home: 0, away: 0 },
+        opponentDiversityCount: 0,
+        dataCompletenessLabel: 'insufficient',
+        recencyCoverageLabel: 'insufficient',
+        sourceCompletenessWarnings: expect.arrayContaining([
+          'TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED',
+          'TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES',
+          'TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION',
+        ]),
+      });
+    }
+  });
+
+  it('keeps aggregate mode free of result-derived and forbidden fields', () => {
+    const stdout = runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local']);
+    for (const field of [
+      'winsCount',
+      'lossesCount',
+      'averageRunsFor',
+      'averageRunsAgainst',
+      'averageRunDifferential',
+      'modelProbability',
+      'predictedWinner',
+      'pick',
+      'finalScore',
+      'outcome',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(stdout).not.toContain(`"${field}"`);
+    }
+  });
+
+  it('keeps aggregate mode free of absolute paths', () => {
+    const stdout = runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local']);
+    expect(stdout).not.toContain(projectRoot);
+    expectNoAbsolutePaths(JSON.parse(stdout));
+  });
+});
+
+describe('Phase 5G MLB aggregate summary provider unit tests', () => {
+  const target: TeamRecentFormEvidenceTarget = {
+    gameId: 'target-game-1',
+    scheduledStartTime: '2024-07-05T19:15:00Z',
+    awayTeam: 'AWAY_1',
+    homeTeam: 'HOME_1',
+  };
+
+  const syntheticSafeRecord: TeamRecentFormEvidenceRecord = {
+    gameId: 'synthetic-1',
+    officialDate: '2024-07-04',
+    scheduledStartTime: '2024-07-04T19:00:00Z',
+    awayTeam: 'AWAY_1',
+    homeTeam: 'HOME_1',
+    liveData: {
+      plays: {
+        allPlays: [
+          {
+            about: {
+              endTime: '2024-07-04T21:30:00Z',
+            },
+          },
+        ],
+      },
+    },
+    provenance: {
+      lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END',
+    },
+  };
+
+  function buildEvidence(
+    input: readonly TeamRecentFormEvidenceRecord[],
+    lookback?: TeamRecentFormFixtureEvidenceLookback,
+  ): ReturnType<typeof buildMLBTeamRecentFormFixtureEvidence> {
+    return buildMLBTeamRecentFormFixtureEvidence(target, input, lookback);
+  }
+
+  it('computes gamesConsidered and completedGamesConsidered from safe evidence', () => {
+    const mixed: TeamRecentFormEvidenceRecord[] = [
+      syntheticSafeRecord,
+      {
+        ...syntheticSafeRecord,
+        gameId: 'synthetic-2',
+        officialDate: '2024-07-03',
+        scheduledStartTime: '2024-07-03T18:30:00Z',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-03T21:00:00Z' } }] } },
+        awayTeam: 'OTHER_1',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const result = buildEvidence(mixed, { lookbackWindowGames: 3, lookbackWindowDays: 30 });
+    const aggregate = buildMLBTeamRecentFormAggregateSummary(result);
+
+    expect(result.awayRecentGamesFound).toBe(1);
+    expect(result.homeRecentGamesFound).toBe(1);
+    expect(aggregate.awayAggregateSummary.gamesConsidered).toBe(1);
+    expect(aggregate.awayAggregateSummary.completedGamesConsidered).toBe(1);
+    expect(aggregate.homeAggregateSummary.gamesConsidered).toBe(1);
+    expect(aggregate.homeAggregateSummary.completedGamesConsidered).toBe(1);
+    expect(aggregate.awayAggregateSummary.opponentDiversityCount).toBe(1);
+    expect(aggregate.homeAggregateSummary.opponentDiversityCount).toBe(1);
+  });
+
+  it('counts homeAwaySplitCounts by evidence item teamRole', () => {
+    const mixed: TeamRecentFormEvidenceRecord[] = [
+      syntheticSafeRecord,
+      {
+        ...syntheticSafeRecord,
+        gameId: 'swapped-1',
+        officialDate: '2024-07-02',
+        scheduledStartTime: '2024-07-02T19:00:00Z',
+        awayTeam: 'OTHER_1',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const result = buildEvidence(mixed, { lookbackWindowGames: 3, lookbackWindowDays: 30 });
+    const aggregate = buildMLBTeamRecentFormAggregateSummary(result);
+
+    expect(aggregate.awayAggregateSummary.homeAwaySplitCounts).toEqual({
+      home: 1,
+      away: 1,
+    });
+    expect(aggregate.homeAggregateSummary.homeAwaySplitCounts).toEqual({
+      home: 1,
+      away: 1,
+    });
+  });
+
+  it('labels insufficient, partial, and complete deterministically', () => {
+    const empty = buildEvidence([], { lookbackWindowGames: 3, lookbackWindowDays: 30 });
+    const partial = buildEvidence([syntheticSafeRecord], { lookbackWindowGames: 3, lookbackWindowDays: 30 });
+    const complete = buildEvidence(
+      [
+        syntheticSafeRecord,
+        {
+          ...syntheticSafeRecord,
+          gameId: 'c-1',
+          officialDate: '2024-07-02',
+          scheduledStartTime: '2024-07-02T19:00:00Z',
+        },
+        {
+          ...syntheticSafeRecord,
+          gameId: 'c-2',
+          officialDate: '2024-07-01',
+          scheduledStartTime: '2024-07-01T19:00:00Z',
+        },
+      ],
+      { lookbackWindowGames: 3, lookbackWindowDays: 30 },
+    );
+
+    const emptyAgg = buildMLBTeamRecentFormAggregateSummary(empty);
+    const partialAgg = buildMLBTeamRecentFormAggregateSummary(partial);
+    const completeAgg = buildMLBTeamRecentFormAggregateSummary(complete);
+
+    expect(emptyAgg.awayAggregateSummary.dataCompletenessLabel).toBe('insufficient');
+    expect(emptyAgg.awayAggregateSummary.recencyCoverageLabel).toBe('insufficient');
+    expect(emptyAgg.awayAggregateSummary.status).toBe('insufficient');
+    expect(emptyAgg.awayAggregateSummary.reason).toBe('insufficient-evidence');
+
+    expect(partialAgg.awayAggregateSummary.dataCompletenessLabel).toBe('partial');
+    expect(partialAgg.awayAggregateSummary.recencyCoverageLabel).toBe('partial');
+    expect(partialAgg.awayAggregateSummary.status).toBe('partial');
+    expect(partialAgg.awayAggregateSummary.reason).toBe('partial-evidence');
+
+    expect(completeAgg.awayAggregateSummary.dataCompletenessLabel).toBe('complete');
+    expect(completeAgg.awayAggregateSummary.recencyCoverageLabel).toBe('complete');
+    expect(completeAgg.awayAggregateSummary.status).toBe('complete');
+    expect(completeAgg.awayAggregateSummary.reason).toBe('complete-evidence');
+  });
+
+  it('dedupes and sorts sourceCompletenessWarnings deterministically', () => {
+    const result = buildEvidence([syntheticSafeRecord], { lookbackWindowGames: 3, lookbackWindowDays: 30 });
+    const aggregate = buildMLBTeamRecentFormAggregateSummary(result);
+
+    const warnings = aggregate.awayAggregateSummary.sourceCompletenessWarnings;
+    expect(warnings).toEqual([...new Set(warnings)].sort());
+    if (warnings.length >= 2) {
+      expect(warnings[0].localeCompare(warnings[warnings.length - 1])).toBeLessThanOrEqual(0);
+    }
   });
 });

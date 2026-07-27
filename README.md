@@ -215,6 +215,7 @@ The recommended next safe phase is Phase 5F: plan aggregate-only team recent for
 Phase 5D implemented the pure local fixture evidence provider in `docs/mlb-team-recent-form-fixture-evidence-provider.md`. It uses an explicit `--fixture-evidence-local` flag, preserves the default Phase 5B goldens, and retains the `TEAM_ONLY`, no-pitcher, no-file-output, no-prediction safety boundary.
 Phase 5E completed: added docs/mlb-team-recent-form-fixture-evidence-golden-tests.md, added tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json, and locked exact --fixture-evidence-local stdout goldens. Phase 5D provider behavior, default Phase 5B goldens, and Phase 4/5 protected goldens remain unchanged.
 Phase 5F is planning-only aggregate summary planning in `docs/mlb-team-recent-form-aggregate-summary-plan.md`. It does not add implementation, file output, or any live/API/web access.
+Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode and preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged.
 
 ## Architecture
 

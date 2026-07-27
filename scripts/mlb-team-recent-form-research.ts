@@ -19,25 +19,28 @@ import {
   validateMLBTeamRecentFormConstructionPackage,
 } from '../src/prospective/mlb/team-recent-form-research';
 
-const USAGE = 'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local]';
+const USAGE = 'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local]';
 
 type ArgumentError =
   | 'TEAM_FORM_RESEARCH_PATH_REQUIRED'
   | 'TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY'
-  | 'TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT';
+  | 'TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT'
+  | 'TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED';
 
 interface ParsedArguments {
   readonly path: string;
   readonly fixtureEvidenceLocal: boolean;
+  readonly aggregateSummariesLocal: boolean;
   readonly error: ArgumentError | null;
 }
 
-const ALLOWED_FLAGS = new Set(['--fixture-evidence-local']);
+const ALLOWED_FLAGS = new Set(['--fixture-evidence-local', '--aggregate-summaries-local']);
 
 function parseArguments(argv: string[]): ParsedArguments {
   const args = argv.slice(2);
   const positionalPaths: string[] = [];
   let fixtureEvidenceLocal = false;
+  let aggregateSummariesLocal = false;
 
   for (const argument of args) {
     if (argument.startsWith('-')) {
@@ -45,11 +48,15 @@ function parseArguments(argv: string[]): ParsedArguments {
         if (argument === '--fixture-evidence-local') {
           fixtureEvidenceLocal = true;
         }
+        if (argument === '--aggregate-summaries-local') {
+          aggregateSummariesLocal = true;
+        }
         continue;
       }
       return {
         path: '',
         fixtureEvidenceLocal: false,
+        aggregateSummariesLocal: false,
         error: 'TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT',
       };
     }
@@ -60,6 +67,7 @@ function parseArguments(argv: string[]): ParsedArguments {
     return {
       path: '',
       fixtureEvidenceLocal: false,
+      aggregateSummariesLocal: false,
       error: 'TEAM_FORM_RESEARCH_PATH_REQUIRED',
     };
   }
@@ -67,13 +75,23 @@ function parseArguments(argv: string[]): ParsedArguments {
     return {
       path: '',
       fixtureEvidenceLocal,
+      aggregateSummariesLocal,
       error: 'TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY',
+    };
+  }
+  if (aggregateSummariesLocal && !fixtureEvidenceLocal) {
+    return {
+      path: '',
+      fixtureEvidenceLocal: false,
+      aggregateSummariesLocal: false,
+      error: 'TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED',
     };
   }
 
   return {
     path: positionalPaths[0],
     fixtureEvidenceLocal,
+    aggregateSummariesLocal,
     error: null,
   };
 }
@@ -189,6 +207,7 @@ const fixtureEvidenceByGameId = parsedArguments.fixtureEvidenceLocal
 const researchPackage = buildMLBTeamRecentFormResearchPackage(
   typedInput,
   fixtureEvidenceByGameId,
+  parsedArguments.aggregateSummariesLocal,
 );
 
 const summary: Record<string, unknown> = {
@@ -213,6 +232,10 @@ const summary: Record<string, unknown> = {
 
 if (parsedArguments.fixtureEvidenceLocal) {
   summary.fixtureEvidenceLocal = true;
+}
+
+if (parsedArguments.aggregateSummariesLocal) {
+  summary.aggregateSummariesLocal = true;
 }
 
 writeSummary(summary);
