@@ -86,3 +86,6 @@ Phase 5D implemented the local fixture evidence provider in `docs/mlb-team-recen
 ## Phase 5K result-aggregate-metrics golden
 
 Phase 5K added exact stdout golden regression coverage for the explicit result-metrics mode in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json`. It preserves Phase 5B/5E/5H goldens and adds no live/API/web access, network schedule ingestion, or historical fixture changes.
+## Phase 5L team context planning
+
+Phase 5L is planning-only and adds the next TEAM_ONLY schedule context module design in `docs/mlb-team-context-rest-travel-schedule-density-plan.md`. It does not implement runtime behavior, file output, `modelProbability`, pitcher evidence, actual starters, live/API/web access, network schedule ingestion, or historical fixture changes. Phase 5B/5E/5H/5K goldens and Phase 5J behavior remain unchanged.

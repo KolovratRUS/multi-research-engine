@@ -300,3 +300,5 @@ Phase 5I completed planning for safe result-derived aggregate metrics in `docs/m
 Phase 5J implemented safe result-derived aggregate metrics behind an explicit local-only mode in `docs/mlb-team-recent-form-result-aggregate-metrics-implementation.md`. It requires `--fixture-evidence-local --aggregate-summaries-local --result-aggregate-metrics-local`, preserves default Phase 5B/5E/5H goldens, and does not add live/API/web access, network schedule ingestion, or historical fixture changes.
 
 Phase 5K added exact stdout golden regression coverage in `docs/mlb-team-recent-form-result-aggregate-metrics-golden-tests.md`. It locks the result-metrics mode output on the current local manual fixture and preserves all protected goldens unchanged.
+
+Phase 5L is planning-only and adds the next TEAM_ONLY schedule context module design in `docs/mlb-team-context-rest-travel-schedule-density-plan.md`. It does not implement runtime behavior, file output, `modelProbability`, pitcher evidence, actual starters, live/API/web access, network schedule ingestion, or historical fixture changes. Phase 5B/5E/5H/5K goldens and Phase 5J behavior remain unchanged.

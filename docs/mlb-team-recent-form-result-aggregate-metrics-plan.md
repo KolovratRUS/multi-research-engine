@@ -180,3 +180,7 @@ State:
 ## Phase 5J Completion
 
 Phase 5J was implemented in `docs/mlb-team-recent-form-result-aggregate-metrics-implementation.md`. It adds `--result-aggregate-metrics-local` as an explicit opt-in behind `--fixture-evidence-local --aggregate-summaries-local --result-aggregate-metrics-local`. Default Phase 5B, Phase 5E, and Phase 5H goldens remain byte-for-byte identical.
+
+## Phase 5L Team Context Planning
+
+Phase 5L is planning-only and adds the next TEAM_ONLY schedule context module design in `docs/mlb-team-context-rest-travel-schedule-density-plan.md`. It does not implement runtime behavior, file output, `modelProbability`, pitcher evidence, actual starters, live/API/web access, network schedule ingestion, or historical fixture changes. Phase 5B/5E/5H/5K goldens and Phase 5J behavior remain unchanged.

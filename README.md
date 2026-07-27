@@ -223,7 +223,9 @@ Phase 5J implemented safe result-derived aggregate metrics behind explicit local
 
 Phase 5K added exact stdout golden regression coverage in `docs/mlb-team-recent-form-result-aggregate-metrics-golden-tests.md`. It locks the result-metrics mode output on the current local manual fixture and preserves all protected goldens unchanged.
 
-The recommended next safe phase is Phase 5L: plan next MLB team context module, likely rest/travel/schedule-density.
+Phase 5L completed planning-only for the next TEAM_ONLY schedule context module in `docs/mlb-team-context-rest-travel-schedule-density-plan.md`. It preserves all protected goldens and adds no runtime behavior.
+
+The recommended next safe phase is Phase 5M: implement MLB team schedule context behind explicit local-only mode.
 
 The application enforces a strict two-stage separation:
 
