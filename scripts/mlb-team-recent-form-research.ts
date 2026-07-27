@@ -22,8 +22,15 @@ import {
   TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES,
   TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED,
 } from '../src/prospective/mlb/team-recent-form-research';
+import {
+  buildTeamScheduleContext,
+  TEAM_SCHEDULE_CONTEXT_NOT_ENABLED,
+  TEAM_SCHEDULE_CONTEXT_REQUIRES_FIXTURE_EVIDENCE,
+  validateScheduleContextModeFlags,
+  type TeamScheduleContextRecord,
+} from '../src/prospective/mlb/team-schedule-context';
 
-const USAGE = 'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local]';
+const USAGE = 'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local] [--team-schedule-context-local]';
 
 type ArgumentError =
   | 'TEAM_FORM_RESEARCH_PATH_REQUIRED'
@@ -31,13 +38,16 @@ type ArgumentError =
   | 'TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT'
   | 'TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED'
   | 'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED'
-  | 'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES';
+  | 'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES'
+  | 'TEAM_SCHEDULE_CONTEXT_NOT_ENABLED'
+  | 'TEAM_SCHEDULE_CONTEXT_REQUIRES_FIXTURE_EVIDENCE';
 
 interface ParsedArguments {
   readonly path: string;
   readonly fixtureEvidenceLocal: boolean;
   readonly aggregateSummariesLocal: boolean;
   readonly resultAggregateMetricsLocal: boolean;
+  readonly teamScheduleContextLocal: boolean;
   readonly error: ArgumentError | null;
 }
 
@@ -45,6 +55,7 @@ const ALLOWED_FLAGS = new Set([
   '--fixture-evidence-local',
   '--aggregate-summaries-local',
   '--result-aggregate-metrics-local',
+  '--team-schedule-context-local',
 ]);
 
 function parseArguments(argv: string[]): ParsedArguments {
@@ -53,6 +64,7 @@ function parseArguments(argv: string[]): ParsedArguments {
   let fixtureEvidenceLocal = false;
   let aggregateSummariesLocal = false;
   let resultAggregateMetricsLocal = false;
+  let teamScheduleContextLocal = false;
 
   for (const argument of args) {
     if (argument.startsWith('-')) {
@@ -66,6 +78,9 @@ function parseArguments(argv: string[]): ParsedArguments {
         if (argument === '--result-aggregate-metrics-local') {
           resultAggregateMetricsLocal = true;
         }
+        if (argument === '--team-schedule-context-local') {
+          teamScheduleContextLocal = true;
+        }
         continue;
       }
       return {
@@ -73,6 +88,7 @@ function parseArguments(argv: string[]): ParsedArguments {
         fixtureEvidenceLocal: false,
         aggregateSummariesLocal: false,
         resultAggregateMetricsLocal: false,
+        teamScheduleContextLocal: false,
         error: 'TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT',
       };
     }
@@ -85,6 +101,7 @@ function parseArguments(argv: string[]): ParsedArguments {
       fixtureEvidenceLocal: false,
       aggregateSummariesLocal: false,
       resultAggregateMetricsLocal: false,
+      teamScheduleContextLocal: false,
       error: 'TEAM_FORM_RESEARCH_PATH_REQUIRED',
     };
   }
@@ -94,6 +111,7 @@ function parseArguments(argv: string[]): ParsedArguments {
       fixtureEvidenceLocal,
       aggregateSummariesLocal,
       resultAggregateMetricsLocal,
+      teamScheduleContextLocal,
       error: 'TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY',
     };
   }
@@ -109,6 +127,7 @@ function parseArguments(argv: string[]): ParsedArguments {
       fixtureEvidenceLocal: false,
       aggregateSummariesLocal: false,
       resultAggregateMetricsLocal: false,
+      teamScheduleContextLocal: false,
       error: 'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED',
     };
   }
@@ -118,6 +137,7 @@ function parseArguments(argv: string[]): ParsedArguments {
       fixtureEvidenceLocal: false,
       aggregateSummariesLocal: false,
       resultAggregateMetricsLocal: false,
+      teamScheduleContextLocal: false,
       error: 'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES',
     };
   }
@@ -128,7 +148,23 @@ function parseArguments(argv: string[]): ParsedArguments {
       fixtureEvidenceLocal: false,
       aggregateSummariesLocal: false,
       resultAggregateMetricsLocal: false,
+      teamScheduleContextLocal: false,
       error: TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED,
+    };
+  }
+
+  const scheduleContextModeError = validateScheduleContextModeFlags({
+    fixtureEvidenceLocal,
+    teamScheduleContextLocal,
+  });
+  if (scheduleContextModeError === TEAM_SCHEDULE_CONTEXT_REQUIRES_FIXTURE_EVIDENCE) {
+    return {
+      path: '',
+      fixtureEvidenceLocal: false,
+      aggregateSummariesLocal: false,
+      resultAggregateMetricsLocal: false,
+      teamScheduleContextLocal: false,
+      error: 'TEAM_SCHEDULE_CONTEXT_REQUIRES_FIXTURE_EVIDENCE',
     };
   }
 
@@ -137,6 +173,7 @@ function parseArguments(argv: string[]): ParsedArguments {
     fixtureEvidenceLocal,
     aggregateSummariesLocal,
     resultAggregateMetricsLocal,
+    teamScheduleContextLocal,
     error: null,
   };
 }
@@ -249,11 +286,38 @@ const fixtureEvidenceByGameId = parsedArguments.fixtureEvidenceLocal
     )
   : {};
 
+const scheduleRecords: readonly TeamScheduleContextRecord[] = typedInput.games.map((game) => ({
+  gameId: game.gameId,
+  officialDate: game.officialDate,
+  scheduledStartTime: game.scheduledStartTime,
+  awayTeam: game.awayTeam,
+  homeTeam: game.homeTeam,
+}));
+
+const scheduleContextByGameId = parsedArguments.teamScheduleContextLocal
+  ? Object.fromEntries(
+      typedInput.games.map((game) => [
+        game.gameId,
+        buildTeamScheduleContext(
+          {
+            gameId: game.gameId,
+            officialDate: game.officialDate,
+            scheduledStartTime: game.scheduledStartTime,
+            awayTeam: game.awayTeam,
+            homeTeam: game.homeTeam,
+          },
+          scheduleRecords,
+        ),
+      ]),
+    )
+  : {};
+
 const researchPackage = buildMLBTeamRecentFormResearchPackage(
   typedInput,
   fixtureEvidenceByGameId,
   parsedArguments.aggregateSummariesLocal,
   parsedArguments.resultAggregateMetricsLocal,
+  scheduleContextByGameId,
 );
 
 const summary: Record<string, unknown> = {
@@ -286,6 +350,10 @@ if (parsedArguments.aggregateSummariesLocal) {
 
 if (parsedArguments.resultAggregateMetricsLocal) {
   summary.resultAggregateMetricsLocal = true;
+}
+
+if (parsedArguments.teamScheduleContextLocal) {
+  summary.teamScheduleContextLocal = true;
 }
 
 writeSummary(summary);

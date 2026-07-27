@@ -17,6 +17,11 @@ import {
   extractEligibleSafeCompletedResultsFromEvidence,
   type MLBTeamRecentFormAggregateSummary,
 } from './team-recent-form-aggregate-summary';
+import {
+  type TeamScheduleContext,
+  validateScheduleContextModeFlags,
+  TEAM_SCHEDULE_CONTEXT_MODULE_NAME,
+} from './team-schedule-context';
 export const RESEARCH_PACKAGE_VERSION = 'mlb-team-recent-form-research-package-v1';
 export const TEAM_RECENT_FORM_MODULE_VERSION = 'mlb-team-recent-form-v1';
 export const TEAM_RECENT_FORM_MODULE_NAME = 'TEAM_RECENT_FORM';
@@ -133,6 +138,7 @@ export interface MLBTeamRecentFormResearchedGame extends MLBTeamRecentFormConstr
   readonly completedResearchModules: readonly ['TEAM_RECENT_FORM'];
   readonly researchFindings: {
     readonly teamRecentForm: MLBTeamRecentFormFinding;
+    readonly teamScheduleContext?: TeamScheduleContext;
   };
   readonly researchMessages: readonly unknown[];
   readonly researchWarnings: readonly unknown[];
@@ -560,33 +566,39 @@ export function buildMLBTeamRecentFormResearchPackage(
   fixtureEvidenceByGameId?: Readonly<Record<string, TeamRecentFormFixtureEvidenceResult>> | null,
   aggregateSummaryEnabled = false,
   resultAggregateMetricsEnabled = false,
+  teamScheduleContextByGameId?: Readonly<Record<string, TeamScheduleContext>> | null,
 ): MLBTeamRecentFormResearchPackage {
-  const games = input.games.map<MLBTeamRecentFormResearchedGame>((game) => ({
-    gameId: game.gameId,
-    officialDate: game.officialDate,
-    scheduledStartTime: game.scheduledStartTime,
-    awayTeam: game.awayTeam,
-    homeTeam: game.homeTeam,
-    snapshotTimestamp: game.snapshotTimestamp,
-    sourceProvenance: game.sourceProvenance,
-    constructionStatus: game.constructionStatus,
-    researchMode: game.researchMode,
-    researchScope: game.researchScope,
-    constructionMessages: game.constructionMessages,
-    warnings: game.warnings,
-    researchStatus: 'researched',
-    completedResearchModules: [TEAM_RECENT_FORM_MODULE_NAME],
-    researchFindings: {
-      teamRecentForm: buildTeamRecentFormFinding(
-        game,
-        fixtureEvidenceByGameId?.[game.gameId],
-        aggregateSummaryEnabled,
-        resultAggregateMetricsEnabled,
-      ),
-    },
-    researchMessages: [],
-    researchWarnings: [],
-  }));
+  const games = input.games.map<MLBTeamRecentFormResearchedGame>((game) => {
+    const scheduleContext = teamScheduleContextByGameId?.[game.gameId];
+
+    return {
+      gameId: game.gameId,
+      officialDate: game.officialDate,
+      scheduledStartTime: game.scheduledStartTime,
+      awayTeam: game.awayTeam,
+      homeTeam: game.homeTeam,
+      snapshotTimestamp: game.snapshotTimestamp,
+      sourceProvenance: game.sourceProvenance,
+      constructionStatus: game.constructionStatus,
+      researchMode: game.researchMode,
+      researchScope: game.researchScope,
+      constructionMessages: game.constructionMessages,
+      warnings: game.warnings,
+      researchStatus: 'researched',
+      completedResearchModules: [TEAM_RECENT_FORM_MODULE_NAME],
+      researchFindings: {
+        teamRecentForm: buildTeamRecentFormFinding(
+          game,
+          fixtureEvidenceByGameId?.[game.gameId],
+          aggregateSummaryEnabled,
+          resultAggregateMetricsEnabled,
+        ),
+        ...(scheduleContext ? { teamScheduleContext: scheduleContext } : {}),
+      } as MLBTeamRecentFormResearchedGame['researchFindings'],
+      researchMessages: [],
+      researchWarnings: [],
+    };
+  });
 
   return {
     researchPackageVersion: RESEARCH_PACKAGE_VERSION,

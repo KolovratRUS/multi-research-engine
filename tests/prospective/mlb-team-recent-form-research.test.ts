@@ -38,6 +38,10 @@ import {
   TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED,
   TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES,
 } from '@/prospective/mlb/team-recent-form-aggregate-summary';
+import {
+  type TeamScheduleContext,
+  buildTeamScheduleContext,
+} from '@/prospective/mlb/team-schedule-context';
 
 const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-team-recent-form-research.ts');
@@ -423,7 +427,7 @@ describe('Phase 5A MLB team recent form research module', () => {
     expect(multiple.error).toBe('TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY');
     expect(unknown.error).toBe('TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT');
     expect(missing.usage).toBe(
-      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local]',
+      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local] [--team-schedule-context-local]',
     );
     expect(multiple.usage).toBe(missing.usage);
     expect(unknown.usage).toBe(missing.usage);
@@ -1990,5 +1994,412 @@ describe('buildSafeResultItemsFromManualRecords unit tests', () => {
         rawOutcome: -2,
       },
     ]);
+  });
+});
+
+describe('Phase 5M MLB team schedule context mode', () => {
+  const fixturePathForSchedule = join(
+    projectRoot,
+    'tests',
+    'prospective',
+    'fixtures',
+    'manual-schedule',
+    'valid-weekly-prospective-research-construction-file-artifact-v1.json',
+  );
+
+  it('rejects bare --team-schedule-context-local with clean JSON error', () => {
+    const { stdout, summary } = runResearchExpectingFailure([
+      fixturePathForSchedule,
+      '--team-schedule-context-local',
+    ]);
+
+    expect(summary).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: 'TEAM_SCHEDULE_CONTEXT_REQUIRES_FIXTURE_EVIDENCE',
+      }),
+    );
+    expect(stdout).not.toContain(projectRoot);
+  });
+
+  it('includes teamScheduleContextLocal only when explicitly enabled', () => {
+    const first = runResearch([
+      fixturePathForSchedule,
+      '--fixture-evidence-local',
+      '--team-schedule-context-local',
+    ]);
+    const second = runResearch([
+      fixturePathForSchedule,
+      '--fixture-evidence-local',
+      '--team-schedule-context-local',
+    ]);
+
+    expect(first).toBe(second);
+    const summary = JSON.parse(first) as Record<string, unknown>;
+    expect(summary.ok).toBe(true);
+    expect(summary.teamScheduleContextLocal).toBe(true);
+  });
+
+  it('keeps default, evidence, aggregate, and result-metrics goldens unchanged', () => {
+    const expectedDefault = readFileSync(validStdoutGoldenPath, 'utf8');
+    expect(runResearch([fixturePathForSchedule])).toBe(expectedDefault);
+
+    const expectedEvidence = readFileSync(
+      fixtureEvidenceLocalStdoutGoldenPath,
+      'utf8',
+    );
+    expect(
+      runResearch([fixturePathForSchedule, '--fixture-evidence-local']),
+    ).toBe(expectedEvidence);
+
+    const expectedAggregate = readFileSync(
+      aggregateSummariesLocalStdoutGoldenPath,
+      'utf8',
+    );
+    expect(
+      runResearch([
+        fixturePathForSchedule,
+        '--fixture-evidence-local',
+        '--aggregate-summaries-local',
+      ]),
+    ).toBe(expectedAggregate);
+
+    const expectedResultMetrics = readFileSync(
+      resultAggregateMetricsLocalStdoutGoldenPath,
+      'utf8',
+    );
+    expect(
+      runResearch([
+        fixturePathForSchedule,
+        '--fixture-evidence-local',
+        '--aggregate-summaries-local',
+        '--result-aggregate-metrics-local',
+      ]),
+    ).toBe(expectedResultMetrics);
+  });
+
+  it('does not expose forbidden fields in schedule context mode', () => {
+    const stdout = runResearch([
+      fixturePathForSchedule,
+      '--fixture-evidence-local',
+      '--team-schedule-context-local',
+    ]);
+
+    for (const field of [
+      'modelProbability',
+      'predictedWinner',
+      'pick',
+      'finalScore',
+      'outcome',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(stdout).not.toContain(`"${field}"`);
+    }
+    expect(stdout).not.toContain(projectRoot);
+    expectNoAbsolutePaths(JSON.parse(stdout));
+  });
+
+  it('keeps schedule context limited to TEAM_ONLY scope descriptive fields', () => {
+    const stdout = runResearch([
+      fixturePathForSchedule,
+      '--fixture-evidence-local',
+      '--team-schedule-context-local',
+    ]);
+    const summary = JSON.parse(stdout) as {
+      package: {
+        games: Array<{
+          researchFindings: {
+            teamRecentForm: Record<string, unknown>;
+            teamScheduleContext: TeamScheduleContext;
+          };
+        }>;
+      };
+    };
+
+    expect(summary.package.games).toHaveLength(2);
+    for (const game of summary.package.games) {
+      expect(game.researchFindings.teamRecentForm.moduleVersion).toBe(
+        TEAM_RECENT_FORM_MODULE_VERSION,
+      );
+      expect(game.researchFindings.teamScheduleContext.moduleVersion).toBe(
+        'mlb-team-schedule-context-v1',
+      );
+      expect(game.researchFindings.teamScheduleContext.scope).toBe('TEAM_ONLY');
+      expect(game.researchFindings.teamScheduleContext.moduleName).toBe(
+        'TEAM_SCHEDULE_CONTEXT',
+      );
+      expect(game.researchFindings.teamScheduleContext.awayScheduleContext).toMatchObject({
+        status: 'insufficient',
+        reason: 'insufficient-schedule-evidence',
+        gamesInLast3Days: 0,
+        gamesInLast7Days: 0,
+        gamesInNext3Days: 0,
+        gamesInNext7Days: 0,
+        consecutiveRoadGames: 0,
+        consecutiveHomeGames: 0,
+        scheduleContextWarnings: expect.arrayContaining([
+          'TEAM_SCHEDULE_CONTEXT_NO_RECORDS',
+        ]),
+      });
+      expect(game.researchFindings.teamScheduleContext.awayScheduleContext.previousGameScheduledAt).toBeNull();
+      expect(game.researchFindings.teamScheduleContext.awayScheduleContext.nextGameScheduledAt).toBeNull();
+    }
+  });
+});
+
+describe('buildTeamScheduleContext unit tests', () => {
+  it('returns deterministic insufficient context when no schedule records exist', () => {
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-1',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [],
+    );
+
+    expect(context.moduleVersion).toBe('mlb-team-schedule-context-v1');
+    expect(context.moduleName).toBe('TEAM_SCHEDULE_CONTEXT');
+    expect(context.scope).toBe('TEAM_ONLY');
+    expect(context.awayScheduleContext).toMatchObject({
+      status: 'insufficient',
+      reason: 'insufficient-schedule-evidence',
+      previousGameScheduledAt: null,
+      nextGameScheduledAt: null,
+      daysSincePreviousGame: null,
+      hoursSincePreviousGame: null,
+      daysUntilNextGame: null,
+      hoursUntilNextGame: null,
+      gamesInLast3Days: 0,
+      gamesInLast7Days: 0,
+      gamesInNext3Days: 0,
+      gamesInNext7Days: 0,
+      consecutiveRoadGames: 0,
+      consecutiveHomeGames: 0,
+      scheduleContextWarnings: ['TEAM_SCHEDULE_CONTEXT_NO_RECORDS'],
+    });
+    expect(context.homeScheduleContext).toMatchObject({
+      status: 'insufficient',
+      reason: 'insufficient-schedule-evidence',
+      previousGameScheduledAt: null,
+      nextGameScheduledAt: null,
+      daysSincePreviousGame: null,
+      hoursSincePreviousGame: null,
+      daysUntilNextGame: null,
+      hoursUntilNextGame: null,
+      gamesInLast3Days: 0,
+      gamesInLast7Days: 0,
+      gamesInNext3Days: 0,
+      gamesInNext7Days: 0,
+      consecutiveRoadGames: 0,
+      consecutiveHomeGames: 0,
+      scheduleContextWarnings: ['TEAM_SCHEDULE_CONTEXT_NO_RECORDS'],
+    });
+  });
+
+  it('detects previous and next games with deterministic fatal/duration metrics', () => {
+    const records = [
+      {
+        gameId: 'prev',
+        officialDate: '2024-07-02',
+        scheduledStartTime: '2024-07-02T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'next',
+        officialDate: '2024-07-08',
+        scheduledStartTime: '2024-07-08T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+    );
+
+    expect(context.awayScheduleContext.status).toBe('complete');
+    expect(context.awayScheduleContext.reason).toBe('complete-schedule-evidence');
+    expect(context.awayScheduleContext.previousGameScheduledAt).toBe('2024-07-02T18:30:00.000Z');
+    expect(context.awayScheduleContext.nextGameScheduledAt).toBe('2024-07-08T18:30:00.000Z');
+    expect(context.awayScheduleContext.daysSincePreviousGame).toBe(3);
+    expect(context.awayScheduleContext.hoursSincePreviousGame).toBeGreaterThanOrEqual(70);
+    expect(context.awayScheduleContext.daysUntilNextGame).toBe(3);
+    expect(context.awayScheduleContext.hoursUntilNextGame).toBeGreaterThanOrEqual(70);
+  });
+
+  it('counts games within 3 and 7 day windows and excludes back-to-back overlap', () => {
+    const records = [
+      {
+        gameId: 'prev',
+        officialDate: '2024-07-04',
+        scheduledStartTime: '2024-07-04T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'prev-2',
+        officialDate: '2024-07-01',
+        scheduledStartTime: '2024-07-01T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'next',
+        officialDate: '2024-07-07',
+        scheduledStartTime: '2024-07-07T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+      7,
+      7,
+    );
+
+    expect(context.awayScheduleContext.gamesInLast3Days).toBe(1);
+    expect(context.awayScheduleContext.gamesInLast7Days).toBe(2);
+    expect(context.awayScheduleContext.gamesInNext3Days).toBe(1);
+    expect(context.awayScheduleContext.gamesInNext7Days).toBe(1);
+  });
+
+  it('returns invalid-timestamp result for malformed target time', () => {
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target',
+        officialDate: '2024-07-05',
+        scheduledStartTime: 'not-a-timestamp',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [
+        {
+          gameId: 'prev',
+          officialDate: '2024-07-02',
+          scheduledStartTime: '2024-07-02T18:30:00Z',
+          awayTeam: 'AWAY_1',
+          homeTeam: 'HOME_1',
+        },
+      ],
+    );
+
+    expect(context.awayScheduleContext.status).toBe('not-evaluated');
+    expect(context.awayScheduleContext.reason).toBe('invalid-timestamp');
+    expect(context.awayScheduleContext.scheduleContextWarnings).toEqual([
+      'TEAM_SCHEDULE_CONTEXT_INVALID_TIMESTAMP',
+    ]);
+    expect(context.awayScheduleContext.gamesInLast3Days).toBe(0);
+    expect(context.awayScheduleContext.gamesInNext3Days).toBe(0);
+  });
+
+  it('excludes the target game from window counts', () => {
+    const records = [
+      {
+        gameId: 'target',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'prev',
+        officialDate: '2024-07-02',
+        scheduledStartTime: '2024-07-02T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+    );
+
+    expect(context.awayScheduleContext.gamesInLast7Days).toBe(1);
+    expect(context.awayScheduleContext.previousGameScheduledAt).toBe('2024-07-02T18:30:00.000Z');
+  });
+
+  it('dedupes and sorts scheduleContextWarnings deterministically', () => {
+    const records = [
+      {
+        gameId: 'a',
+        officialDate: '2024-07-03',
+        scheduledStartTime: '2024-07-03T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+    );
+
+    const warnings = context.awayScheduleContext.scheduleContextWarnings;
+    expect(warnings).toEqual([...new Set(warnings)].sort());
+  });
+
+  it('never exposes raw outcome fields in schedule context output', () => {
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [],
+    );
+
+    const json = JSON.stringify(context);
+    for (const field of [
+      'finalScore',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'predictedWinner',
+      'pick',
+      'modelProbability',
+    ]) {
+      expect(json).not.toContain(`"${field}"`);
+    }
   });
 });
