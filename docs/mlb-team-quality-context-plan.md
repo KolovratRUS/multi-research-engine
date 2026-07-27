@@ -194,13 +194,13 @@ The module must remain descriptive and odds-blind.
 
 ## Recommended Next Safe Phase
 
-Phase 5R — implement TEAM_QUALITY_CONTEXT builder skeleton and unit tests only.
+Phase 5V — plan next TEAM_ONLY module or begin website/reporting format planning.
 
 Scope:
 - local-only
-- no CLI integration yet unless explicitly scoped
+- no CLI command change unless explicitly scoped
 - no stdout golden
-- no runtime default behavior change
+- no default behavior change
 - no modelProbability
 - no raw outcomes
 - no pitcher evidence
@@ -209,4 +209,4 @@ Scope:
 - no live/API/web
 - no network standings/roster/schedule ingestion
 - no historical fixture changes
-- preserve Phase 5B/5E/5H/5K/5N goldens
+- preserve Phase 5B/5E/5H/5K/5N/5T goldens

@@ -15,7 +15,7 @@ Status:
 - no pitcher evidence
 - no actual starters
 - no raw outcomes
-- protected Phase 5B/5E/5H/5K/5N goldens unchanged
+- protected Phase 5B/5E/5H/5K/5N/5T goldens unchanged
 
 Builder:
 - src/prospective/mlb/team-quality-context.ts

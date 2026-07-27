@@ -82,7 +82,10 @@ Recommended checks:
 
 ## Recommended Next Safe Phase
 
-Phase 5U — add synthetic richer team-quality fixture coverage or plan next TEAM_ONLY module.
+Phase 5U adds richer synthetic TEAM_QUALITY_CONTEXT unit/fixture coverage. It adds no new research behavior. It adds no stdout golden. It preserves Phase 5B/5E/5H/5K/5N/5T goldens. It preserves Phase 5S team-quality CLI behavior. It preserves Phase 5R builder behavior. No modelProbability. No raw outcomes. No pitcher evidence. No actual starters. No file output. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5V.
+
+Docs:
+- docs/mlb-team-quality-context-synthetic-coverage.md
 
 Guidelines for Phase 5U:
 - no default behavior change

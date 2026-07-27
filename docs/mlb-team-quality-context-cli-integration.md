@@ -9,6 +9,8 @@ Status:
 - no live source
 - no web/API/network
 
+- Phase 5U synthetic coverage additions documented in docs/mlb-team-quality-context-synthetic-coverage.md
+
 ## Purpose
 
 Phase 5S integrates the Phase 5R `TEAM_QUALITY_CONTEXT` builder into the MLB team recent form research CLI.
