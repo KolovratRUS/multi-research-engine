@@ -253,3 +253,7 @@ Phase 5D implemented the local fixture evidence provider in `docs/mlb-team-recen
 ## Phase 5C local fixture evidence plan
 
 Phase 5C is planning-only. It defined a future pure local evidence provider, deterministic three-game/30-day lookback, safe completion derived only from the last completed play end with `LAST_COMPLETED_PLAY_END` provenance, and per-target exclusion of the target game and future games. It changes no Phase 5A behavior or Phase 5B golden.
+
+## Phase 5K result-aggregate-metrics golden
+
+Phase 5K added exact stdout golden regression coverage for the explicit result-metrics mode in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json`. It preserves Phase 5B/5E/5H goldens and adds no live/API/web access, network schedule ingestion, or historical fixture changes.

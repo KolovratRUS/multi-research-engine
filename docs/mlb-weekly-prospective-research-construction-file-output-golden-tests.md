@@ -82,3 +82,7 @@ The recommended next safe phase is Phase 5J: implement safe result-derived aggre
 - No new research behavior, file output, dependency, or fixture data change introduced.
 
 Phase 5D implemented the local fixture evidence provider in `docs/mlb-team-recent-form-fixture-evidence-provider.md`. It adds no real schedule ingestion, no live source, no network access, no historical fixture changes, and no `modelProbability` prediction output.
+
+## Phase 5K result-aggregate-metrics golden
+
+Phase 5K added exact stdout golden regression coverage for the explicit result-metrics mode in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json`. It preserves Phase 5B/5E/5H goldens and adds no live/API/web access, network schedule ingestion, or historical fixture changes.

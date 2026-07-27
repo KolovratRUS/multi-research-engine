@@ -80,6 +80,10 @@ const aggregateSummariesLocalStdoutGoldenPath = join(
   goldenFixtureDirectory,
   'valid-mlb-team-recent-form-research-aggregate-summaries-local-cli-output-v1.json',
 );
+const resultAggregateMetricsLocalStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json',
+);
 const tempRoot = join(
   projectRoot,
   'tmp',
@@ -1586,6 +1590,51 @@ describe('Phase 5J MLB result aggregate metrics mode', () => {
     expect(summary.fixtureEvidenceLocal).toBe(true);
     expect(summary.aggregateSummariesLocal).toBe(true);
     expect(summary.resultAggregateMetricsLocal).toBe(true);
+  });
+
+  it('preserves exact result-aggregate-metrics stdout golden', () => {
+    const expected = readFileSync(resultAggregateMetricsLocalStdoutGoldenPath, 'utf8');
+    expect(runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--aggregate-summaries-local',
+      '--result-aggregate-metrics-local',
+    ])).toBe(expected);
+  });
+
+  it('result-metrics golden contains expected shape and deterministic insufficient metrics', () => {
+    const stdout = readFileSync(resultAggregateMetricsLocalStdoutGoldenPath, 'utf8');
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+
+    expect(summary.ok).toBe(true);
+    expect(summary.fixtureEvidenceLocal).toBe(true);
+    expect(summary.aggregateSummariesLocal).toBe(true);
+    expect(summary.resultAggregateMetricsLocal).toBe(true);
+    expect(summary.gameCount).toBe(2);
+
+    const games = (summary.package as Record<string, unknown>).games as Array<Record<string, unknown>>;
+    for (const game of games) {
+      const finding = (game.researchFindings as Record<string, unknown>).teamRecentForm as Record<string, unknown>;
+      expect(finding.moduleVersion).toBe('mlb-team-recent-form-v1');
+      expect(finding.scope).toBe('TEAM_ONLY');
+
+      for (const side of [finding.awayAggregateSummary, finding.homeAggregateSummary]) {
+        const metrics = (side as Record<string, unknown>).resultAggregateMetrics as Record<string, unknown>;
+        expect(metrics.status).toBe('insufficient');
+        expect(metrics.reason).toBe('insufficient-result-evidence');
+        expect(metrics.gamesWithResultMetrics).toBe(0);
+        expect(metrics.winsCount).toBe(0);
+        expect(metrics.lossesCount).toBe(0);
+        expect(metrics.drawsOrTiesCount).toBe(0);
+        expect(metrics.averageRunsFor).toBeNull();
+        expect(metrics.averageRunsAgainst).toBeNull();
+        expect(metrics.averageRunDifferential).toBeNull();
+        expect(metrics.runDifferentialTotal).toBe(0);
+        expect(metrics.gamesWithRunsForAvailable).toBe(0);
+        expect(metrics.gamesWithRunsAgainstAvailable).toBe(0);
+        expect(metrics.resultMetricCompletenessLabel).toBe('insufficient');
+      }
+    }
   });
 
   it('produces deterministic result-metrics mode output across repeated runs', () => {

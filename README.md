@@ -221,7 +221,9 @@ Phase 5I completed planning for safe result-derived aggregate metrics in `docs/m
 
 Phase 5J implemented safe result-derived aggregate metrics behind explicit local-only mode in `docs/mlb-team-recent-form-result-aggregate-metrics-implementation.md`. It requires `--fixture-evidence-local --aggregate-summaries-local --result-aggregate-metrics-local`, preserves default Phase 5B/5E/5H goldens, and keeps `modelProbability` and raw outcome fields absent.
 
-The recommended next safe phase is Phase 5K: add exact result-metrics stdout golden and a synthetic fixture with safe scores for end-to-end metric verification.
+Phase 5K added exact stdout golden regression coverage in `docs/mlb-team-recent-form-result-aggregate-metrics-golden-tests.md`. It locks the result-metrics mode output on the current local manual fixture and preserves all protected goldens unchanged.
+
+The recommended next safe phase is Phase 5L: plan next MLB team context module, likely rest/travel/schedule-density.
 
 The application enforces a strict two-stage separation:
 

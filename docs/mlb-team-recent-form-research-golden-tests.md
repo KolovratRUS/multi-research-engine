@@ -175,3 +175,7 @@ Phase 5C is planning-only and is documented in `docs/mlb-team-recent-form-local-
 - TypeScript, production build, inventory, dry-run, and Git diff checks pass.
 - Direct npm aliases using `tsx` encounter managed-sandbox IPC `EPERM` before script execution; equivalent local-loader behavior passes.
 - Generated construction output, invalid-input mutations, and empty `tmp` directories were removed. No Phase 5A behavior, Phase 5B fixture, protected earlier golden, historical fixture, package file, dependency, live/API/web source, or network schedule ingestion changed.
+
+## Phase 5K result-aggregate-metrics golden
+
+Phase 5K added exact stdout golden coverage for the explicit result-metrics mode. The golden is `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json`. It preserves Phase 5B/5E/5H goldens and adds no live/API/web access, network schedule ingestion, historical fixture changes, or `modelProbability`.

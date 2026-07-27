@@ -358,3 +358,7 @@ Phase 5D implemented the planned local fixture evidence provider in `src/prospec
 ## Phase 5J Result Aggregate Metrics
 
 Phase 5J adds an explicit `--result-aggregate-metrics-local` flag that requires `--fixture-evidence-local --aggregate-summaries-local`. It computes safe result-derived metrics (winsCount, lossesCount, averageRunsFor, etc.) only from `buildSafeResultItemsFromManualRecords` with `LAST_COMPLETED_PLAY_END` provenance, excludes raw outcome fields, and keeps `modelProbability` absent. Default Phase 5B/5E/5H behavior is unchanged.
+
+## Phase 5K Result Aggregate Metrics Golden
+
+Phase 5K added exact stdout golden regression coverage in `docs/mlb-team-recent-form-result-aggregate-metrics-golden-tests.md`. It locks the result-metrics mode output on the current local manual fixture, preserves Phase 5B/5E/5H goldens, and adds no live/API/web access, network schedule ingestion, or historical fixture changes.

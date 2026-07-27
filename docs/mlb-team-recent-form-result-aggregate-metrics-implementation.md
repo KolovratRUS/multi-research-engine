@@ -90,3 +90,15 @@ Add an exact Phase 5K result-metrics stdout golden for
 lock the shape and byte length, and add a synthetic fixture with safe result
 scores so unit tests can verify `winsCount`, `lossesCount`,
 `averageRunsFor`, and `averageRunDifferential` end-to-end under the explicit flag.
+
+## Phase 5K Exact Stdout Golden
+
+Phase 5K locks the exact result-metrics stdout in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json`. The command is:
+
+```bash
+node --require tsx/cjs scripts/mlb-team-recent-form-research.ts \
+  tests/prospective/fixtures/manual-schedule/valid-weekly-prospective-research-construction-file-artifact-v1.json \
+  --fixture-evidence-local --aggregate-summaries-local --result-aggregate-metrics-local
+```
+
+The golden captures deterministic insufficient / not-evaluated metrics on the current local manual fixtures and preserves all existing Phase 5B/5E/5H goldens unchanged.

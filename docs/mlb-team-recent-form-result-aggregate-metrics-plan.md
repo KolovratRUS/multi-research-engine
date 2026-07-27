@@ -139,13 +139,13 @@ Make clear:
 
 ## Implementation sequencing recommendation
 
-- Phase 5J: implement result-derived aggregate metrics behind explicit local-only result-metrics mode, if safe result extraction is confirmed
+- Phase 5J: implement result-derived aggregate metrics behind explicit local-only result-metrics mode
 - Phase 5K: exact stdout golden for result-metrics mode
 - Phase 5L: planning-only transition toward additional team context modules, such as rest/travel/schedule-density
 
 ## Validation
 
-Phase 5I planning-only work preserves all protected goldens and adds no runtime behavior.
+Phase 5K added exact stdout golden coverage for the result-metrics mode in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json`. It preserves all protected goldens and adds no runtime behavior.
 
 - inventory: 29 total games (June 17, July 12)
 - default stdout golden byte-for-byte match

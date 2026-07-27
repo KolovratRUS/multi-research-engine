@@ -397,3 +397,7 @@ Phase 5F adds planning-only aggregate summary design in `docs/mlb-team-recent-fo
 ## Phase 5C local fixture evidence plan
 
 Phase 5C is planning-only and changes no construction behavior. It plans a pure local fixture evidence provider, deterministic lookback, safe-completion filtering, and per-target leakage guards for the Phase 5A/5B research module. `TEAM_ONLY` remains no-pitcher, the construction artifact remains the sole target schedule/game handoff, and the Phase 4V/4Y construction plus Phase 4P/4S lock goldens remain unchanged.
+
+## Phase 5K result-aggregate-metrics golden
+
+Phase 5K added exact stdout golden regression coverage for the explicit result-metrics mode in `tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-result-aggregate-metrics-local-cli-output-v1.json`. It preserves Phase 5B/5E/5H goldens and adds no live/API/web access, network schedule ingestion, or historical fixture changes.
