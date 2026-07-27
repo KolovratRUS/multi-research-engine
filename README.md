@@ -399,3 +399,5 @@ The leakage test in `tests/leakage.test.ts` enforces this boundary.
 - Expand to NBA, Soccer, AFL, NRL and Tennis research modules.
 - Implement beam-search combination construction.
 - Add backtesting and calibration dashboards.
+
+Phase 5O is planning-only for richer synthetic local schedule-density fixture coverage. It adds `docs/mlb-team-schedule-context-synthetic-fixtures-plan.md`, does not modify runtime behavior, tests, goldens, or fixtures, and preserves Phase 5B/5E/5H/5K/5N goldens with no modelProbability, no raw outcomes, no pitcher evidence, no file output, and no live/API/web.

@@ -62,3 +62,5 @@ Recommended Phase 5N:
 - add exact stdout golden for schedule context mode
 - no new research behavior
 - preserve Phase 5B/5E/5H/5K goldens
+
+Phase 5O is planning-only for richer synthetic local schedule-density fixture coverage. It adds `docs/mlb-team-schedule-context-synthetic-fixtures-plan.md`, does not modify runtime behavior, tests, goldens, or fixtures, and preserves Phase 5B/5E/5H/5K/5N goldens with no modelProbability, no raw outcomes, no pitcher evidence, no file output, and no live/API/web.
