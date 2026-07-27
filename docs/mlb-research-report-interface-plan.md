@@ -3,6 +3,7 @@
 ## Status
 
 - Phase 5V
+- Phase 5W
 - planning-only
 - no runtime behavior
 - no CLI behavior

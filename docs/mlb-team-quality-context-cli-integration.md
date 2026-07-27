@@ -157,5 +157,29 @@ Scope:
 - preserve Phase 5S CLI behavior
 - preserve Phase 5R/5U team-quality behavior
 
+Phase 5W — typed report-shape adapter skeleton and tests.
+
+Scope:
+- local-only
+- no runtime behavior
+- no CLI behavior
+- no website/API implementation
+- no file output
+- no new stdout golden
+- no package/dependency changes
+- no modelProbability
+- no picks/predictions/betting advice
+- no raw outcomes
+- no pitcher evidence
+- no actual starters
+- no live/API/web
+- no network standings/roster/schedule ingestion
+- no historical fixture changes
+- preserve Phase 5B/5E/5H/5K/5N/5T goldens
+- preserve Phase 5S CLI behavior
+- preserve Phase 5R/5U team-quality behavior
+- preserve Phase 5W adapter tests
+
 Docs:
 - docs/mlb-research-report-interface-plan.md
+- docs/mlb-research-report-adapter-implementation.md
