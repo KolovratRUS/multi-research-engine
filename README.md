@@ -6,6 +6,8 @@ Private sports betting research and multi construction tool.
 
 ## Phase 1A Status
 
+Phase 5P adds synthetic schedule-context unit/fixture coverage. It adds no new stdout golden. It preserves Phase 5B/5E/5H/5K/5N goldens. It preserves Phase 5J result-metrics behavior. It preserves Phase 5M schedule-context behavior. No modelProbability. No raw outcomes. No pitcher evidence. No actual starters. No file output. No live/API/web or network schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5Q.
+
 This repository is in **Phase 1A — baseball research-data pipeline**.
 
 Current implementation:

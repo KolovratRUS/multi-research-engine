@@ -2511,4 +2511,484 @@ describe('buildTeamScheduleContext unit tests', () => {
       expect(json).not.toContain(`"${field}"`);
     }
   });
+
+  it('returns rich previous/next schedule context with exact dates hours days and window counts', () => {
+    const records = [
+      {
+        gameId: 'prev-2',
+        officialDate: '2024-07-02',
+        scheduledStartTime: '2024-07-02T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'prev-1',
+        officialDate: '2024-07-04',
+        scheduledStartTime: '2024-07-04T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_2',
+      },
+      {
+        gameId: 'prev-home',
+        officialDate: '2024-07-07',
+        scheduledStartTime: '2024-07-07T18:30:00Z',
+        awayTeam: 'HOME_1',
+        homeTeam: 'AWAY_1',
+      },
+      {
+        gameId: 'prev-mixed',
+        officialDate: '2024-07-08',
+        scheduledStartTime: '2024-07-08T18:30:00Z',
+        awayTeam: 'AWAY_2',
+        homeTeam: 'AWAY_1',
+      },
+      {
+        gameId: 'prev-0',
+        officialDate: '2024-07-09',
+        scheduledStartTime: '2024-07-09T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_3',
+      },
+      {
+        gameId: 'next-1',
+        officialDate: '2024-07-14',
+        scheduledStartTime: '2024-07-14T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_4',
+      },
+      {
+        gameId: 'next-extra',
+        officialDate: '2024-07-12',
+        scheduledStartTime: '2024-07-12T18:30:00Z',
+        awayTeam: 'AWAY_3',
+        homeTeam: 'AWAY_1',
+      },
+      {
+        gameId: 'next-2',
+        officialDate: '2024-07-17',
+        scheduledStartTime: '2024-07-17T18:30:00Z',
+        awayTeam: 'AWAY_2',
+        homeTeam: 'HOME_3',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-rich',
+        officialDate: '2024-07-10',
+        scheduledStartTime: '2024-07-10T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+    );
+
+    expect(context.awayScheduleContext.status).toBe('complete');
+    expect(context.awayScheduleContext.reason).toBe('complete-schedule-evidence');
+    expect(context.awayScheduleContext.previousGameScheduledAt).toBe('2024-07-09T18:30:00.000Z');
+    expect(context.awayScheduleContext.nextGameScheduledAt).toBe('2024-07-12T18:30:00.000Z');
+    expect(context.awayScheduleContext.daysSincePreviousGame).toBe(1);
+    expect(context.awayScheduleContext.hoursSincePreviousGame).toBe(25);
+    expect(context.awayScheduleContext.daysUntilNextGame).toBe(2);
+    expect(context.awayScheduleContext.hoursUntilNextGame).toBe(48);
+    expect(context.awayScheduleContext.gamesInLast3Days).toBe(1);
+    expect(context.awayScheduleContext.gamesInLast7Days).toBe(4);
+    expect(context.awayScheduleContext.gamesInNext3Days).toBe(1);
+    expect(context.awayScheduleContext.gamesInNext7Days).toBe(2);
+    expect(context.awayScheduleContext.consecutiveRoadGames).toBe(1);
+    expect(context.awayScheduleContext.consecutiveHomeGames).toBe(0);
+    expect(context.awayScheduleContext.homeAwaySequenceLabel).toBe('mixed');
+    expect(context.awayScheduleContext.scheduleDensityLabel).toBe('elevated-density');
+    expect(context.awayScheduleContext.restAdvantageLabel).toBe('minimal-rest');
+    expect(context.awayScheduleContext.travelBurdenLabel).toBe('insufficient');
+    expect(context.awayScheduleContext.scheduleContextCompletenessLabel).toBe('complete');
+
+    expect(context.homeScheduleContext.status).toBe('partial');
+    expect(context.homeScheduleContext.reason).toBe('partial-schedule-evidence');
+    expect(context.homeScheduleContext.previousGameScheduledAt).toBe('2024-07-07T18:30:00.000Z');
+    expect(context.homeScheduleContext.nextGameScheduledAt).toBeNull();
+    expect(context.homeScheduleContext.daysSincePreviousGame).toBe(3);
+    expect(context.homeScheduleContext.hoursSincePreviousGame).toBe(73);
+    expect(context.homeScheduleContext.daysUntilNextGame).toBeNull();
+    expect(context.homeScheduleContext.hoursUntilNextGame).toBeNull();
+    expect(context.homeScheduleContext.gamesInLast3Days).toBe(0);
+    expect(context.homeScheduleContext.gamesInLast7Days).toBe(1);
+    expect(context.homeScheduleContext.gamesInNext3Days).toBe(0);
+    expect(context.homeScheduleContext.gamesInNext7Days).toBe(0);
+    expect(context.homeScheduleContext.consecutiveRoadGames).toBe(1);
+    expect(context.homeScheduleContext.consecutiveHomeGames).toBe(0);
+    expect(context.homeScheduleContext.homeAwaySequenceLabel).toBe('mixed');
+    expect(context.homeScheduleContext.scheduleDensityLabel).toBe('low-density');
+    expect(context.homeScheduleContext.restAdvantageLabel).toBe('standard-rest');
+    expect(context.homeScheduleContext.travelBurdenLabel).toBe('insufficient');
+    expect(context.homeScheduleContext.scheduleContextCompletenessLabel).toBe('partial');
+  });
+
+  it('excludes games exactly at the 3-day window boundary from counts', () => {
+    const records = [
+      {
+        gameId: 'boundary-3d-past',
+        officialDate: '2024-07-07',
+        scheduledStartTime: '2024-07-07T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'boundary-3d-future',
+        officialDate: '2024-07-13',
+        scheduledStartTime: '2024-07-13T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-boundary',
+        officialDate: '2024-07-10',
+        scheduledStartTime: '2024-07-10T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+    );
+
+    expect(context.awayScheduleContext.previousGameScheduledAt).toBe('2024-07-07T19:00:00.000Z');
+    expect(context.awayScheduleContext.nextGameScheduledAt).toBe('2024-07-13T19:00:00.000Z');
+    expect(context.awayScheduleContext.daysSincePreviousGame).toBe(3);
+    expect(context.awayScheduleContext.hoursSincePreviousGame).toBe(72);
+    expect(context.awayScheduleContext.daysUntilNextGame).toBe(3);
+    expect(context.awayScheduleContext.hoursUntilNextGame).toBe(72);
+    expect(context.awayScheduleContext.gamesInLast3Days).toBe(0);
+    expect(context.awayScheduleContext.gamesInNext3Days).toBe(0);
+    expect(context.awayScheduleContext.gamesInLast7Days).toBe(1);
+    expect(context.awayScheduleContext.gamesInNext7Days).toBe(1);
+  });
+
+  it('excludes games exactly at the 7-day window boundary from counts', () => {
+    const records = [
+      {
+        gameId: 'boundary-7d-past',
+        officialDate: '2024-07-03',
+        scheduledStartTime: '2024-07-03T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'boundary-7d-future',
+        officialDate: '2024-07-17',
+        scheduledStartTime: '2024-07-17T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-boundary',
+        officialDate: '2024-07-10',
+        scheduledStartTime: '2024-07-10T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+    );
+
+    expect(context.awayScheduleContext.previousGameScheduledAt).toBe('2024-07-03T19:00:00.000Z');
+    expect(context.awayScheduleContext.nextGameScheduledAt).toBe('2024-07-17T19:00:00.000Z');
+    expect(context.awayScheduleContext.daysSincePreviousGame).toBe(7);
+    expect(context.awayScheduleContext.hoursSincePreviousGame).toBe(168);
+    expect(context.awayScheduleContext.daysUntilNextGame).toBe(7);
+    expect(context.awayScheduleContext.hoursUntilNextGame).toBe(168);
+    expect(context.awayScheduleContext.gamesInLast3Days).toBe(0);
+    expect(context.awayScheduleContext.gamesInNext3Days).toBe(0);
+    expect(context.awayScheduleContext.gamesInLast7Days).toBe(0);
+    expect(context.awayScheduleContext.gamesInNext7Days).toBe(0);
+  });
+
+  it('computes consecutive road games from the most recent past streak', () => {
+    const records = [
+      {
+        gameId: 'road-1',
+        officialDate: '2024-07-01',
+        scheduledStartTime: '2024-07-01T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_A',
+      },
+      {
+        gameId: 'road-2',
+        officialDate: '2024-07-02',
+        scheduledStartTime: '2024-07-02T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_B',
+      },
+      {
+        gameId: 'road-3',
+        officialDate: '2024-07-03',
+        scheduledStartTime: '2024-07-03T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_C',
+      },
+      {
+        gameId: 'road-4',
+        officialDate: '2024-07-04',
+        scheduledStartTime: '2024-07-04T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_D',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-streak',
+        officialDate: '2024-07-06',
+        scheduledStartTime: '2024-07-06T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+    );
+
+    expect(context.awayScheduleContext.consecutiveRoadGames).toBe(4);
+    expect(context.awayScheduleContext.consecutiveHomeGames).toBe(0);
+    expect(context.awayScheduleContext.homeAwaySequenceLabel).toBe('away-streak');
+    expect(context.awayScheduleContext.gamesInLast7Days).toBe(4);
+    expect(context.awayScheduleContext.scheduleDensityLabel).toBe('elevated-density');
+  });
+
+  it('computes consecutive home games from the most recent past streak', () => {
+    const records = [
+      {
+        gameId: 'home-1',
+        officialDate: '2024-07-01',
+        scheduledStartTime: '2024-07-01T18:30:00Z',
+        awayTeam: 'AWAY_A',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'home-2',
+        officialDate: '2024-07-02',
+        scheduledStartTime: '2024-07-02T18:30:00Z',
+        awayTeam: 'AWAY_B',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'home-3',
+        officialDate: '2024-07-03',
+        scheduledStartTime: '2024-07-03T18:30:00Z',
+        awayTeam: 'AWAY_C',
+        homeTeam: 'HOME_1',
+      },
+      {
+        gameId: 'home-4',
+        officialDate: '2024-07-04',
+        scheduledStartTime: '2024-07-04T18:30:00Z',
+        awayTeam: 'AWAY_D',
+        homeTeam: 'HOME_1',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-home-streak',
+        officialDate: '2024-07-06',
+        scheduledStartTime: '2024-07-06T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+    );
+
+    expect(context.homeScheduleContext.consecutiveHomeGames).toBe(4);
+    expect(context.homeScheduleContext.consecutiveRoadGames).toBe(0);
+    expect(context.homeScheduleContext.homeAwaySequenceLabel).toBe('home-streak');
+    expect(context.homeScheduleContext.gamesInLast7Days).toBe(4);
+    expect(context.homeScheduleContext.scheduleDensityLabel).toBe('elevated-density');
+  });
+
+  it('returns mixed home/away sequence label when last 3 games alternate', () => {
+    const records = [
+      {
+        gameId: 'mix-1',
+        officialDate: '2024-07-01',
+        scheduledStartTime: '2024-07-01T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_A',
+      },
+      {
+        gameId: 'mix-2',
+        officialDate: '2024-07-02',
+        scheduledStartTime: '2024-07-02T18:30:00Z',
+        awayTeam: 'HOME_A',
+        homeTeam: 'AWAY_1',
+      },
+      {
+        gameId: 'mix-3',
+        officialDate: '2024-07-03',
+        scheduledStartTime: '2024-07-03T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_A',
+      },
+    ];
+
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-mixed',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      records,
+    );
+
+    expect(context.awayScheduleContext.homeAwaySequenceLabel).toBe('mixed');
+    expect(context.awayScheduleContext.consecutiveRoadGames).toBe(1);
+    expect(context.awayScheduleContext.consecutiveHomeGames).toBe(0);
+    expect(context.awayScheduleContext.gamesInLast7Days).toBe(3);
+    expect(context.awayScheduleContext.scheduleDensityLabel).toBe('moderate-density');
+  });
+
+  it('does not list the target game as previous or next', () => {
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-exclude',
+        officialDate: '2024-07-10',
+        scheduledStartTime: '2024-07-10T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [
+        {
+          gameId: 'target-exclude',
+          officialDate: '2024-07-10',
+          scheduledStartTime: '2024-07-10T19:00:00Z',
+          awayTeam: 'AWAY_1',
+          homeTeam: 'HOME_1',
+        },
+      ],
+    );
+
+    expect(context.awayScheduleContext.previousGameScheduledAt).toBeNull();
+    expect(context.awayScheduleContext.nextGameScheduledAt).toBeNull();
+    expect(context.awayScheduleContext.gamesInLast7Days).toBe(0);
+    expect(context.awayScheduleContext.gamesInNext7Days).toBe(0);
+  });
+
+  it('returns partial context when no previous game exists', () => {
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-only-next',
+        officialDate: '2024-07-10',
+        scheduledStartTime: '2024-07-10T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [
+        {
+          gameId: 'only-next',
+          officialDate: '2024-07-14',
+          scheduledStartTime: '2024-07-14T18:30:00Z',
+          awayTeam: 'AWAY_1',
+          homeTeam: 'HOME_1',
+        },
+      ],
+    );
+
+    expect(context.awayScheduleContext.status).toBe('partial');
+    expect(context.awayScheduleContext.reason).toBe('partial-schedule-evidence');
+    expect(context.awayScheduleContext.previousGameScheduledAt).toBeNull();
+    expect(context.awayScheduleContext.nextGameScheduledAt).toBe('2024-07-14T18:30:00.000Z');
+    expect(context.awayScheduleContext.daysUntilNextGame).toBe(4);
+    expect(context.awayScheduleContext.hoursUntilNextGame).toBe(96);
+    expect(context.awayScheduleContext.scheduleContextCompletenessLabel).toBe('partial');
+  });
+
+  it('returns partial context when no next game exists', () => {
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-only-prev',
+        officialDate: '2024-07-10',
+        scheduledStartTime: '2024-07-10T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [
+        {
+          gameId: 'only-prev',
+          officialDate: '2024-07-02',
+          scheduledStartTime: '2024-07-02T18:30:00Z',
+          awayTeam: 'AWAY_1',
+          homeTeam: 'HOME_1',
+        },
+      ],
+    );
+
+    expect(context.awayScheduleContext.status).toBe('partial');
+    expect(context.awayScheduleContext.reason).toBe('partial-schedule-evidence');
+    expect(context.awayScheduleContext.previousGameScheduledAt).toBe('2024-07-02T18:30:00.000Z');
+    expect(context.awayScheduleContext.nextGameScheduledAt).toBeNull();
+    expect(context.awayScheduleContext.daysSincePreviousGame).toBe(8);
+    expect(context.awayScheduleContext.hoursSincePreviousGame).toBe(193);
+    expect(context.awayScheduleContext.scheduleContextCompletenessLabel).toBe('partial');
+  });
+
+  it('emits invalid-timestamp warning for empty scheduledStartTime', () => {
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-empty',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [],
+    );
+
+    expect(context.awayScheduleContext.status).toBe('not-evaluated');
+    expect(context.awayScheduleContext.reason).toBe('invalid-timestamp');
+    expect(context.awayScheduleContext.scheduleContextWarnings).toEqual([
+      'TEAM_SCHEDULE_CONTEXT_INVALID_TIMESTAMP',
+    ]);
+  });
+
+  it('does not serialize forbidden fields when output is stringified', () => {
+    const context = buildTeamScheduleContext(
+      {
+        gameId: 'target-stringify',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [
+        {
+          gameId: 'prev',
+          officialDate: '2024-07-02',
+          scheduledStartTime: '2024-07-02T18:30:00Z',
+          awayTeam: 'AWAY_1',
+          homeTeam: 'HOME_1',
+        },
+      ],
+    );
+
+    const json = JSON.stringify(context);
+    for (const field of [
+      'finalScore',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'predictedWinner',
+      'pick',
+      'modelProbability',
+      'outcome',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(json).not.toContain(`"${field}"`);
+    }
+  });
 });
