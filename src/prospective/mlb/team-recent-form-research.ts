@@ -22,6 +22,12 @@ import {
   validateScheduleContextModeFlags,
   TEAM_SCHEDULE_CONTEXT_MODULE_NAME,
 } from './team-schedule-context';
+import {
+  type TeamQualityContext,
+  buildTeamQualityContext,
+  validateTeamQualityContextModeFlags,
+  TEAM_QUALITY_CONTEXT_REQUIRES_FIXTURE_EVIDENCE,
+} from './team-quality-context';
 export const RESEARCH_PACKAGE_VERSION = 'mlb-team-recent-form-research-package-v1';
 export const TEAM_RECENT_FORM_MODULE_VERSION = 'mlb-team-recent-form-v1';
 export const TEAM_RECENT_FORM_MODULE_NAME = 'TEAM_RECENT_FORM';
@@ -139,6 +145,7 @@ export interface MLBTeamRecentFormResearchedGame extends MLBTeamRecentFormConstr
   readonly researchFindings: {
     readonly teamRecentForm: MLBTeamRecentFormFinding;
     readonly teamScheduleContext?: TeamScheduleContext;
+    readonly teamQualityContext?: TeamQualityContext;
   };
   readonly researchMessages: readonly unknown[];
   readonly researchWarnings: readonly unknown[];
@@ -567,9 +574,11 @@ export function buildMLBTeamRecentFormResearchPackage(
   aggregateSummaryEnabled = false,
   resultAggregateMetricsEnabled = false,
   teamScheduleContextByGameId?: Readonly<Record<string, TeamScheduleContext>> | null,
+  teamQualityContextByGameId?: Readonly<Record<string, TeamQualityContext>> | null,
 ): MLBTeamRecentFormResearchPackage {
   const games = input.games.map<MLBTeamRecentFormResearchedGame>((game) => {
     const scheduleContext = teamScheduleContextByGameId?.[game.gameId];
+    const qualityContext = teamQualityContextByGameId?.[game.gameId];
 
     return {
       gameId: game.gameId,
@@ -594,6 +603,7 @@ export function buildMLBTeamRecentFormResearchPackage(
           resultAggregateMetricsEnabled,
         ),
         ...(scheduleContext ? { teamScheduleContext: scheduleContext } : {}),
+        ...(qualityContext ? { teamQualityContext: qualityContext } : {}),
       } as MLBTeamRecentFormResearchedGame['researchFindings'],
       researchMessages: [],
       researchWarnings: [],

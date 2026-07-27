@@ -42,6 +42,14 @@ import {
   type TeamScheduleContext,
   buildTeamScheduleContext,
 } from '@/prospective/mlb/team-schedule-context';
+import {
+  type TeamQualityContext,
+  buildTeamQualityContext,
+  TEAM_QUALITY_CONTEXT_MODULE_NAME,
+  TEAM_QUALITY_CONTEXT_MODULE_VERSION,
+  TEAM_QUALITY_CONTEXT_SCOPE,
+  TEAM_QUALITY_CONTEXT_REQUIRES_FIXTURE_EVIDENCE,
+} from '@/prospective/mlb/team-quality-context';
 
 const projectRoot = join(__dirname, '..', '..');
 const scriptPath = join(projectRoot, 'scripts', 'mlb-team-recent-form-research.ts');
@@ -431,7 +439,7 @@ describe('Phase 5A MLB team recent form research module', () => {
     expect(multiple.error).toBe('TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY');
     expect(unknown.error).toBe('TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT');
     expect(missing.usage).toBe(
-      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local] [--team-schedule-context-local]',
+      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local] [--team-schedule-context-local] [--team-quality-context-local]',
     );
     expect(multiple.usage).toBe(missing.usage);
     expect(unknown.usage).toBe(missing.usage);
@@ -2987,6 +2995,309 @@ describe('buildTeamScheduleContext unit tests', () => {
       'odds',
       'market',
       'price',
+    ]) {
+      expect(json).not.toContain(`"${field}"`);
+    }
+  });
+});
+
+describe('Phase 5S MLB team quality context CLI mode', () => {
+  const fixturePathForQuality = join(
+    projectRoot,
+    'tests',
+    'prospective',
+    'fixtures',
+    'manual-schedule',
+    'valid-weekly-prospective-research-construction-file-artifact-v1.json',
+  );
+
+  it('rejects bare --team-quality-context-local with clean JSON error', () => {
+    const { stdout, summary } = runResearchExpectingFailure([
+      fixturePathForQuality,
+      '--team-quality-context-local',
+    ]);
+
+    expect(summary).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: TEAM_QUALITY_CONTEXT_REQUIRES_FIXTURE_EVIDENCE,
+      }),
+    );
+    expect(stdout).not.toContain(projectRoot);
+  });
+
+  it('includes teamQualityContextLocal only when explicitly enabled', () => {
+    const first = runResearch([
+      fixturePathForQuality,
+      '--fixture-evidence-local',
+      '--team-quality-context-local',
+    ]);
+    const second = runResearch([
+      fixturePathForQuality,
+      '--fixture-evidence-local',
+      '--team-quality-context-local',
+    ]);
+
+    expect(first).toBe(second);
+    const summary = JSON.parse(first) as Record<string, unknown>;
+    expect(summary.ok).toBe(true);
+    expect(summary.teamQualityContextLocal).toBe(true);
+  });
+
+  it('keeps default, evidence, aggregate, result-metrics, and schedule-context goldens unchanged', () => {
+    const expectedDefault = readFileSync(validStdoutGoldenPath, 'utf8');
+    expect(runResearch([fixturePathForQuality])).toBe(expectedDefault);
+
+    const expectedEvidence = readFileSync(
+      fixtureEvidenceLocalStdoutGoldenPath,
+      'utf8',
+    );
+    expect(
+      runResearch([fixturePathForQuality, '--fixture-evidence-local']),
+    ).toBe(expectedEvidence);
+
+    const expectedAggregate = readFileSync(
+      aggregateSummariesLocalStdoutGoldenPath,
+      'utf8',
+    );
+    expect(
+      runResearch([
+        fixturePathForQuality,
+        '--fixture-evidence-local',
+        '--aggregate-summaries-local',
+      ]),
+    ).toBe(expectedAggregate);
+
+    const expectedResultMetrics = readFileSync(
+      resultAggregateMetricsLocalStdoutGoldenPath,
+      'utf8',
+    );
+    expect(
+      runResearch([
+        fixturePathForQuality,
+        '--fixture-evidence-local',
+        '--aggregate-summaries-local',
+        '--result-aggregate-metrics-local',
+      ]),
+    ).toBe(expectedResultMetrics);
+
+    const expectedSchedule = readFileSync(
+      teamScheduleContextLocalStdoutGoldenPath,
+      'utf8',
+    );
+    expect(
+      runResearch([
+        fixturePathForQuality,
+        '--fixture-evidence-local',
+        '--team-schedule-context-local',
+      ]),
+    ).toBe(expectedSchedule);
+  });
+
+  it('each game includes researchFindings.teamQualityContext only in explicit mode', () => {
+    const defaultStdout = runResearch([fixturePathForQuality]);
+    const explicitStdout = runResearch([
+      fixturePathForQuality,
+      '--fixture-evidence-local',
+      '--team-quality-context-local',
+    ]);
+
+    const defaultSummary = JSON.parse(defaultStdout) as {
+      package: { games: Array<{ researchFindings: Record<string, unknown> }> };
+    };
+    const explicitSummary = JSON.parse(explicitStdout) as {
+      package: { games: Array<{ researchFindings: Record<string, unknown> }> };
+    };
+
+    for (const game of defaultSummary.package.games) {
+      expect(game.researchFindings).not.toHaveProperty('teamQualityContext');
+    }
+
+    for (const game of explicitSummary.package.games) {
+      expect(game.researchFindings).toHaveProperty('teamQualityContext');
+    }
+  });
+
+  it('team quality context exposes only TEAM_ONLY scope fields', () => {
+    const stdout = runResearch([
+      fixturePathForQuality,
+      '--fixture-evidence-local',
+      '--team-quality-context-local',
+    ]);
+    const summary = JSON.parse(stdout) as {
+      package: {
+        games: Array<{
+          researchFindings: {
+            teamQualityContext: {
+              moduleVersion: string;
+              moduleName: string;
+              scope: string;
+              awayTeamQualityContext: Record<string, unknown>;
+              homeTeamQualityContext: Record<string, unknown>;
+            };
+          };
+        }>;
+      };
+    };
+
+    expect(summary.package.games).toHaveLength(2);
+    for (const game of summary.package.games) {
+      expect(game.researchFindings.teamQualityContext.moduleVersion).toBe(
+        TEAM_QUALITY_CONTEXT_MODULE_VERSION,
+      );
+      expect(game.researchFindings.teamQualityContext.moduleName).toBe(
+        TEAM_QUALITY_CONTEXT_MODULE_NAME,
+      );
+      expect(game.researchFindings.teamQualityContext.scope).toBe(
+        TEAM_QUALITY_CONTEXT_SCOPE,
+      );
+      expect(game.researchFindings.teamQualityContext.awayTeamQualityContext).toBeDefined();
+      expect(game.researchFindings.teamQualityContext.homeTeamQualityContext).toBeDefined();
+    }
+  });
+
+  it('does not expose forbidden fields in team quality context mode', () => {
+    const stdout = runResearch([
+      fixturePathForQuality,
+      '--fixture-evidence-local',
+      '--team-quality-context-local',
+    ]);
+
+    for (const field of [
+      'modelProbability',
+      'predictedWinner',
+      'pick',
+      'finalScore',
+      'outcome',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+      'winChance',
+      'powerRating',
+      'teamRank',
+      'standingsPosition',
+    ]) {
+      expect(stdout).not.toContain(`"${field}"`);
+    }
+    expect(stdout).not.toContain(projectRoot);
+    expectNoAbsolutePaths(JSON.parse(stdout));
+  });
+
+  it('team-quality explicit mode output is deterministic across repeated runs', () => {
+    const first = runResearch([
+      fixturePathForQuality,
+      '--fixture-evidence-local',
+      '--team-quality-context-local',
+    ]);
+    const second = runResearch([
+      fixturePathForQuality,
+      '--fixture-evidence-local',
+      '--team-quality-context-local',
+    ]);
+
+    expect(first).toBe(second);
+    expect(JSON.parse(first)).toEqual(JSON.parse(second));
+  });
+});
+
+describe('buildTeamQualityContext unit tests', () => {
+  it('returns deterministic insufficient context when no local records exist', () => {
+    const context = buildTeamQualityContext(
+      {
+        gameId: 'target-1',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [],
+    );
+
+    expect(context.moduleVersion).toBe(TEAM_QUALITY_CONTEXT_MODULE_VERSION);
+    expect(context.moduleName).toBe(TEAM_QUALITY_CONTEXT_MODULE_NAME);
+    expect(context.scope).toBe(TEAM_QUALITY_CONTEXT_SCOPE);
+    expect(context.awayTeamQualityContext).toMatchObject({
+      status: 'insufficient',
+      reason: 'insufficient-local-evidence',
+      historicalSampleSizeLabel: 'none',
+      qualityContextWarnings: expect.arrayContaining([
+        'TEAM_QUALITY_CONTEXT_NO_LOCAL_EVIDENCE',
+      ]),
+    });
+    expect(context.homeTeamQualityContext).toMatchObject({
+      status: 'insufficient',
+      reason: 'insufficient-local-evidence',
+    });
+  });
+
+  it('does not list the target game in local records', () => {
+    const context = buildTeamQualityContext(
+      {
+        gameId: 'target-1',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [
+        {
+          gameId: 'target-1',
+          officialDate: '2024-07-05',
+          scheduledStartTime: '2024-07-05T19:15:00Z',
+          awayTeam: 'AWAY_1',
+          homeTeam: 'HOME_1',
+        },
+      ],
+    );
+
+    expect(context.awayTeamQualityContext.status).toBe('insufficient');
+    expect(context.homeTeamQualityContext.status).toBe('insufficient');
+  });
+
+  it('does not serialize forbidden fields when output is stringified', () => {
+    const context = buildTeamQualityContext(
+      {
+        gameId: 'target-1',
+        officialDate: '2024-07-05',
+        scheduledStartTime: '2024-07-05T19:15:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+      },
+      [
+        {
+          gameId: 'prev-1',
+          officialDate: '2024-07-04',
+          scheduledStartTime: '2024-07-04T19:00:00Z',
+          awayTeam: 'AWAY_1',
+          homeTeam: 'HOME_1',
+        },
+      ],
+    );
+
+    const json = JSON.stringify(context);
+    for (const field of [
+      'modelProbability',
+      'predictedWinner',
+      'pick',
+      'finalScore',
+      'outcome',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+      'winChance',
+      'powerRating',
+      'teamRank',
+      'standingsPosition',
     ]) {
       expect(json).not.toContain(`"${field}"`);
     }

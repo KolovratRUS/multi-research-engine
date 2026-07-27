@@ -283,13 +283,21 @@ export function buildTeamQualityContext(
   };
 }
 
+export const TEAM_QUALITY_CONTEXT_REQUIRES_FIXTURE_EVIDENCE =
+  'TEAM_QUALITY_CONTEXT_REQUIRES_FIXTURE_EVIDENCE';
+
 export function validateTeamQualityContextModeFlags({
+  fixtureEvidenceLocal,
   teamQualityContextLocal,
 }: {
+  readonly fixtureEvidenceLocal: boolean;
   readonly teamQualityContextLocal: boolean;
 }): string | null {
   if (!teamQualityContextLocal) {
     return null;
   }
-  return 'TEAM_QUALITY_CONTEXT_LOCAL_MODE_NOT_IMPLEMENTED';
+  if (!fixtureEvidenceLocal) {
+    return TEAM_QUALITY_CONTEXT_REQUIRES_FIXTURE_EVIDENCE;
+  }
+  return null;
 }
