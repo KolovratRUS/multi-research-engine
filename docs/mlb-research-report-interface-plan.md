@@ -294,15 +294,22 @@ Recommended future phases:
 - no website code
 - preserve all existing goldens and behavior
 
+- completed: local-only typed adapter, copy-only label fields, safety assertion, warning dedupe/sort
+
 ### Phase 5X: local-only report rendering helper/unit tests
 
-- add deterministic report JSON generation in tests or local helper
+- add deterministic human-readable renderer
 - verify module availability mapping
 - verify warning sort/dedupe mapping
 - verify safe fields only
+- verify label-only rendering of researchStrengthScore/confidence/dataQuality
+- verify generatedAt handled without current-time calls
+- verify no raw outcomes, no pitcher evidence, no actual starters
 - no CLI flag
 - no file output committed by default
 - preserve existing behavior
+
+- completed: local-only typed renderer, sections, game cards, game details, deterministic output
 
 ### Phase 5Y: optional explicit CLI report-preview JSON mode
 

@@ -83,12 +83,13 @@ Metadata includes package/adapter versions, deterministic flag, source mode, and
 
 ## Recommended next safe phase
 
-Phase 5X — add local-only human-readable report rendering helper and unit tests.
+Phase 5Y — add optional explicit CLI report-preview JSON mode using adapter+renderer.
 
-Phase 5X rules:
+Phase 5Y rules:
 
 - local-only
-- no CLI/file output
+- no default behavior change
+- no file output yet
 - no website/API implementation
 - no modelProbability
 - no picks/predictions/betting advice
