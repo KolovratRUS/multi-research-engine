@@ -18,9 +18,11 @@
 
 ## Purpose
 
-Phase 5H locks the exact stdout for the Phase 5G aggregate-summary mode. This is a regression fixture only. It uses the existing manual-schedule construction fixture, the local fixture evidence provider, and the explicit `--aggregate-summaries-local` mode to produce a deterministic aggregate-enabled stdout snapshot.
+Locks exact aggregate-summary stdout regression coverage for `--fixture-evidence-local --aggregate-summaries-local`. It does not change the Phase 5E evidence-enabled stdout golden, the Phase 5B default golden, the Phase 5D provider behavior, or any research implementation.
 
-This phase does not add implementation, file output, or new research behavior.
+## Golden fixture path
+
+`tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-aggregate-summaries-local-cli-output-v1.json`
 
 ## What is locked
 
@@ -31,12 +33,6 @@ This phase does not add implementation, file output, or new research behavior.
 - Exact construction package embedding and package identity fields.
 - `awayAggregateSummary` and `homeAggregateSummary` on each TEAM_RECENT_FORM finding.
 - Absence of result-derived, forbidden, absolute-path, and stack-trace content.
-- Current deterministic warning set:
-  - `TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED`
-  - `TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES`
-  - `TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION`
-
-Do not force this exact warning set if implementation behavior changes deterministically. Capture the current implementation output as the golden.
 
 ## Protected defaults
 
@@ -71,14 +67,16 @@ Do not force this exact warning set if implementation behavior changes determini
 Phase 5I — plan safe result-derived aggregate metrics.
 
 State:
-
-- planning-only
-- no implementation
-- no raw finalScore/outcome output
-- no modelProbability
-- no pitcher evidence
-- no actual starters
-- no file output
-- no live/API/web
-- no network schedule ingestion
-- no historical fixture data changes
+- planning-only;
+- no implementation;
+- no raw finalScore/outcome/completedGameState/finalStatus output;
+- no modelProbability;
+- no pitcher evidence;
+- no actual starters;
+- no file output;
+- no live/API/web;
+- no network schedule ingestion;
+- no historical fixture data changes;
+- preserve Phase 5B default goldens;
+- preserve Phase 5E evidence-enabled golden;
+- preserve aggregate stdout golden added in Phase 5H.

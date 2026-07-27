@@ -216,9 +216,10 @@ Phase 5D implemented the pure local fixture evidence provider in `docs/mlb-team-
 Phase 5E completed: added docs/mlb-team-recent-form-fixture-evidence-golden-tests.md, added tests/prospective/fixtures/manual-schedule/valid-mlb-team-recent-form-research-fixture-evidence-local-cli-output-v1.json, and locked exact --fixture-evidence-local stdout goldens. Phase 5D provider behavior, default Phase 5B goldens, and Phase 4/5 protected goldens remain unchanged.
 Phase 5F is planning-only aggregate summary planning in `docs/mlb-team-recent-form-aggregate-summary-plan.md`. It does not add implementation, file output, or any live/API/web access.
 Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb-team-recent-form-aggregate-summary-implementation.md`. It adds an explicit `--fixture-evidence-local --aggregate-summaries-local` mode and preserves default Phase 5B and Phase 5E evidence-enabled goldens unchanged.
-Phase 5H adds exact aggregate-summary stdout golden regression coverage in `docs/mlb-team-recent-form-aggregate-summary-golden-tests.md`. It does not add research behavior, file output, `modelProbability`, pitcher evidence, live/API/web access, network schedule ingestion, or historical fixture changes.
+Phase 5H added exact aggregate-summary stdout golden regression coverage in `docs/mlb-team-recent-form-aggregate-summary-golden-tests.md`. It does not add research behavior, file output, `modelProbability`, pitcher evidence, live/API/web access, network schedule ingestion, or historical fixture changes.
+Phase 5I completed planning for safe result-derived aggregate metrics in `docs/mlb-team-recent-form-result-aggregate-metrics-plan.md`. It does not add implementation, file output, research behavior, `modelProbability`, pitcher evidence, actual starters, live/API/web access, network schedule ingestion, or historical fixture changes.
 
-The recommended next safe phase is Phase 5I: plan safe result-derived aggregate metrics.
+The recommended next safe phase is Phase 5J: implement safe result-derived aggregate metrics behind explicit local-only mode.
 
 The application enforces a strict two-stage separation:
 

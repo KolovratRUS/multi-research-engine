@@ -87,19 +87,9 @@ Phase 5H locks exact aggregate-summary stdout regression goldens in `docs/mlb-te
 
 Phase 5I — plan safe result-derived aggregate metrics.
 
-State:
+Phase 5I completed planning for safe result-derived aggregate metrics in `docs/mlb-team-recent-form-result-aggregate-metrics-plan.md`. It does not add implementation, file output, research behavior, `modelProbability`, pitcher evidence, actual starters, live/API/web access, network schedule ingestion, or historical fixture changes.
 
-- planning-only;
-- no implementation;
-- aggregate-only;
-- no raw finalScore/outcome output;
-- no modelProbability;
-- no pitcher evidence;
-- no actual starters;
-- no file output;
-- no live/API/web;
-- no network schedule ingestion;
-- no historical fixture data changes.
+The recommended next safe phase is Phase 5J: implement safe result-derived aggregate metrics behind explicit local-only mode.
 
 ## Phase 5F aggregate summary plan
 
