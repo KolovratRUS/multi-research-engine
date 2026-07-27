@@ -13,12 +13,42 @@ import {
 } from './team-recent-form-fixture-evidence';
 import {
   buildMLBTeamRecentFormAggregateSummary,
+  buildSafeResultItemsFromManualRecords,
+  extractEligibleSafeCompletedResultsFromEvidence,
   type MLBTeamRecentFormAggregateSummary,
 } from './team-recent-form-aggregate-summary';
 export const RESEARCH_PACKAGE_VERSION = 'mlb-team-recent-form-research-package-v1';
 export const TEAM_RECENT_FORM_MODULE_VERSION = 'mlb-team-recent-form-v1';
 export const TEAM_RECENT_FORM_MODULE_NAME = 'TEAM_RECENT_FORM';
 export const EXPECTED_CONSTRUCTION_VERSION = 'mlb-weekly-prospective-research-construction-v1';
+
+export const TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED =
+  'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED';
+export const TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES =
+  'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES';
+export const TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED =
+  'TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED';
+
+export function validateResultAggregateMetricsModeFlags({
+  fixtureEvidenceLocal,
+  aggregateSummariesLocal,
+  resultAggregateMetricsLocal,
+}: {
+  readonly fixtureEvidenceLocal: boolean;
+  readonly aggregateSummariesLocal: boolean;
+  readonly resultAggregateMetricsLocal: boolean;
+}): string | null {
+  if (!resultAggregateMetricsLocal) {
+    return null;
+  }
+  if (!fixtureEvidenceLocal) {
+    return TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED;
+  }
+  if (!aggregateSummariesLocal) {
+    return TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES;
+  }
+  return null;
+}
 
 export interface MLBTeamFormResearchValidationMessage {
   readonly code: string;
@@ -413,9 +443,10 @@ function buildTeamRecentFormFinding(
   game: MLBTeamRecentFormConstructionGame,
   fixtureEvidence?: TeamRecentFormFixtureEvidenceResult | null,
   aggregateSummaryEnabled?: boolean,
+  resultAggregateMetricsEnabled?: boolean,
 ): MLBTeamRecentFormFinding {
   if (!fixtureEvidence) {
-    return {
+    const base: MLBTeamRecentFormFinding = {
       moduleVersion: TEAM_RECENT_FORM_MODULE_VERSION,
       scope: 'TEAM_ONLY',
       awayTeam: game.awayTeam,
@@ -438,6 +469,46 @@ function buildTeamRecentFormFinding(
       warnings: [],
       evidence: [],
     };
+
+    if (resultAggregateMetricsEnabled) {
+      const summary: MLBTeamRecentFormAggregateSummary = {
+        status: 'not-evaluated',
+        reason: 'no-evidence',
+        gamesConsidered: 0,
+        completedGamesConsidered: 0,
+        recencyWindowDays: 0,
+        recencyWindowGames: 0,
+        homeAwaySplitCounts: { home: 0, away: 0 },
+        opponentDiversityCount: 0,
+        dataCompletenessLabel: 'insufficient',
+        recencyCoverageLabel: 'insufficient',
+        sourceCompletenessWarnings: [],
+        resultAggregateMetrics: {
+          status: 'not-evaluated',
+          reason: 'not-evaluated',
+          gamesWithResultMetrics: 0,
+          winsCount: 0,
+          lossesCount: 0,
+          drawsOrTiesCount: 0,
+          averageRunsFor: null,
+          averageRunsAgainst: null,
+          averageRunDifferential: null,
+          runDifferentialTotal: 0,
+          gamesWithRunsForAvailable: 0,
+          gamesWithRunsAgainstAvailable: 0,
+          resultMetricCompletenessLabel: 'insufficient',
+          resultMetricWarnings: [],
+        },
+      };
+
+      return {
+        ...base,
+        awayAggregateSummary: summary,
+        homeAggregateSummary: { ...summary },
+      };
+    }
+
+    return base;
   }
 
   const base: MLBTeamRecentFormFinding = {
@@ -465,7 +536,15 @@ function buildTeamRecentFormFinding(
   };
 
   if (aggregateSummaryEnabled) {
-    const aggregate = buildMLBTeamRecentFormAggregateSummary(fixtureEvidence);
+    const eligibleResults =
+      resultAggregateMetricsEnabled && fixtureEvidence.evidence.length > 0
+        ? extractEligibleSafeCompletedResultsFromEvidence(fixtureEvidence.evidence)
+        : [];
+    const aggregate = buildMLBTeamRecentFormAggregateSummary(
+      fixtureEvidence,
+      resultAggregateMetricsEnabled ? true : undefined,
+      eligibleResults.length > 0 || resultAggregateMetricsEnabled ? eligibleResults : undefined,
+    );
     return {
       ...base,
       awayAggregateSummary: aggregate.awayAggregateSummary,
@@ -480,6 +559,7 @@ export function buildMLBTeamRecentFormResearchPackage(
   input: MLBTeamRecentFormConstructionPackage,
   fixtureEvidenceByGameId?: Readonly<Record<string, TeamRecentFormFixtureEvidenceResult>> | null,
   aggregateSummaryEnabled = false,
+  resultAggregateMetricsEnabled = false,
 ): MLBTeamRecentFormResearchPackage {
   const games = input.games.map<MLBTeamRecentFormResearchedGame>((game) => ({
     gameId: game.gameId,
@@ -501,6 +581,7 @@ export function buildMLBTeamRecentFormResearchPackage(
         game,
         fixtureEvidenceByGameId?.[game.gameId],
         aggregateSummaryEnabled,
+        resultAggregateMetricsEnabled,
       ),
     },
     researchMessages: [],

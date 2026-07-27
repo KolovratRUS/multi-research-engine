@@ -219,7 +219,9 @@ Phase 5G implemented aggregate-only coverage/completeness summaries in `docs/mlb
 Phase 5H added exact aggregate-summary stdout golden regression coverage in `docs/mlb-team-recent-form-aggregate-summary-golden-tests.md`. It does not add research behavior, file output, `modelProbability`, pitcher evidence, live/API/web access, network schedule ingestion, or historical fixture changes.
 Phase 5I completed planning for safe result-derived aggregate metrics in `docs/mlb-team-recent-form-result-aggregate-metrics-plan.md`. It does not add implementation, file output, research behavior, `modelProbability`, pitcher evidence, actual starters, live/API/web access, network schedule ingestion, or historical fixture changes.
 
-The recommended next safe phase is Phase 5J: implement safe result-derived aggregate metrics behind explicit local-only mode.
+Phase 5J implemented safe result-derived aggregate metrics behind explicit local-only mode in `docs/mlb-team-recent-form-result-aggregate-metrics-implementation.md`. It requires `--fixture-evidence-local --aggregate-summaries-local --result-aggregate-metrics-local`, preserves default Phase 5B/5E/5H goldens, and keeps `modelProbability` and raw outcome fields absent.
+
+The recommended next safe phase is Phase 5K: add exact result-metrics stdout golden and a synthetic fixture with safe scores for end-to-end metric verification.
 
 The application enforces a strict two-stage separation:
 

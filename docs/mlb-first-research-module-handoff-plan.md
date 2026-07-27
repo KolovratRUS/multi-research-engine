@@ -402,3 +402,7 @@ Phase 5D implemented the planned local fixture evidence provider in `src/prospec
 - No historical fixture data changed.
 - No dependency, package-lock, or package change was made.
 - No live/API/web/network schedule ingestion occurred.
+
+## Phase 5J Completion Note
+
+Phase 5J implemented `--result-aggregate-metrics-local` as an explicit opt-in behind `--fixture-evidence-local --aggregate-summaries-local --result-aggregate-metrics-local`. It preserves Phase 5B/5E/5H goldens, adds no live/API/web access, network schedule ingestion, or historical fixture changes.

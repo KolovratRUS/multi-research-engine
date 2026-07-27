@@ -17,30 +17,42 @@ import {
   buildMLBTeamRecentFormResearchPackage,
   type MLBTeamRecentFormConstructionPackage,
   validateMLBTeamRecentFormConstructionPackage,
+  validateResultAggregateMetricsModeFlags,
+  TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED,
+  TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES,
+  TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED,
 } from '../src/prospective/mlb/team-recent-form-research';
 
-const USAGE = 'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local]';
+const USAGE = 'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local]';
 
 type ArgumentError =
   | 'TEAM_FORM_RESEARCH_PATH_REQUIRED'
   | 'TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY'
   | 'TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT'
-  | 'TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED';
+  | 'TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED'
+  | 'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED'
+  | 'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES';
 
 interface ParsedArguments {
   readonly path: string;
   readonly fixtureEvidenceLocal: boolean;
   readonly aggregateSummariesLocal: boolean;
+  readonly resultAggregateMetricsLocal: boolean;
   readonly error: ArgumentError | null;
 }
 
-const ALLOWED_FLAGS = new Set(['--fixture-evidence-local', '--aggregate-summaries-local']);
+const ALLOWED_FLAGS = new Set([
+  '--fixture-evidence-local',
+  '--aggregate-summaries-local',
+  '--result-aggregate-metrics-local',
+]);
 
 function parseArguments(argv: string[]): ParsedArguments {
   const args = argv.slice(2);
   const positionalPaths: string[] = [];
   let fixtureEvidenceLocal = false;
   let aggregateSummariesLocal = false;
+  let resultAggregateMetricsLocal = false;
 
   for (const argument of args) {
     if (argument.startsWith('-')) {
@@ -51,12 +63,16 @@ function parseArguments(argv: string[]): ParsedArguments {
         if (argument === '--aggregate-summaries-local') {
           aggregateSummariesLocal = true;
         }
+        if (argument === '--result-aggregate-metrics-local') {
+          resultAggregateMetricsLocal = true;
+        }
         continue;
       }
       return {
         path: '',
         fixtureEvidenceLocal: false,
         aggregateSummariesLocal: false,
+        resultAggregateMetricsLocal: false,
         error: 'TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT',
       };
     }
@@ -68,6 +84,7 @@ function parseArguments(argv: string[]): ParsedArguments {
       path: '',
       fixtureEvidenceLocal: false,
       aggregateSummariesLocal: false,
+      resultAggregateMetricsLocal: false,
       error: 'TEAM_FORM_RESEARCH_PATH_REQUIRED',
     };
   }
@@ -76,15 +93,42 @@ function parseArguments(argv: string[]): ParsedArguments {
       path: '',
       fixtureEvidenceLocal,
       aggregateSummariesLocal,
+      resultAggregateMetricsLocal,
       error: 'TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY',
     };
   }
+
+  const resultModeError = validateResultAggregateMetricsModeFlags({
+    fixtureEvidenceLocal,
+    aggregateSummariesLocal,
+    resultAggregateMetricsLocal,
+  });
+  if (resultModeError === TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED) {
+    return {
+      path: '',
+      fixtureEvidenceLocal: false,
+      aggregateSummariesLocal: false,
+      resultAggregateMetricsLocal: false,
+      error: 'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED',
+    };
+  }
+  if (resultModeError === TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES) {
+    return {
+      path: '',
+      fixtureEvidenceLocal: false,
+      aggregateSummariesLocal: false,
+      resultAggregateMetricsLocal: false,
+      error: 'TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES',
+    };
+  }
+
   if (aggregateSummariesLocal && !fixtureEvidenceLocal) {
     return {
       path: '',
       fixtureEvidenceLocal: false,
       aggregateSummariesLocal: false,
-      error: 'TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED',
+      resultAggregateMetricsLocal: false,
+      error: TEAM_FORM_RESEARCH_AGGREGATE_SUMMARIES_NOT_ENABLED,
     };
   }
 
@@ -92,6 +136,7 @@ function parseArguments(argv: string[]): ParsedArguments {
     path: positionalPaths[0],
     fixtureEvidenceLocal,
     aggregateSummariesLocal,
+    resultAggregateMetricsLocal,
     error: null,
   };
 }
@@ -208,6 +253,7 @@ const researchPackage = buildMLBTeamRecentFormResearchPackage(
   typedInput,
   fixtureEvidenceByGameId,
   parsedArguments.aggregateSummariesLocal,
+  parsedArguments.resultAggregateMetricsLocal,
 );
 
 const summary: Record<string, unknown> = {
@@ -236,6 +282,10 @@ if (parsedArguments.fixtureEvidenceLocal) {
 
 if (parsedArguments.aggregateSummariesLocal) {
   summary.aggregateSummariesLocal = true;
+}
+
+if (parsedArguments.resultAggregateMetricsLocal) {
+  summary.resultAggregateMetricsLocal = true;
 }
 
 writeSummary(summary);

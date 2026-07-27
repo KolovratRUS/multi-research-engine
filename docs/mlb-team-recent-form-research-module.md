@@ -354,3 +354,7 @@ Phase 5D implemented the planned local fixture evidence provider in `src/prospec
 - Direct npm aliases using the `tsx` launcher encounter managed-sandbox IPC `EPERM` before script execution; equivalent local-loader behavior passes, including all four historical review modes and threshold checks.
 - Generated output and empty `tmp` directories were removed. No Phase 5A source, Phase 5B golden, earlier construction/lock behavior or golden, historical fixture, package file, or dependency changed.
 - Safety searches confirm Phase 5C additions use restricted terminology only for negative exclusions, keep `modelProbability` absent, and add no executable `source=live` command. No live/API/web request or network schedule ingestion occurred.
+
+## Phase 5J Result Aggregate Metrics
+
+Phase 5J adds an explicit `--result-aggregate-metrics-local` flag that requires `--fixture-evidence-local --aggregate-summaries-local`. It computes safe result-derived metrics (winsCount, lossesCount, averageRunsFor, etc.) only from `buildSafeResultItemsFromManualRecords` with `LAST_COMPLETED_PLAY_END` provenance, excludes raw outcome fields, and keeps `modelProbability` absent. Default Phase 5B/5E/5H behavior is unchanged.

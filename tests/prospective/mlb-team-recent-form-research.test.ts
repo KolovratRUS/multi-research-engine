@@ -34,6 +34,9 @@ import {
 } from '@/prospective/mlb/team-recent-form-fixture-evidence';
 import {
   buildMLBTeamRecentFormAggregateSummary,
+  buildSafeResultItemsFromManualRecords,
+  TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED,
+  TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES,
 } from '@/prospective/mlb/team-recent-form-aggregate-summary';
 
 const projectRoot = join(__dirname, '..', '..');
@@ -416,7 +419,7 @@ describe('Phase 5A MLB team recent form research module', () => {
     expect(multiple.error).toBe('TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY');
     expect(unknown.error).toBe('TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT');
     expect(missing.usage).toBe(
-      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local]',
+      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local]',
     );
     expect(multiple.usage).toBe(missing.usage);
     expect(unknown.usage).toBe(missing.usage);
@@ -1526,5 +1529,417 @@ describe('Phase 5G MLB aggregate summary provider unit tests', () => {
     if (warnings.length >= 2) {
       expect(warnings[0].localeCompare(warnings[warnings.length - 1])).toBeLessThanOrEqual(0);
     }
+  });
+});
+
+describe('Phase 5J MLB result aggregate metrics mode', () => {
+  it('rejects bare --result-aggregate-metrics-local with clean JSON error', () => {
+    const { stdout, summary } = runResearchExpectingFailure([
+      fixturePath,
+      '--result-aggregate-metrics-local',
+    ]);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.error).toBe(TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED);
+    expect('package' in summary).toBe(false);
+    expect(stdout).not.toContain(projectRoot);
+  });
+
+  it('rejects --fixture-evidence-local --result-aggregate-metrics-local without --aggregate-summaries-local', () => {
+    const { stdout, summary } = runResearchExpectingFailure([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--result-aggregate-metrics-local',
+    ]);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.error).toBe(TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_REQUIRES_AGGREGATE_SUMMARIES);
+    expect('package' in summary).toBe(false);
+    expect(stdout).not.toContain(projectRoot);
+  });
+
+  it('preserves exact default stdout golden without resultAggregateMetricsLocal', () => {
+    const expected = readFileSync(validStdoutGoldenPath, 'utf8');
+    expect(runResearch([fixturePath])).toBe(expected);
+  });
+
+  it('preserves exact evidence-enabled stdout golden without resultAggregateMetricsLocal', () => {
+    const expected = readFileSync(fixtureEvidenceLocalStdoutGoldenPath, 'utf8');
+    expect(runResearch([fixturePath, '--fixture-evidence-local'])).toBe(expected);
+  });
+
+  it('preserves exact aggregate stdout golden without resultAggregateMetricsLocal', () => {
+    const expected = readFileSync(aggregateSummariesLocalStdoutGoldenPath, 'utf8');
+    expect(runResearch([fixturePath, '--fixture-evidence-local', '--aggregate-summaries-local'])).toBe(expected);
+  });
+
+  it('includes resultAggregateMetricsLocal flag in full result-metrics mode', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--aggregate-summaries-local',
+      '--result-aggregate-metrics-local',
+    ]);
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+
+    expect(summary.ok).toBe(true);
+    expect(summary.fixtureEvidenceLocal).toBe(true);
+    expect(summary.aggregateSummariesLocal).toBe(true);
+    expect(summary.resultAggregateMetricsLocal).toBe(true);
+  });
+
+  it('produces deterministic result-metrics mode output across repeated runs', () => {
+    const first = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--aggregate-summaries-local',
+      '--result-aggregate-metrics-local',
+    ]);
+    const second = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--aggregate-summaries-local',
+      '--result-aggregate-metrics-local',
+    ]);
+
+    expect(first).toBe(second);
+  });
+
+  it('keeps result-metrics mode free of forbidden fields and absolute paths', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--aggregate-summaries-local',
+      '--result-aggregate-metrics-local',
+    ]);
+
+    for (const field of [
+      'modelProbability',
+      'predictedWinner',
+      'pick',
+      'finalScore',
+      'outcome',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(stdout).not.toContain(`\"${field}\"`);
+    }
+    expect(stdout).not.toContain(projectRoot);
+    expectNoAbsolutePaths(JSON.parse(stdout));
+  });
+
+  it('returns deterministic insufficient resultAggregateMetrics on current manual fixtures', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--aggregate-summaries-local',
+      '--result-aggregate-metrics-local',
+    ]);
+    const summary = JSON.parse(stdout) as {
+      package: {
+        games: Array<{
+          researchFindings: {
+            teamRecentForm: {
+              awayAggregateSummary: Record<string, unknown>;
+              homeAggregateSummary: Record<string, unknown>;
+            };
+          };
+        }>;
+      };
+    };
+
+    for (const game of summary.package.games) {
+      const finding = game.researchFindings.teamRecentForm;
+      for (const side of [finding.awayAggregateSummary, finding.homeAggregateSummary]) {
+        const metrics = side.resultAggregateMetrics as {
+          status: string;
+          reason: string;
+          gamesWithResultMetrics: number;
+          winsCount: number;
+          lossesCount: number;
+          drawsOrTiesCount: number;
+          averageRunsFor: number | null;
+          averageRunsAgainst: number | null;
+          averageRunDifferential: number | null;
+          runDifferentialTotal: number;
+          gamesWithRunsForAvailable: number;
+          gamesWithRunsAgainstAvailable: number;
+          resultMetricCompletenessLabel: string;
+          resultMetricWarnings: readonly string[];
+        };
+        expect(metrics.status).toBe('insufficient');
+        expect(metrics.reason).toBe('insufficient-result-evidence');
+        expect(metrics.gamesWithResultMetrics).toBe(0);
+        expect(metrics.winsCount).toBe(0);
+        expect(metrics.lossesCount).toBe(0);
+        expect(metrics.drawsOrTiesCount).toBe(0);
+        expect(metrics.averageRunsFor).toBeNull();
+        expect(metrics.averageRunsAgainst).toBeNull();
+        expect(metrics.averageRunDifferential).toBeNull();
+        expect(metrics.runDifferentialTotal).toBe(0);
+        expect(metrics.gamesWithRunsForAvailable).toBe(0);
+        expect(metrics.gamesWithRunsAgainstAvailable).toBe(0);
+        expect(metrics.resultMetricCompletenessLabel).toBe('insufficient');
+        expect(metrics.resultMetricWarnings).toEqual(
+          expect.arrayContaining(['TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED', 'TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES', 'TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION', TEAM_FORM_RESEARCH_RESULT_AGGREGATE_METRICS_NOT_ENABLED]),
+        );
+      }
+    }
+  });
+});
+
+describe('buildSafeResultItemsFromManualRecords unit tests', () => {
+  const target = {
+    gameId: 'target-game-1',
+    scheduledStartTime: '2024-07-05T19:15:00Z',
+    awayTeam: 'AWAY_1',
+    homeTeam: 'HOME_1',
+  };
+
+  function buildItems(
+    records: Array<{
+      readonly gameId: string;
+      readonly scheduledStartTime: string;
+      readonly awayTeam: string;
+      readonly homeTeam: string;
+      readonly liveData?: Readonly<{
+        readonly plays?: Readonly<{
+          readonly allPlays?: ReadonlyArray<Readonly<{
+            readonly about?: Readonly<{
+              readonly endTime?: string;
+            }>;
+          }>>;
+        }>;
+      }>;
+      readonly provenance?: Readonly<{
+        readonly lastCompletedPlayEnd?: string;
+      }>;
+      readonly safeResultData?: Readonly<{
+        readonly awayScore?: number;
+        readonly homeScore?: number;
+      }> | null;
+    }>,
+  ) {
+    return buildSafeResultItemsFromManualRecords({
+      records,
+      target,
+      lookbackWindowDays: 30,
+      lookbackWindowGames: 4,
+    });
+  }
+
+  it('computes wins/losses/ties and averages from team perspective', () => {
+    const items = buildItems([
+      {
+        gameId: 'win-1',
+        scheduledStartTime: '2024-07-04T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-04T21:30:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 3, homeScore: 5 },
+      },
+      {
+        gameId: 'loss-1',
+        scheduledStartTime: '2024-07-03T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-03T21:00:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 4, homeScore: 2 },
+      },
+      {
+        gameId: 'tie-1',
+        scheduledStartTime: '2024-07-02T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-02T21:00:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 3, homeScore: 3 },
+      },
+      {
+        gameId: 'other-1',
+        scheduledStartTime: '2024-07-01T18:30:00Z',
+        awayTeam: 'OTHER_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-01T21:00:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 1, homeScore: 4 },
+      },
+    ]);
+
+    expect(items).toHaveLength(4);
+    expect(items.map((item) => item.sourceGameId)).toEqual([
+      'win-1',
+      'loss-1',
+      'tie-1',
+      'other-1',
+    ]);
+    expect(items[0]).toMatchObject({
+      team: 'AWAY_1',
+      teamRole: 'AWAY',
+      opponent: 'HOME_1',
+      runsFor: 3,
+      runsAgainst: 5,
+      runDifferential: -2,
+    });
+    expect(items[1]).toMatchObject({
+      team: 'AWAY_1',
+      teamRole: 'AWAY',
+      opponent: 'HOME_1',
+      runsFor: 4,
+      runsAgainst: 2,
+      runDifferential: 2,
+    });
+    expect(items[2]).toMatchObject({
+      team: 'AWAY_1',
+      teamRole: 'AWAY',
+      opponent: 'HOME_1',
+      runsFor: 3,
+      runsAgainst: 3,
+      runDifferential: 0,
+    });
+    expect(items[3]).toMatchObject({
+      team: 'HOME_1',
+      teamRole: 'HOME',
+      opponent: 'OTHER_1',
+      runsFor: 4,
+      runsAgainst: 1,
+      runDifferential: 3,
+    });
+  });
+
+  it('excludes games with missing safe result scores', () => {
+    const items = buildItems([
+      {
+        gameId: 'missing-score',
+        scheduledStartTime: '2024-07-04T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-04T21:30:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 3 },
+      },
+    ]);
+
+    expect(items).toHaveLength(0);
+  });
+
+  it('excludes unsafe completion provenance', () => {
+    const items = buildItems([
+      {
+        gameId: 'unsafe-provenance',
+        scheduledStartTime: '2024-07-04T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-04T21:30:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'SCHEDULE_PROBABLE_TIMESTAMP_UNKNOWN' },
+        safeResultData: { awayScore: 3, homeScore: 5 },
+      },
+    ]);
+
+    expect(items).toHaveLength(0);
+  });
+
+  it('excludes completedAt after or equal target scheduledStartTime', () => {
+    const items = buildItems([
+      {
+        gameId: 'late-completed',
+        scheduledStartTime: '2024-07-04T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-05T19:15:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 3, homeScore: 5 },
+      },
+      {
+        gameId: 'equal-completed',
+        scheduledStartTime: '2024-07-04T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-05T19:15:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 2, homeScore: 1 },
+      },
+    ]);
+
+    expect(items).toHaveLength(0);
+  });
+
+  it('excludes the target game', () => {
+    const items = buildItems([
+      {
+        gameId: target.gameId,
+        scheduledStartTime: '2024-07-04T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-04T21:30:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 3, homeScore: 5 },
+      },
+    ]);
+
+    expect(items).toHaveLength(0);
+  });
+
+  it('limits results to lookbackWindowGames and sorts deterministically', () => {
+    const items = buildItems([
+      {
+        gameId: 'oldest',
+        scheduledStartTime: '2024-07-03T18:30:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-03T21:00:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 1, homeScore: 2 },
+      },
+      {
+        gameId: 'newest',
+        scheduledStartTime: '2024-07-03T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-03T22:00:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 4, homeScore: 5 },
+      },
+    ]);
+
+    expect(items).toHaveLength(2);
+    expect(items[0].sourceGameId).toBe('newest');
+    expect(items[1].sourceGameId).toBe('oldest');
+  });
+
+  it('does not expose raw score/outcome fields in returned aggregate', () => {
+    const items = buildItems([
+      {
+        gameId: 'raw-check',
+        scheduledStartTime: '2024-07-04T19:00:00Z',
+        awayTeam: 'AWAY_1',
+        homeTeam: 'HOME_1',
+        liveData: { plays: { allPlays: [{ about: { endTime: '2024-07-04T21:30:00Z' } }] } },
+        provenance: { lastCompletedPlayEnd: 'LAST_COMPLETED_PLAY_END' },
+        safeResultData: { awayScore: 3, homeScore: 5 },
+      },
+    ]);
+
+    const aggregates = items.map((item) => ({
+      team: item.team,
+      rawScoreSummary: item.runsFor,
+      rawOutcome: item.runDifferential,
+    }));
+
+    expect(aggregates).toEqual([
+      {
+        team: 'AWAY_1',
+        rawScoreSummary: 3,
+        rawOutcome: -2,
+      },
+    ]);
   });
 });
