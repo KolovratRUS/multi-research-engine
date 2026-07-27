@@ -7,6 +7,8 @@ No package changes.
 
 ## Status
 
+Phase 5R adds TEAM_QUALITY_CONTEXT builder skeleton and unit tests. No CLI integration yet. No new stdout golden. No default behavior change. Phase 5B/5E/5H/5K/5N goldens preserved. Phase 5J result-metrics behavior preserved. Phase 5M schedule-context behavior preserved. Phase 5P synthetic coverage preserved. No modelProbability. No raw outcomes. No pitcher evidence. No actual starters. No file output. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5S.
+
 - Phase: 5Q
 - planning-only
 - no implementation
