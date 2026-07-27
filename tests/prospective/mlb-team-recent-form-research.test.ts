@@ -100,6 +100,10 @@ const teamScheduleContextLocalStdoutGoldenPath = join(
   goldenFixtureDirectory,
   'valid-mlb-team-schedule-context-local-cli-output-v1.json',
 );
+const teamQualityContextLocalStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'valid-mlb-team-quality-context-local-cli-output-v1.json',
+);
 const tempRoot = join(
   projectRoot,
   'tmp',
@@ -3202,6 +3206,78 @@ describe('Phase 5S MLB team quality context CLI mode', () => {
 
     expect(first).toBe(second);
     expect(JSON.parse(first)).toEqual(JSON.parse(second));
+  });
+
+  it('matches Phase 5T exact team-quality stdout golden', () => {
+    const expected = readFileSync(
+      teamQualityContextLocalStdoutGoldenPath,
+      'utf8',
+    );
+    expect(
+      runResearch([
+        fixturePathForQuality,
+        '--fixture-evidence-local',
+        '--team-quality-context-local',
+      ]),
+    ).toBe(expected);
+  });
+
+  it('Phase 5T golden has expected top-level fields and no forbidden fields', () => {
+    const golden = readFileSync(
+      teamQualityContextLocalStdoutGoldenPath,
+      'utf8',
+    );
+    const summary = JSON.parse(golden) as Record<string, unknown>;
+
+    expect(summary.ok).toBe(true);
+    expect(summary.fixtureEvidenceLocal).toBe(true);
+    expect(summary.teamQualityContextLocal).toBe(true);
+    expect(summary.researchPackageVersion).toBe('mlb-team-recent-form-research-package-v1');
+    expect(summary.gameCount).toBe(2);
+
+    const games = (summary.package as Record<string, unknown>).games as Array<
+      Record<string, unknown>
+    >;
+    expect(games).toHaveLength(2);
+    for (const game of games) {
+      const researchFindings = game.researchFindings as Record<
+        string,
+        unknown
+      >;
+      expect(researchFindings).toHaveProperty('teamRecentForm');
+      expect(researchFindings).toHaveProperty('teamQualityContext');
+
+      const teamQualityContext = researchFindings
+        .teamQualityContext as Record<string, unknown>;
+      expect(teamQualityContext.moduleVersion).toBe('mlb-team-quality-context-v1');
+      expect(teamQualityContext.moduleName).toBe('TEAM_QUALITY_CONTEXT');
+      expect(teamQualityContext.scope).toBe('TEAM_ONLY');
+      expect(teamQualityContext.awayTeamQualityContext).toBeDefined();
+      expect(teamQualityContext.homeTeamQualityContext).toBeDefined();
+    }
+
+    for (const field of [
+      'modelProbability',
+      'predictedWinner',
+      'pick',
+      'winChance',
+      'powerRating',
+      'teamRank',
+      'standingsPosition',
+      'finalScore',
+      'outcome',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'closingOdds',
+      'impliedProbability',
+      'odds',
+      'market',
+      'price',
+    ]) {
+      expect(golden).not.toContain(`"${field}"`);
+    }
+    expectNoAbsolutePaths(summary);
   });
 });
 

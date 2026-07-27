@@ -1,0 +1,304 @@
+{
+  "ok": true,
+  "researchPackageVersion": "mlb-team-recent-form-research-package-v1",
+  "researchRunId": "team-recent-form:manual-schedule-fixture-week-1",
+  "sourceConstructionRunId": "manual-schedule-fixture-week-1",
+  "sourceConstructionLockId": "manual-week-lock:manual-schedule-fixture-week-1",
+  "sourceMode": "manual-schedule",
+  "weekStart": "2024-07-01",
+  "weekEnd": "2024-07-07",
+  "researchedAt": "2024-07-01T00:00:00Z",
+  "sourceConstructedAt": "2024-07-01T00:00:00Z",
+  "sourceLockedAt": "2024-07-01T00:00:00Z",
+  "gameCount": 2,
+  "validationMessageCount": 0,
+  "validationErrorCount": 0,
+  "validationWarningCount": 0,
+  "validationMessages": [],
+  "package": {
+    "researchPackageVersion": "mlb-team-recent-form-research-package-v1",
+    "constructionVersion": "mlb-weekly-prospective-research-construction-v1",
+    "researchRunId": "team-recent-form:manual-schedule-fixture-week-1",
+    "sourceConstructionRunId": "manual-schedule-fixture-week-1",
+    "sourceConstructionLockId": "manual-week-lock:manual-schedule-fixture-week-1",
+    "sourceMode": "manual-schedule",
+    "weekStart": "2024-07-01",
+    "weekEnd": "2024-07-07",
+    "researchedAt": "2024-07-01T00:00:00Z",
+    "sourceConstructedAt": "2024-07-01T00:00:00Z",
+    "sourceLockedAt": "2024-07-01T00:00:00Z",
+    "inputConstructionPackage": {
+      "constructionVersion": "mlb-weekly-prospective-research-construction-v1",
+      "lockVersion": "mlb-manual-week-lock-v1",
+      "runId": "manual-schedule-fixture-week-1",
+      "lockId": "manual-week-lock:manual-schedule-fixture-week-1",
+      "sourceMode": "manual-schedule",
+      "weekStart": "2024-07-01",
+      "weekEnd": "2024-07-07",
+      "constructedAt": "2024-07-01T00:00:00Z",
+      "lockedAt": "2024-07-01T00:00:00Z",
+      "inputSnapshot": {
+        "runId": "manual-schedule-fixture-week-1",
+        "createdAt": "2024-07-01T00:00:00Z",
+        "sourceMode": "manual-schedule",
+        "games": [
+          {
+            "gameId": "manual-game-1",
+            "officialDate": "2024-07-03",
+            "scheduledStartTime": "2024-07-03T17:10:00Z",
+            "awayTeam": "MANUAL_AWAY_1",
+            "homeTeam": "MANUAL_HOME_1",
+            "snapshotTimestamp": "2024-07-01T00:00:00Z",
+            "sourceProvenance": "manual-game-provenance"
+          },
+          {
+            "gameId": "manual-game-2",
+            "officialDate": "2024-07-05",
+            "scheduledStartTime": "2024-07-05T19:15:00Z",
+            "awayTeam": "MANUAL_AWAY_2",
+            "homeTeam": "MANUAL_HOME_2",
+            "snapshotTimestamp": "2024-07-01T00:00:00Z",
+            "sourceProvenance": "manual-game-provenance"
+          }
+        ],
+        "warnings": []
+      },
+      "games": [
+        {
+          "gameId": "manual-game-1",
+          "officialDate": "2024-07-03",
+          "scheduledStartTime": "2024-07-03T17:10:00Z",
+          "awayTeam": "MANUAL_AWAY_1",
+          "homeTeam": "MANUAL_HOME_1",
+          "snapshotTimestamp": "2024-07-01T00:00:00Z",
+          "sourceProvenance": "manual-game-provenance",
+          "constructionStatus": "pending-research",
+          "researchMode": "pregame",
+          "researchScope": "FULL",
+          "constructionMessages": [],
+          "warnings": []
+        },
+        {
+          "gameId": "manual-game-2",
+          "officialDate": "2024-07-05",
+          "scheduledStartTime": "2024-07-05T19:15:00Z",
+          "awayTeam": "MANUAL_AWAY_2",
+          "homeTeam": "MANUAL_HOME_2",
+          "snapshotTimestamp": "2024-07-01T00:00:00Z",
+          "sourceProvenance": "manual-game-provenance",
+          "constructionStatus": "pending-research",
+          "researchMode": "pregame",
+          "researchScope": "FULL",
+          "constructionMessages": [],
+          "warnings": []
+        }
+      ],
+      "constructionWarnings": [],
+      "constructionMessages": []
+    },
+    "games": [
+      {
+        "gameId": "manual-game-1",
+        "officialDate": "2024-07-03",
+        "scheduledStartTime": "2024-07-03T17:10:00Z",
+        "awayTeam": "MANUAL_AWAY_1",
+        "homeTeam": "MANUAL_HOME_1",
+        "snapshotTimestamp": "2024-07-01T00:00:00Z",
+        "sourceProvenance": "manual-game-provenance",
+        "constructionStatus": "pending-research",
+        "researchMode": "pregame",
+        "researchScope": "FULL",
+        "constructionMessages": [],
+        "warnings": [],
+        "researchStatus": "researched",
+        "completedResearchModules": [
+          "TEAM_RECENT_FORM"
+        ],
+        "researchFindings": {
+          "teamRecentForm": {
+            "moduleVersion": "mlb-team-recent-form-v1",
+            "scope": "TEAM_ONLY",
+            "awayTeam": "MANUAL_AWAY_1",
+            "homeTeam": "MANUAL_HOME_1",
+            "lookbackWindowGames": 3,
+            "lookbackWindowDays": 30,
+            "awayRecentGamesFound": 0,
+            "homeRecentGamesFound": 0,
+            "awaySummary": {
+              "status": "insufficient",
+              "reason": "insufficient-evidence"
+            },
+            "homeSummary": {
+              "status": "insufficient",
+              "reason": "insufficient-evidence"
+            },
+            "dataQuality": "insufficient",
+            "volatility": "not-evaluated",
+            "confidence": "low",
+            "warnings": [
+              "TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED",
+              "TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES",
+              "TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION"
+            ],
+            "evidence": []
+          },
+          "teamQualityContext": {
+            "moduleVersion": "mlb-team-quality-context-v1",
+            "moduleName": "TEAM_QUALITY_CONTEXT",
+            "scope": "TEAM_ONLY",
+            "awayTeamQualityContext": {
+              "status": "insufficient",
+              "reason": "insufficient-local-evidence",
+              "teamName": "MANUAL_AWAY_1",
+              "localEvidenceGameCount": 0,
+              "opponentEvidenceGameCount": 0,
+              "recentOpponentEvidenceGameCount": 0,
+              "historicalSampleSizeLabel": "none",
+              "opponentSampleSizeLabel": "none",
+              "qualityContextCompletenessLabel": "insufficient",
+              "volatilityContextLabel": "unavailable",
+              "scheduleAdjustedContextLabel": "unavailable",
+              "qualityContextWarnings": [
+                "TEAM_QUALITY_CONTEXT_NO_LOCAL_EVIDENCE",
+                "TEAM_QUALITY_CONTEXT_SCHEDULE_CONTEXT_UNAVAILABLE"
+              ],
+              "dataQuality": "insufficient",
+              "confidence": "low",
+              "researchStrengthScore": "low"
+            },
+            "homeTeamQualityContext": {
+              "status": "insufficient",
+              "reason": "insufficient-local-evidence",
+              "teamName": "MANUAL_HOME_1",
+              "localEvidenceGameCount": 0,
+              "opponentEvidenceGameCount": 0,
+              "recentOpponentEvidenceGameCount": 0,
+              "historicalSampleSizeLabel": "none",
+              "opponentSampleSizeLabel": "none",
+              "qualityContextCompletenessLabel": "insufficient",
+              "volatilityContextLabel": "unavailable",
+              "scheduleAdjustedContextLabel": "unavailable",
+              "qualityContextWarnings": [
+                "TEAM_QUALITY_CONTEXT_NO_LOCAL_EVIDENCE",
+                "TEAM_QUALITY_CONTEXT_SCHEDULE_CONTEXT_UNAVAILABLE"
+              ],
+              "dataQuality": "insufficient",
+              "confidence": "low",
+              "researchStrengthScore": "low"
+            }
+          }
+        },
+        "researchMessages": [],
+        "researchWarnings": []
+      },
+      {
+        "gameId": "manual-game-2",
+        "officialDate": "2024-07-05",
+        "scheduledStartTime": "2024-07-05T19:15:00Z",
+        "awayTeam": "MANUAL_AWAY_2",
+        "homeTeam": "MANUAL_HOME_2",
+        "snapshotTimestamp": "2024-07-01T00:00:00Z",
+        "sourceProvenance": "manual-game-provenance",
+        "constructionStatus": "pending-research",
+        "researchMode": "pregame",
+        "researchScope": "FULL",
+        "constructionMessages": [],
+        "warnings": [],
+        "researchStatus": "researched",
+        "completedResearchModules": [
+          "TEAM_RECENT_FORM"
+        ],
+        "researchFindings": {
+          "teamRecentForm": {
+            "moduleVersion": "mlb-team-recent-form-v1",
+            "scope": "TEAM_ONLY",
+            "awayTeam": "MANUAL_AWAY_2",
+            "homeTeam": "MANUAL_HOME_2",
+            "lookbackWindowGames": 3,
+            "lookbackWindowDays": 30,
+            "awayRecentGamesFound": 0,
+            "homeRecentGamesFound": 0,
+            "awaySummary": {
+              "status": "insufficient",
+              "reason": "insufficient-evidence"
+            },
+            "homeSummary": {
+              "status": "insufficient",
+              "reason": "insufficient-evidence"
+            },
+            "dataQuality": "insufficient",
+            "volatility": "not-evaluated",
+            "confidence": "low",
+            "warnings": [
+              "TEAM_FORM_EVIDENCE_FUTURE_GAME_EXCLUDED",
+              "TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES",
+              "TEAM_FORM_EVIDENCE_NO_SAFE_COMPLETION"
+            ],
+            "evidence": []
+          },
+          "teamQualityContext": {
+            "moduleVersion": "mlb-team-quality-context-v1",
+            "moduleName": "TEAM_QUALITY_CONTEXT",
+            "scope": "TEAM_ONLY",
+            "awayTeamQualityContext": {
+              "status": "insufficient",
+              "reason": "insufficient-local-evidence",
+              "teamName": "MANUAL_AWAY_2",
+              "localEvidenceGameCount": 0,
+              "opponentEvidenceGameCount": 0,
+              "recentOpponentEvidenceGameCount": 0,
+              "historicalSampleSizeLabel": "none",
+              "opponentSampleSizeLabel": "none",
+              "qualityContextCompletenessLabel": "insufficient",
+              "volatilityContextLabel": "unavailable",
+              "scheduleAdjustedContextLabel": "unavailable",
+              "qualityContextWarnings": [
+                "TEAM_QUALITY_CONTEXT_NO_LOCAL_EVIDENCE",
+                "TEAM_QUALITY_CONTEXT_SCHEDULE_CONTEXT_UNAVAILABLE"
+              ],
+              "dataQuality": "insufficient",
+              "confidence": "low",
+              "researchStrengthScore": "low"
+            },
+            "homeTeamQualityContext": {
+              "status": "insufficient",
+              "reason": "insufficient-local-evidence",
+              "teamName": "MANUAL_HOME_2",
+              "localEvidenceGameCount": 0,
+              "opponentEvidenceGameCount": 0,
+              "recentOpponentEvidenceGameCount": 0,
+              "historicalSampleSizeLabel": "none",
+              "opponentSampleSizeLabel": "none",
+              "qualityContextCompletenessLabel": "insufficient",
+              "volatilityContextLabel": "unavailable",
+              "scheduleAdjustedContextLabel": "unavailable",
+              "qualityContextWarnings": [
+                "TEAM_QUALITY_CONTEXT_NO_LOCAL_EVIDENCE",
+                "TEAM_QUALITY_CONTEXT_SCHEDULE_CONTEXT_UNAVAILABLE"
+              ],
+              "dataQuality": "insufficient",
+              "confidence": "low",
+              "researchStrengthScore": "low"
+            }
+          }
+        },
+        "researchMessages": [],
+        "researchWarnings": []
+      }
+    ],
+    "researchModules": [
+      {
+        "moduleName": "TEAM_RECENT_FORM",
+        "moduleVersion": "mlb-team-recent-form-v1",
+        "scope": "TEAM_ONLY",
+        "status": "completed",
+        "messages": [],
+        "warnings": []
+      }
+    ],
+    "researchWarnings": [],
+    "researchMessages": []
+  },
+  "fixtureEvidenceLocal": true,
+  "teamQualityContextLocal": true
+}
