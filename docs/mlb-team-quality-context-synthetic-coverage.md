@@ -73,18 +73,26 @@ Leave validation results here after running:
 
 ## Recommended Phase 5V scope
 
-Phase 5V — plan next TEAM_ONLY module or begin website/reporting/interface planning.
+Phase 5V — plan future MLB research report/interface format only.
 
 Scope:
-- local-only
-- no live/API/web
-- no real schedule ingestion
-- no generated run artifacts committed
-- no default behavior change
+- planning-only
+- no runtime behavior
+- no CLI behavior
+- no website/API implementation
+- no file output
+- no new tests/goldens
 - no modelProbability
+- no picks/predictions/betting advice
 - no raw outcomes
 - no pitcher evidence
 - no actual starters
-- no file output unless explicitly scoped
+- no live/API/web
 - no network standings/roster/schedule ingestion
 - no historical fixture changes
+- preserve Phase 5B/5E/5H/5K/5N/5T goldens
+- preserve Phase 5S CLI behavior
+- preserve Phase 5R/5U team-quality behavior
+
+Docs:
+- docs/mlb-research-report-interface-plan.md

@@ -12,8 +12,11 @@ Phase 5S integrates explicit --team-quality-context-local CLI mode. It requires 
 
 Phase 5U adds richer synthetic TEAM_QUALITY_CONTEXT unit/fixture coverage. It adds no new research behavior. It adds no stdout golden. It preserves Phase 5B/5E/5H/5K/5N/5T goldens. It preserves Phase 5S team-quality CLI behavior. It preserves Phase 5R builder behavior. No modelProbability. No raw outcomes. No pitcher evidence. No actual starters. No file output. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5V.
 
+Phase 5V is planning-only. It plans the future MLB research report/interface format. It adds no runtime behavior. It adds no CLI behavior. It adds no website/API implementation. It adds no file output. It adds no new tests/goldens. It preserves Phase 5B/5E/5H/5K/5N/5T goldens. It preserves Phase 5S CLI behavior. It preserves Phase 5R/5U team-quality behavior. No modelProbability. No picks/predictions/betting advice. No raw outcomes. No pitcher evidence. No actual starters. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5W.
+
 Docs:
 - docs/mlb-team-quality-context-synthetic-coverage.md
+- docs/mlb-research-report-interface-plan.md
 
 Phase 5T adds exact stdout golden regression coverage for --fixture-evidence-local --team-quality-context-local. It adds no new research behavior. It preserves Phase 5B/5E/5H/5K/5N goldens. It preserves Phase 5S team-quality CLI behavior. It preserves Phase 5R builder behavior. No modelProbability. No raw outcomes. No pitcher evidence. No actual starters. No file output. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5U.
 

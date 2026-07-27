@@ -135,3 +135,27 @@ Guidelines for Phase 5T:
 - no live/API/web
 - no network standings/roster/schedule ingestion
 - no default behavior change
+
+Phase 5V — plan future MLB research report/interface format.
+
+Scope:
+- planning-only
+- no runtime behavior
+- no CLI behavior
+- no website/API implementation
+- no file output
+- no new tests/goldens
+- no modelProbability
+- no picks/predictions/betting advice
+- no raw outcomes
+- no pitcher evidence
+- no actual starters
+- no live/API/web
+- no network standings/roster/schedule ingestion
+- no historical fixture changes
+- preserve Phase 5B/5E/5H/5K/5N/5T goldens
+- preserve Phase 5S CLI behavior
+- preserve Phase 5R/5U team-quality behavior
+
+Docs:
+- docs/mlb-research-report-interface-plan.md

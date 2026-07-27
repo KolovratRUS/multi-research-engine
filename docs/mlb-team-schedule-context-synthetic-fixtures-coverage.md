@@ -82,17 +82,9 @@ Deterministic timestamps used:
 
 ## Planned Next Safe Phase
 
-Phase 5Q — plan additional TEAM_ONLY research modules or synthetic fixture
-snapshots if useful.
+Phase 5Q is planning-only. Phase 5Q plans the next safe MLB TEAM_ONLY module: team quality context. No implementation or behavior changed. No new tests/goldens. Phase 5B/5E/5H/5K/5N goldens preserved. Phase 5J result-metrics behavior preserved. Phase 5M schedule-context behavior preserved. Phase 5P synthetic coverage preserved. No modelProbability. No raw outcomes. No pitcher evidence. No actual starters. No file output. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5R.
 
-Scope:
-- local-only
-- no live/API/web
-- no real schedule ingestion
-- no new stdout golden
-- no modelProbability
-- no raw outcomes
-- no pitcher evidence
-- no actual starters
-- no file output
-- no historical fixture changes
+Phase 5V is planning-only. It plans the future MLB research report/interface format. It adds no runtime behavior. It adds no CLI behavior. It adds no website/API implementation. It adds no file output. It adds no new tests/goldens. It preserves Phase 5B/5E/5H/5K/5N/5T goldens. It preserves Phase 5S CLI behavior. It preserves Phase 5R/5U team-quality behavior. No modelProbability. No picks/predictions/betting advice. No raw outcomes. No pitcher evidence. No actual starters. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5W.
+
+Docs:
+- docs/mlb-research-report-interface-plan.md

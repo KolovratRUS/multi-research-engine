@@ -93,3 +93,20 @@ Recommended Phase 5S:
 - no live/API/web
 - no network standings/roster/schedule ingestion
 - preserve Phase 5B/5E/5H/5K/5N goldens
+
+Recommended Phase 5V:
+- plan future MLB research report/interface format only
+- no CLI/runtime behavior changes
+- no new tests/goldens
+- no modelProbability
+- no picks/predictions/betting advice
+- no raw outcomes
+- no pitcher evidence
+- no actual starters
+- no file output
+- no live/API/web
+- no network standings/roster/schedule ingestion
+- no historical fixture changes
+- preserve Phase 5B/5E/5H/5K/5N/5T goldens
+- preserve Phase 5S team-quality CLI behavior
+- preserve Phase 5R builder behavior
