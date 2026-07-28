@@ -205,3 +205,10 @@ This phase does not:
 - add betting advice or predictions
 
 Validation results are recorded after successful test runs in the final Phase 6G report.
+
+## Phase 6H status
+
+Phase 6H relies on the Phase 6G validation guarantees and does not change them.
+It does not modify the builder, validator, tests, or fixtures.
+It does not add UI implementation, components, CSS, routes, server/network files, CLI flags, fixtures, stdout goldens, or package changes.
+Reference: `docs/mlb-report-preview-ui-component-implementation-plan.md`

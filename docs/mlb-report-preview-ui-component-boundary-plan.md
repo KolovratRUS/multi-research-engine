@@ -305,6 +305,15 @@ Phase 6G adds synthetic, golden-free validation coverage for the Phase 6F bounda
 It does not modify the builder or validator contract unless a real gap is discovered.
 It adds no UI implementation, no CSS, no routes, no server, no network, no CLI flag, no stdout golden change, no fixture change, and no package change.
 
+## Phase 6H status
+
+Phase 6H narrows this boundary into a first framework-agnostic implementation slice.
+It relies on the Phase 6G synthetic validation guarantees and does not change them.
+It adds no UI implementation, no CSS, no routes, no server, no network, no CLI change, no fixture change, no golden change, no package change, and no live source.
+
+Reference:
+- `docs/mlb-report-preview-ui-component-implementation-plan.md`
+
 ## Non-Goals
 
 This boundary plan explicitly excludes:

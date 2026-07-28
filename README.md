@@ -654,3 +654,10 @@ No actual starters.
 No live/API/web or network standings/roster/schedule ingestion.
 No historical fixture changes.
 
+Phase 6H defines the first framework-agnostic component implementation slice for the validated MLB reportPreview UI view model.
+It is documentation-only.
+It defines the first component slice, input contracts, rendering rules, and test categories.
+It consumes only the validated Phase 6F/6G view model.
+It adds no component implementation, no framework, no CSS, no route, no server, no network, no CLI, no fixture, no golden, and no package changes.
+Recommended next safe phase is the later component-contract implementation phase described in `docs/mlb-report-preview-ui-component-implementation-plan.md`.
+

@@ -202,3 +202,9 @@ It adds one new test file: `tests/prospective/mlb-report-preview-ui-view-model-s
 It adds one new doc file: `docs/mlb-report-preview-ui-view-model-synthetic-coverage.md`.
 It does not add UI implementation, components, CSS, routes, server/network files, CLI flags, fixtures, stdout goldens, or package changes.
 It does not modify historical fixtures or introduce live source support.
+
+## Phase 6H status
+
+Phase 6H uses the validated Phase 6F/6G view model as the intended consumer boundary for the first framework-agnostic component slice.
+It does not modify the view-model contract, builder, validator, tests, or fixtures.
+Reference: `docs/mlb-report-preview-ui-component-implementation-plan.md`
