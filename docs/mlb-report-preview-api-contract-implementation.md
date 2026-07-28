@@ -119,14 +119,14 @@ Top-level API response:
 
 ## Recommended next safe phase
 
-Phase 6C — local in-process API adapter/handler using existing `reportPreview` contract.
+Phase 6D — optional local handler fixture/golden-free validation coverage or next sport module planning.
 Scope:
-- local in-process adapter/handler only
+- optional local handler fixture/golden-free validation coverage only
 - no server/network
 - no file output
 - no CLI flag
 - no default behavior change
-- no `modelProbability`
+- no modelProbability
 - no picks/predictions/betting advice
 - no raw outcomes
 - no pitcher evidence

@@ -144,7 +144,7 @@ const RESTRICTED_VALUE_SUBSTRINGS = new Set<string>([
   'actualstartingpitchers',
 ]);
 
-const MLB_REPORT_PREVIEW_API_CONTRACT_FORBIDDEN_KEYS = new Set([
+export const MLB_REPORT_PREVIEW_API_CONTRACT_FORBIDDEN_KEYS = new Set([
   ...MLB_RESEARCH_REPORT_RENDERER_FORBIDDEN_TERMS,
   'package',
   'researchPackageVersion',
@@ -163,7 +163,7 @@ const MLB_REPORT_PREVIEW_API_CONTRACT_FORBIDDEN_KEYS = new Set([
   'constructionWarnings',
 ]);
 
-function collectProhibitedKeyMatches(value: unknown): string[] {
+export function collectProhibitedKeyMatches(value: unknown): string[] {
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
   const matches: string[] = [];
   for (const field of MLB_REPORT_PREVIEW_API_CONTRACT_FORBIDDEN_KEYS) {
@@ -174,7 +174,7 @@ function collectProhibitedKeyMatches(value: unknown): string[] {
   return matches;
 }
 
-function collectBadStrings(value: unknown, bad: string[] = []): string[] {
+export function collectBadStrings(value: unknown, bad: string[] = []): string[] {
   if (typeof value === 'string') {
     if (!KNOWN_SAFE_STRING_EXACT_MATCHES.has(value)) {
       const lower = value.toLowerCase();
