@@ -11,6 +11,9 @@ import {
   type MLBReportPreviewApiHandlerSuccess,
   type MLBReportPreviewApiHandlerFailure,
 } from '@/prospective/mlb/report-preview-api-handler';
+import {
+  MLB_REPORT_PREVIEW_API_CONTRACT_VERSION,
+} from '@/prospective/mlb/report-preview-api-contract';
 import type { MLBResearchRenderedReport } from '@/prospective/mlb/research-report-renderer';
 
 const goldenPath = join(
@@ -194,5 +197,141 @@ describe('MLBReportPreviewApiHandler', () => {
     const response = handleMLBReportPreviewApiRequest(baseRequest);
     expect(response.ok).toBe(true);
     expect((response as MLBReportPreviewApiHandlerSuccess).apiResponse.reportPreview).toBeDefined();
+  });
+
+  it('rejects raw research package shaped input', () => {
+    const invalid = JSON.parse(JSON.stringify(reportPreview)) as MLBResearchRenderedReport;
+    (invalid as unknown as Record<string, unknown>).package = { researchPackageVersion: 'v1', constructionWarnings: [] };
+    (invalid as unknown as Record<string, unknown>).researchPackageVersion = 'v1';
+    (invalid as unknown as Record<string, unknown>).researchRunId = 'run-1';
+    (invalid as unknown as Record<string, unknown>).sourceConstructionRunId = 'run-1';
+    const response = handleMLBReportPreviewApiRequest({
+      reportPreview: invalid,
+    });
+    expect(response.ok).toBe(false);
+    expect((response as MLBReportPreviewApiHandlerFailure).error.code).toBe('PROHIBITED_FIELD');
+  });
+
+  it('rejects raw historical fixture shaped input', () => {
+    const invalid = JSON.parse(JSON.stringify(reportPreview)) as MLBResearchRenderedReport;
+    (invalid as unknown as Record<string, unknown>).evidence = {};
+    (invalid as unknown as Record<string, unknown>).inputSnapshot = {};
+    (invalid as unknown as Record<string, unknown>).constructionVersion = 'v1';
+    (invalid as unknown as Record<string, unknown>).lockVersion = 'v1';
+    const response = handleMLBReportPreviewApiRequest({
+      reportPreview: invalid,
+    });
+    expect(response.ok).toBe(false);
+    expect((response as MLBReportPreviewApiHandlerFailure).error.code).toBe('PROHIBITED_FIELD');
+  });
+
+  it('rejects betting/market fields as object keys', () => {
+    const invalid = JSON.parse(JSON.stringify(reportPreview)) as MLBResearchRenderedReport;
+    const record = invalid as unknown as Record<string, unknown>;
+    record.odds = 100;
+    record.sportsbook = 'book';
+    record.market = 'h2h';
+    record.price = 100;
+    record.edge = 0.05;
+    record.ROI = 0.1;
+    const response = handleMLBReportPreviewApiRequest({
+      reportPreview: invalid,
+    });
+    expect(response.ok).toBe(false);
+    expect((response as MLBReportPreviewApiHandlerFailure).error.code).toBe('PROHIBITED_FIELD');
+  });
+
+  it('rejects betting/market terms in unsafe strings', () => {
+    const cases = ['market edge', 'sportsbook price', 'implied probability'];
+    for (const phrase of cases) {
+      const invalid = JSON.parse(JSON.stringify(reportPreview)) as MLBResearchRenderedReport;
+      (invalid as unknown as Record<string, unknown>).safetyNotes = [phrase];
+      const response = handleMLBReportPreviewApiRequest({
+        reportPreview: invalid,
+      });
+      expect(response.ok).toBe(false);
+      expect((response as MLBReportPreviewApiHandlerFailure).error.code).toBe('PROHIBITED_VALUE_TEXT');
+    }
+  });
+
+  it('rejects near-miss unsafe safety text while allowing safe excerpt', () => {
+    const invalid = JSON.parse(JSON.stringify(reportPreview)) as MLBResearchRenderedReport;
+    (invalid as unknown as Record<string, unknown>).safetyNotes = [
+      'No live schedule, odds, pitcher, or market data is included, but this is a best bet.',
+    ];
+    const response = handleMLBReportPreviewApiRequest({
+      reportPreview: invalid,
+    });
+    expect(response.ok).toBe(false);
+    expect((response as MLBReportPreviewApiHandlerFailure).error.code).toBe('PROHIBITED_VALUE_TEXT');
+  });
+
+  it('returns deterministic failure responses across repeated calls', () => {
+    const invalid = JSON.parse(JSON.stringify(reportPreview)) as MLBResearchRenderedReport;
+    (invalid as unknown as Record<string, unknown>).finalScore = 1;
+    const first = handleMLBReportPreviewApiRequest({ reportPreview: invalid });
+    const second = handleMLBReportPreviewApiRequest({ reportPreview: invalid });
+    expect(first).toEqual(second);
+  });
+
+  it('failure metadata is deterministic and local', () => {
+    const invalid = JSON.parse(JSON.stringify(reportPreview)) as MLBResearchRenderedReport;
+    (invalid as unknown as Record<string, unknown>).finalScore = 1;
+    const response = handleMLBReportPreviewApiRequest({
+      reportPreview: invalid,
+    });
+    const failure = response as MLBReportPreviewApiHandlerFailure;
+    expect(failure.metadata.generatedAt).toBeNull();
+    expect(failure.metadata.source).toBe('local-report-preview');
+    expect(failure.metadata.deterministic).toBe(true);
+    expect(failure.metadata.contractVersion).toBe(MLB_REPORT_PREVIEW_API_CONTRACT_VERSION);
+    expect(failure.metadata.handlerVersion).toBe(MLB_REPORT_PREVIEW_API_HANDLER_VERSION);
+  });
+
+  it('success metadata mirrors rendered report golden', () => {
+    const response = handleMLBReportPreviewApiRequest(baseRequest);
+    const success = response as MLBReportPreviewApiHandlerSuccess;
+    expect(success.metadata.rendererVersion).toBe(reportPreview.metadata.rendererVersion);
+    expect(success.metadata.adapterVersion).toBe(reportPreview.metadata.adapterVersion);
+    expect(success.metadata.generatedAt).toBeNull();
+    expect(success.metadata.deterministic).toBe(true);
+  });
+
+  it('does not mutate deeply nested invalid input', () => {
+    const nested = JSON.parse(JSON.stringify(reportPreview)) as MLBResearchRenderedReport;
+    const record = nested as unknown as Record<string, unknown>;
+    record.teamQualityContextSummary = 'QA: 0.90, QB: 0.85';
+    const snapshot = JSON.stringify(nested);
+    handleMLBReportPreviewApiRequest({ reportPreview: nested });
+    expect(JSON.stringify(nested)).toBe(snapshot);
+  });
+
+  it('does not call current time', () => {
+    const response = handleMLBReportPreviewApiRequest(baseRequest);
+    expect((response as MLBReportPreviewApiHandlerSuccess).metadata.generatedAt).toBeNull();
+  });
+
+  it('does not read files, invoke CLI, or call network', () => {
+    const response = handleMLBReportPreviewApiRequest(baseRequest);
+    expect(response.ok).toBe(true);
+    expect((response as MLBReportPreviewApiHandlerSuccess).apiResponse.reportPreview).toBeDefined();
+  });
+
+  it('rejects non-object request values without throwing', () => {
+    const nullResponse = handleMLBReportPreviewApiRequest(null as any);
+    expect(nullResponse.ok).toBe(false);
+    const undefinedResponse = handleMLBReportPreviewApiRequest(undefined as any);
+    expect(undefinedResponse.ok).toBe(false);
+    const stringResponse = handleMLBReportPreviewApiRequest('request' as any);
+    expect(stringResponse.ok).toBe(false);
+  });
+
+  it('rejects invalid source values', () => {
+    const liveResponse = handleMLBReportPreviewApiRequest({
+      ...baseRequest,
+      source: 'live' as any,
+    });
+    expect(liveResponse.ok).toBe(false);
+    expect((liveResponse as MLBReportPreviewApiHandlerFailure).error.code).toBe('INVALID_SOURCE');
   });
 });

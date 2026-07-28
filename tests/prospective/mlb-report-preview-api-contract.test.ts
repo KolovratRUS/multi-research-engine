@@ -383,7 +383,6 @@ describe('MLBReportPreviewApiContract', () => {
       },
     } as any;
     const result = validateMLBReportPreviewApiResponse(invalid);
-    console.log('DEBUG result', result);
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((error: MLBReportPreviewApiValidationError) => error.code === 'INVALID_GAME_CARDS'),

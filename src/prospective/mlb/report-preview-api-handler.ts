@@ -124,6 +124,20 @@ function buildFailureResponse(
 export function handleMLBReportPreviewApiRequest(
   request: MLBReportPreviewApiHandlerRequest,
 ): MLBReportPreviewApiHandlerResponse {
+  if (typeof request !== 'object' || request === null) {
+    return buildFailureResponse({} as MLBReportPreviewApiHandlerRequest, {
+      code: 'INVALID_REQUEST',
+      message: 'request must be an object.',
+    });
+  }
+
+  if (request.source && request.source !== 'local-report-preview') {
+    return buildFailureResponse(request, {
+      code: 'INVALID_SOURCE',
+      message: `handler source must be 'local-report-preview'.`,
+    });
+  }
+
   const reportPreview = request.reportPreview;
 
   if (!reportPreview) {

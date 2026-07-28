@@ -120,21 +120,58 @@ It also pre-scans the raw rendered `reportPreview` for prohibited keys and bad s
 - npm run build
 - git diff --check
 
+## Phase 6D coverage
+
+Phase 6D adds golden-free validation coverage for the handler.
+It adds no server/backend/frontend code.
+It adds no HTTP routes.
+It adds no website/API deployment.
+It adds no network behavior.
+It adds no CLI behavior.
+It adds no file output.
+It adds no new stdout golden.
+It adds no fixtures.
+It adds no generated goldens.
+It preserves Phase 5B/5E/5H/5K/5N/5T/5Z and 5Z goldens.
+It preserves Phase 5Y report-preview CLI behavior.
+It preserves Phase 6C handler contract and hardens invalid-input handling only if needed.
+It preserves Phase 6B API contract behavior unless explicitly documented.
+It preserves Phase 5W adapter behavior.
+It preserves Phase 5X renderer behavior.
+
+Handler hardenings added by Phase 6D:
+- Non-object request guard: returns ok false with INVALID_REQUEST instead of throwing.
+- Invalid source guard: rejects any source other than `local-report-preview` with INVALID_SOURCE.
+
+## Validation commands
+
+- npm run inventory:mlb-fixtures
+- npm run prospective:mlb:dry-run-check
+- npx vitest run tests/prospective/mlb-report-preview-api-handler.test.ts --reporter=verbose
+- npx vitest run tests/prospective/mlb-report-preview-api-contract.test.ts --reporter=verbose
+- npx vitest run tests/prospective --reporter=verbose
+- npx vitest run tests/backtesting --reporter=verbose
+- npx vitest run --reporter=verbose
+- npx tsc --noEmit --incremental false --pretty false
+- npm test
+- npm run build
+- git diff --check
+
 ## Recommended next safe phase
 
-Phase 6D — optional local handler fixture/golden-free validation coverage or next sport module planning.
-Scope:
-- optional local handler fixture/golden-free validation coverage only
+Phase 6E — plan website UI component boundaries for consuming handler output only, no implementation.
+Alternatively, next sport module planning if the user chooses.
+
+Scope for Phase 6E:
+- local-only planning
 - no server/network
+- no frontend implementation artifacts
+- no real schedule ingestion
+- no golden changes
+- no CLI changes
 - no file output
-- no CLI flag
-- no default behavior change
 - no modelProbability
 - no picks/predictions/betting advice
 - no raw outcomes
 - no pitcher evidence
 - no actual starters
-- no live/API/web
-- preserve existing goldens
-
-Alternatively, next sport module planning if the user chooses.
