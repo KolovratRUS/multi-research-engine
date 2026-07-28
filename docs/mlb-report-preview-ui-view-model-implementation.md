@@ -208,3 +208,10 @@ It does not modify historical fixtures or introduce live source support.
 Phase 6H uses the validated Phase 6F/6G view model as the intended consumer boundary for the first framework-agnostic component slice.
 It does not modify the view-model contract, builder, validator, tests, or fixtures.
 Reference: `docs/mlb-report-preview-ui-component-implementation-plan.md`
+
+## Phase 6I status
+
+Phase 6I adds the presentation contract built from the validated Phase 6F/6G view model.
+It does not modify the view-model contract, builder, validator, tests, or fixtures.
+It does not add UI implementation, components, CSS, routes, server/network files, CLI flags, fixtures, stdout goldens, or package changes.
+Reference: `docs/mlb-report-preview-ui-components-implementation.md`

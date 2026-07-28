@@ -661,3 +661,11 @@ It consumes only the validated Phase 6F/6G view model.
 It adds no component implementation, no framework, no CSS, no route, no server, no network, no CLI, no fixture, no golden, and no package changes.
 Recommended next safe phase is the later component-contract implementation phase described in `docs/mlb-report-preview-ui-component-implementation-plan.md`.
 
+Phase 6I implements the first framework-agnostic MLB reportPreview UI presentation contract.
+It adds typed plain-data presentation interfaces, empty-state fields, and a single pure builder.
+It consumes only the validated Phase 6F/6G view model.
+It adds no browser UI, HTML, CSS, JSX, TSX, framework, route, server, network, CLI, fixture, golden, or package changes.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.
+Recommended next safe phase is a future locally planned phase outside this contract implementation.

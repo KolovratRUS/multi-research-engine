@@ -314,6 +314,16 @@ It adds no UI implementation, no CSS, no routes, no server, no network, no CLI c
 Reference:
 - `docs/mlb-report-preview-ui-component-implementation-plan.md`
 
+## Phase 6I status
+
+Phase 6I implements the first framework-agnostic MLB reportPreview UI presentation contract in `src/prospective/mlb/report-preview-ui-components.ts`.
+It consumes only the validated Phase 6F/6G view model.
+It adds typed plain-data presentation interfaces, empty-state fields, and a single pure builder.
+It adds no browser UI, HTML, CSS, JSX, TSX, framework, route, server, network, CLI, fixture, golden, or package change.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks/predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.
+
 ## Non-Goals
 
 This boundary plan explicitly excludes:

@@ -212,3 +212,12 @@ Phase 6H relies on the Phase 6G validation guarantees and does not change them.
 It does not modify the builder, validator, tests, or fixtures.
 It does not add UI implementation, components, CSS, routes, server/network files, CLI flags, fixtures, stdout goldens, or package changes.
 Reference: `docs/mlb-report-preview-ui-component-implementation-plan.md`
+
+## Phase 6I status
+
+Phase 6I builds on the Phase 6G guarantees and does not change them.
+It adds a framework-agnostic presentation contract in `src/prospective/mlb/report-preview-ui-components.ts`.
+It adds no UI implementation, components, CSS, routes, server/network files, CLI flags, fixtures, stdout goldens, or package changes.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks/predictions. No raw outcomes. No pitcher evidence. No actual starters.
+Reference: `docs/mlb-report-preview-ui-components-implementation.md`

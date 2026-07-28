@@ -374,7 +374,7 @@ A future component-contract implementation phase must satisfy before commit:
 - no framework dependencies introduced in first slice
 - no package changes
 - deterministic
-- immutable
+- pure builder / fresh output
 - safe labels unchanged
 - visible limitations
 - no prohibited concepts
