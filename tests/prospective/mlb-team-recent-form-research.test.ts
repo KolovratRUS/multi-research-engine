@@ -104,6 +104,10 @@ const teamQualityContextLocalStdoutGoldenPath = join(
   goldenFixtureDirectory,
   'valid-mlb-team-quality-context-local-cli-output-v1.json',
 );
+const reportPreviewLocalStdoutGoldenPath = join(
+  goldenFixtureDirectory,
+  'valid-mlb-report-preview-local-cli-output-v1.json',
+);
 const tempRoot = join(
   projectRoot,
   'tmp',
@@ -3486,6 +3490,55 @@ describe('Phase 5Y MLB report-preview JSON CLI mode', () => {
     ]) {
       expect(keys).not.toContain(field);
     }
+  });
+
+  it('matches the new Phase 5Z report-preview golden exactly', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    const golden = readFileSync(reportPreviewLocalStdoutGoldenPath, 'utf8');
+    expect(stdout).toBe(golden);
+  });
+
+  it('produces deterministic explicit report-preview output across repeated runs', () => {
+    const first = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    const second = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    expect(first).toBe(second);
+  });
+
+  it('new report-preview golden contains expected top-level fields and metadata', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+    expect(summary.ok).toBe(true);
+    expect(summary.fixtureEvidenceLocal).toBe(true);
+    expect(summary.reportPreviewLocal).toBe(true);
+    expect(summary.reportPreview).toBeDefined();
+    expect(summary.reportPreview).toEqual(
+      expect.objectContaining({
+        rendererVersion: 'mlb-research-report-renderer-v1',
+        rendererName: 'MLB_RESEARCH_REPORT_RENDERER',
+        adapterVersion: 'mlb-research-report-adapter-v1',
+        metadata: expect.objectContaining({
+          generatedAt: null,
+          deterministic: true,
+          source: 'local-research-package',
+        }),
+      }),
+    );
   });
 });
 

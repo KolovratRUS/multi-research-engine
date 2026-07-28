@@ -159,8 +159,29 @@ Recommended Phase 5Y scope
 - No actual starters.
 - No live/API/web or network standings/roster/schedule ingestion.
 - No historical fixture changes.
-- Recommended next safe phase is Phase 5Z.
 
 Docs:
 - docs/mlb-research-report-interface-plan.md
 - docs/mlb-research-report-adapter-implementation.md
+
+## Phase 5Z Status
+
+Phase 5Z adds exact stdout golden regression coverage for explicit `--fixture-evidence-local --report-preview-local`.
+It adds one new golden: `tests/prospective/fixtures/manual-schedule/valid-mlb-report-preview-local-cli-output-v1.json`.
+It adds no default behavior change.
+It adds no file output.
+It adds no website/API implementation.
+It preserves Phase 5B/5E/5H/5K/5N/5T goldens.
+It preserves Phase 5Y report-preview CLI behavior.
+It preserves Phase 5S team-quality CLI behavior.
+It preserves Phase 5W adapter behavior.
+It preserves Phase 5X renderer behavior.
+It preserves Phase 5R/5U team-quality behavior.
+No modelProbability.
+No picks/predictions/betting advice.
+No raw outcomes.
+No pitcher evidence.
+No actual starters.
+No live/API/web or network standings/roster/schedule ingestion.
+No historical fixture changes.
+Recommended next safe phase is Phase 6A.

@@ -16,7 +16,7 @@ Phase 5V is planning-only. It plans the future MLB research report/interface for
 
 Phase 5W adds local-only typed MLB research report-shape adapter skeleton and tests. It adds no runtime behavior. It adds no CLI behavior. It adds no website/API implementation. It adds no file output. It adds no new stdout golden. It preserves Phase 5B/5E/5H/5K/5N/5T goldens. It preserves Phase 5S CLI behavior. It preserves Phase 5R/5U team-quality behavior. No modelProbability. No picks/predictions/betting advice. No raw outcomes. No pitcher evidence. No actual starters. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5X.
 
-Phase 5X adds local-only MLB human-readable report renderer and tests. It adds no CLI behavior. It adds no file output. It adds no website/API implementation. It adds no new stdout golden. It preserves Phase 5B/5E/5H/5K/5N/5T goldens. It preserves Phase 5S CLI behavior. It preserves Phase 5W adapter behavior unless explicitly documented. It preserves Phase 5R/5U team-quality behavior. No modelProbability. No picks/predictions/betting advice. No raw outcomes. No pitcher evidence. No actual starters. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5Y.
+Phase 5X adds local-only MLB human-readable report renderer and tests. It adds no CLI behavior. It adds no file output. It adds no website/API implementation. It adds no new stdout golden. It preserves Phase 5B/5E/5H/5K/5N/5T goldens. It preserves Phase 5S CLI behavior. It preserves Phase 5W adapter behavior unless explicitly documented. It preserves Phase 5R/5U team-quality behavior. No modelProbability. No picks/predictions/betting advice. No raw outcomes. No pitcher evidence. No actual starters. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 6A.
 
 ## Phase 5Y Status
 
@@ -39,19 +39,19 @@ Phase 5X adds local-only MLB human-readable report renderer and tests. It adds n
 - No actual starters.
 - No live/API/web or network standings/roster/schedule ingestion.
 - No historical fixture changes.
-- Recommended next safe phase is Phase 5Z.
 No picks/predictions/betting advice.
 No raw outcomes.
 No pitcher evidence.
 No actual starters.
 No live/API/web or network standings/roster/schedule ingestion.
 No historical fixture changes.
-Recommended next safe phase is Phase 5Z.
 
 Docs:
 - docs/mlb-research-report-interface-plan.md
 - docs/mlb-research-report-adapter-implementation.md
 - docs/mlb-research-report-renderer-implementation.md
+- docs/mlb-research-report-preview-cli-integration.md
+- docs/mlb-research-report-preview-golden-tests.md
 
 Phase 5T adds exact stdout golden regression coverage for --fixture-evidence-local --team-quality-context-local. It adds no new research behavior. It preserves Phase 5B/5E/5H/5K/5N goldens. It preserves Phase 5S team-quality CLI behavior. It preserves Phase 5R builder behavior. No modelProbability. No raw outcomes. No pitcher evidence. No actual starters. No file output. No live/API/web or network standings/roster/schedule ingestion. No historical fixture changes. Recommended next safe phase is Phase 5U.
 
@@ -454,3 +454,24 @@ The leakage test in `tests/leakage.test.ts` enforces this boundary.
 - Add backtesting and calibration dashboards.
 
 Phase 5O is planning-only for richer synthetic local schedule-density fixture coverage. It adds `docs/mlb-team-schedule-context-synthetic-fixtures-plan.md`, does not modify runtime behavior, tests, goldens, or fixtures, and preserves Phase 5B/5E/5H/5K/5N goldens with no modelProbability, no raw outcomes, no pitcher evidence, no file output, and no live/API/web.
+## Phase 5Z Status
+
+Phase 5Z adds exact stdout golden regression coverage for explicit `--fixture-evidence-local --report-preview-local`.
+It adds one new golden: `tests/prospective/fixtures/manual-schedule/valid-mlb-report-preview-local-cli-output-v1.json`.
+It adds no default behavior change.
+It adds no file output.
+It adds no website/API implementation.
+It preserves Phase 5B/5E/5H/5K/5N/5T goldens.
+It preserves Phase 5Y report-preview CLI behavior.
+It preserves Phase 5S team-quality CLI behavior.
+It preserves Phase 5W adapter behavior.
+It preserves Phase 5X renderer behavior.
+It preserves Phase 5R/5U team-quality behavior.
+No modelProbability.
+No picks/predictions/betting advice.
+No raw outcomes.
+No pitcher evidence.
+No actual starters.
+No live/API/web or network standings/roster/schedule ingestion.
+No historical fixture changes.
+Recommended next safe phase is Phase 6A.
