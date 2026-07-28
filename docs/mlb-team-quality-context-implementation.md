@@ -138,25 +138,28 @@ Scope:
 
 Recommended Phase 5Y scope
 
-Phase 5Y — add optional explicit CLI report-preview JSON mode using adapter+renderer.
+## Phase 5Y Status
 
-Scope:
-- local-only
-- no default behavior change
-- no file output yet
-- no website/API implementation
-- no modelProbability
-- no picks/predictions/betting advice
-- no raw outcomes
-- no pitcher evidence
-- no actual starters
-- no live/API/web
-- no network standings/roster/schedule ingestion
-- no historical fixture changes
-- preserve Phase 5B/5E/5H/5K/5N/5T goldens
-- preserve Phase 5S team-quality CLI behavior
-- preserve Phase 5R builder behavior
-- preserve Phase 5W adapter behavior
+- Phase 5Y adds optional explicit `--report-preview-local` JSON CLI mode.
+- It requires `--fixture-evidence-local`.
+- It adds `reportPreviewLocal: true` and `reportPreview` only in explicit mode.
+- It adds no default behavior change.
+- It adds no file output.
+- It adds no website/API implementation.
+- It adds no new stdout golden.
+- It preserves Phase 5B/5E/5H/5K/5N/5T goldens.
+- It preserves Phase 5S team-quality CLI behavior.
+- It preserves Phase 5W adapter behavior.
+- It preserves Phase 5X renderer behavior.
+- It preserves Phase 5R/5U team-quality behavior.
+- No modelProbability.
+- No picks/predictions/betting advice.
+- No raw outcomes.
+- No pitcher evidence.
+- No actual starters.
+- No live/API/web or network standings/roster/schedule ingestion.
+- No historical fixture changes.
+- Recommended next safe phase is Phase 5Z.
 
 Docs:
 - docs/mlb-research-report-interface-plan.md

@@ -443,7 +443,7 @@ describe('Phase 5A MLB team recent form research module', () => {
     expect(multiple.error).toBe('TEAM_FORM_RESEARCH_SINGLE_PATH_ONLY');
     expect(unknown.error).toBe('TEAM_FORM_RESEARCH_UNKNOWN_ARGUMENT');
     expect(missing.usage).toBe(
-      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local] [--team-schedule-context-local] [--team-quality-context-local]',
+      'npm run prospective:mlb:research-team-form -- <construction-package-json> [--fixture-evidence-local] [--aggregate-summaries-local] [--result-aggregate-metrics-local] [--team-schedule-context-local] [--team-quality-context-local] [--report-preview-local]',
     );
     expect(multiple.usage).toBe(missing.usage);
     expect(unknown.usage).toBe(missing.usage);
@@ -3278,6 +3278,214 @@ describe('Phase 5S MLB team quality context CLI mode', () => {
       expect(golden).not.toContain(`"${field}"`);
     }
     expectNoAbsolutePaths(summary);
+  });
+});
+
+describe('Phase 5Y MLB report-preview JSON CLI mode', () => {
+  afterEach(() => {
+    rmSync(tempRoot, { recursive: true, force: true });
+    expect(existsSync(tempRoot)).toBe(false);
+  });
+
+  it('rejects bare --report-preview-local without --fixture-evidence-local', () => {
+    const { summary } = runResearchExpectingFailure([
+      fixturePath,
+      '--report-preview-local',
+    ]);
+
+    expect(summary).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: 'REPORT_PREVIEW_REQUIRES_FIXTURE_EVIDENCE',
+      }),
+    );
+    expectNoPackage(summary);
+  });
+
+  it('returns clean error JSON with no stack and no absolute paths', () => {
+    const { stdout, summary } = runResearchExpectingFailure([
+      fixturePath,
+      '--report-preview-local',
+    ]);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.error).toBe('REPORT_PREVIEW_REQUIRES_FIXTURE_EVIDENCE');
+    expect(stdout).toBe(`${JSON.stringify(summary, null, 2)}\n`);
+    expect(stdout).not.toContain(projectRoot);
+    expect(stdout).not.toContain(' at ');
+    expectNoAbsolutePaths(summary);
+  });
+
+  it('succeeds with explicit --fixture-evidence-local --report-preview-local', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+
+    expect(summary.ok).toBe(true);
+    expect(summary.fixtureEvidenceLocal).toBe(true);
+    expect(summary.reportPreviewLocal).toBe(true);
+    expect(summary.reportPreview).toBeDefined();
+    expect(typeof summary.reportPreview).toBe('object');
+  });
+
+  it('adds top-level reportPreviewLocal:true in explicit mode only', () => {
+    const defaultSummary = JSON.parse(
+      runResearch([fixturePath]),
+    ) as Record<string, unknown>;
+    const previewSummary = JSON.parse(
+      runResearch([fixturePath, '--fixture-evidence-local', '--report-preview-local']),
+    ) as Record<string, unknown>;
+
+    expect(defaultSummary.reportPreviewLocal).toBeUndefined();
+    expect(defaultSummary.reportPreview).toBeUndefined();
+    expect(previewSummary.reportPreviewLocal).toBe(true);
+    expect(previewSummary.reportPreview).toBeDefined();
+  });
+
+  it('adds reportPreview with expected renderer/adapter metadata', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    const summary = JSON.parse(stdout) as {
+      reportPreview: {
+        rendererVersion: string;
+        rendererName: string;
+        adapterVersion: string;
+        metadata: {
+          generatedAt: unknown;
+          deterministic: boolean;
+          source: string;
+        };
+      };
+    };
+
+    expect(summary.reportPreview.rendererVersion).toBe('mlb-research-report-renderer-v1');
+    expect(summary.reportPreview.rendererName).toBe('MLB_RESEARCH_REPORT_RENDERER');
+    expect(summary.reportPreview.adapterVersion).toBe('mlb-research-report-adapter-v1');
+    expect(summary.reportPreview.metadata.generatedAt).toBeNull();
+    expect(summary.reportPreview.metadata.deterministic).toBe(true);
+    expect(summary.reportPreview.metadata.source).toBe('local-research-package');
+  });
+
+  it('renders one game card and detail per package section game', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    const summary = JSON.parse(stdout) as {
+      gameCount: number;
+      reportPreview: Record<string, unknown>;
+    };
+
+    expect(summary.gameCount).toBe(2);
+    expect(summary.reportPreview.gameCards).toHaveLength(2);
+    expect(summary.reportPreview.gameDetails).toHaveLength(2);
+  });
+
+  it('produces deterministic reportPreview across repeated runs', () => {
+    const first = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    const second = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+
+    expect(first).toBe(second);
+  });
+
+  it('preserves default Phase 5B golden without --report-preview-local', () => {
+    const expected = readFileSync(validStdoutGoldenPath, 'utf8');
+    expect(runResearch([fixturePath])).toBe(expected);
+  });
+
+  it('preserves evidence-enabled Phase 5E golden when --report-preview-local is absent', () => {
+    const expected = readFileSync(fixtureEvidenceLocalStdoutGoldenPath, 'utf8');
+    expect(runResearch([fixturePath, '--fixture-evidence-local'])).toBe(expected);
+  });
+
+  it('does not auto-enable schedule or team quality context in preview mode', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+
+    expect(summary.teamScheduleContextLocal).toBeUndefined();
+    expect(summary.teamQualityContextLocal).toBeUndefined();
+  });
+
+  it('may coexist with schedule context and team quality context only when fixture evidence is present', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--team-schedule-context-local',
+      '--team-quality-context-local',
+      '--report-preview-local',
+    ]);
+    const summary = JSON.parse(stdout) as Record<string, unknown>;
+
+    expect(summary.ok).toBe(true);
+    expect(summary.fixtureEvidenceLocal).toBe(true);
+    expect(summary.teamScheduleContextLocal).toBe(true);
+    expect(summary.teamQualityContextLocal).toBe(true);
+    expect(summary.reportPreviewLocal).toBe(true);
+    expect(summary.reportPreview).toBeDefined();
+  });
+
+  it('keeps reportPreview free from prohibited output fields', () => {
+    const stdout = runResearch([
+      fixturePath,
+      '--fixture-evidence-local',
+      '--report-preview-local',
+    ]);
+    const reportPreview = JSON.parse(stdout).reportPreview as Record<string, unknown>;
+    const keys = collectKeys(reportPreview);
+
+    for (const field of [
+      'modelProbability',
+      'predictedWinner',
+      'pick',
+      'winChance',
+      'powerRating',
+      'teamRank',
+      'standingsPosition',
+      'finalScore',
+      'outcome',
+      'completedGameState',
+      'finalStatus',
+      'actualStartingPitchers',
+      'pitcher',
+      'odds',
+      'sportsbook',
+      'market',
+      'price',
+      'edge',
+      'ROI',
+      'impliedProbability',
+      'probability',
+      'winner',
+      'favorite',
+      'underdog',
+      'best bet',
+      'value',
+      'projected score',
+      'should win',
+      'likely winner',
+      'chance to win',
+    ]) {
+      expect(keys).not.toContain(field);
+    }
   });
 });
 

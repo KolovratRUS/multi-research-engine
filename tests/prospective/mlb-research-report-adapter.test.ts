@@ -99,8 +99,8 @@ describe('MLBResearchReportAdapter', () => {
               warnings: [],
             },
             teamScheduleContext: {
-              awayTeamScheduleContext: { status: 'complete', scheduleContextCompletenessLabel: 'complete' },
-              homeTeamScheduleContext: { status: 'complete', scheduleContextCompletenessLabel: 'complete' },
+              awayScheduleContext: { status: 'complete', scheduleContextCompletenessLabel: 'complete' },
+              homeScheduleContext: { status: 'complete', scheduleContextCompletenessLabel: 'complete' },
             },
           },
         },

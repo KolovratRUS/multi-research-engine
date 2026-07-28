@@ -20,8 +20,8 @@ export interface MLBResearchReportInputScheduleContextSide {
 }
 
 export interface MLBResearchReportInputScheduleContext {
-  readonly awayTeamScheduleContext: MLBResearchReportInputScheduleContextSide;
-  readonly homeTeamScheduleContext: MLBResearchReportInputScheduleContextSide;
+  readonly awayScheduleContext: MLBResearchReportInputScheduleContextSide;
+  readonly homeScheduleContext: MLBResearchReportInputScheduleContextSide;
   readonly warnings?: readonly string[];
 }
 
@@ -239,7 +239,7 @@ export function buildMLBResearchReportFromPackage(
       availableModules.push({
         moduleName: 'TEAM_SCHEDULE_CONTEXT',
         status: 'available',
-        availableDataQuality: toDataQualityLabel(teamScheduleContext.awayTeamScheduleContext.status),
+        availableDataQuality: toDataQualityLabel(teamScheduleContext.awayScheduleContext.status),
         availableConfidence: 'medium',
         availableResearchStrengthScore: 'not-evaluated',
       });
@@ -294,7 +294,7 @@ export function buildMLBResearchReportFromPackage(
 
     const slateDataQualities: string[] = [];
     if (teamRecentForm) slateDataQualities.push(teamRecentForm.dataQuality);
-    if (teamScheduleContext) slateDataQualities.push(teamScheduleContext.awayTeamScheduleContext.status);
+    if (teamScheduleContext) slateDataQualities.push(teamScheduleContext.awayScheduleContext.status);
     if (teamQualityContext) slateDataQualities.push(teamQualityContext.awayTeamQualityContext.status);
 
     const aggregatedDataQuality: DataQualityLabel | 'not-evaluated' = slateDataQualities.includes('insufficient')
@@ -318,8 +318,8 @@ export function buildMLBResearchReportFromPackage(
     let scheduleContextSummary: string | null = null;
     if (teamScheduleContext) {
       const labels = [
-        teamScheduleContext.awayTeamScheduleContext.scheduleContextCompletenessLabel,
-        teamScheduleContext.homeTeamScheduleContext.scheduleContextCompletenessLabel,
+        teamScheduleContext.awayScheduleContext.scheduleContextCompletenessLabel,
+        teamScheduleContext.homeScheduleContext.scheduleContextCompletenessLabel,
       ];
       if (labels.every((label) => label === 'complete')) scheduleContextSummary = 'complete';
       else if (labels.some((label) => label === 'complete' || label === 'partial')) scheduleContextSummary = 'partial';
@@ -372,10 +372,10 @@ export function buildMLBResearchReportFromPackage(
       },
       teamScheduleContextPanel: teamScheduleContext
         ? {
-            awayStatus: teamScheduleContext.awayTeamScheduleContext.status,
-            awayContextLabel: teamScheduleContext.awayTeamScheduleContext.scheduleContextCompletenessLabel,
-            homeStatus: teamScheduleContext.homeTeamScheduleContext.status,
-            homeContextLabel: teamScheduleContext.homeTeamScheduleContext.scheduleContextCompletenessLabel,
+            awayStatus: teamScheduleContext.awayScheduleContext.status,
+            awayContextLabel: teamScheduleContext.awayScheduleContext.scheduleContextCompletenessLabel,
+            homeStatus: teamScheduleContext.homeScheduleContext.status,
+            homeContextLabel: teamScheduleContext.homeScheduleContext.scheduleContextCompletenessLabel,
           }
         : null,
       teamQualityContextPanel: teamQualityContext

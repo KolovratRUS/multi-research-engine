@@ -1,0 +1,173 @@
+# MLB Research Report Preview CLI Integration
+
+## Phase 5Y Status
+
+Phase 5Y adds an optional explicit `--report-preview-local` JSON CLI mode to the MLB research command.
+
+## Exact Flag
+
+`--report-preview-local`
+
+## Requirements
+
+- `--report-preview-local` is allowed only when `--fixture-evidence-local` is present.
+- Bare `--report-preview-local` without `--fixture-evidence-local` returns a clean JSON error:
+  - `ok: false`
+  - `error: REPORT_PREVIEW_REQUIRES_FIXTURE_EVIDENCE`
+- The mode runs after the normal local research package is built.
+- It builds a report adapter object from the research package.
+- It renders the report using the renderer.
+- It adds the rendered report to the existing JSON output under the key `reportPreview`.
+- It adds top-level `reportPreviewLocal: true`.
+- It does not replace the existing package output.
+- It does not add `generatedAt` unless an existing deterministic source already provides it; by default generatedAt remains null.
+- It does not call current time.
+- It does not read/write files.
+- It does not call network.
+
+## What It Adds
+
+In explicit report-preview mode, top-level output additionally includes:
+- `reportPreviewLocal: true`
+- `reportPreview` object with:
+  - `rendererVersion`
+  - `rendererName`
+  - `adapterVersion`
+  - `title`
+  - `sections`
+  - `gameCards`
+  - `gameDetails`
+  - `safetyNotes`
+  - `metadata`
+
+`reportPreview.metadata.generatedAt` is `null` by default.
+`reportPreview.metadata.deterministic` is `true`.
+`reportPreview.metadata.source` is `local-research-package`.
+
+## What It Does Not Change
+
+- Default no-flag Phase 5A/5B behavior remains unchanged.
+- Phase 5B default stdout golden remains unchanged.
+- Phase 5E evidence-enabled stdout golden remains unchanged.
+- Phase 5H aggregate stdout golden remains unchanged.
+- Phase 5K result-metrics stdout golden remains unchanged.
+- Phase 5N schedule-context stdout golden remains unchanged.
+- Phase 5T team-quality stdout golden remains unchanged.
+- Phase 5S team-quality CLI behavior remains unchanged.
+- Phase 5W adapter behavior remains unchanged.
+- Phase 5X renderer behavior remains unchanged.
+- Phase 5R/5U team-quality builder/test behavior remains unchanged.
+- No file output is added.
+- No website/API implementation is added.
+- No new stdout golden is added.
+- No dependencies are added.
+
+## Safety Boundaries
+
+- Report-preview output must not include picks, predictions, betting advice, bookmaker language, or probability claims.
+- modelProbability remains null/absent/not available until calibrated.
+- Keep researchStrengthScore, confidence, matchConfidence, dataQuality, volatility, and modelProbability conceptually separate.
+- Historical completion remains based only on liveData.plays.allPlays[last].about.endTime with provenance LAST_COMPLETED_PLAY_END.
+- Actual starters remain evaluation-only.
+- TEAM_ONLY excludes pitcher evidence.
+- Report-preview output must not expose raw finalScore, raw outcome, completedGameState, finalStatus, actualStartingPitchers, or any calibrated probability.
+
+Prohibited output fields:
+- pick
+- predictedWinner
+- winChance
+- powerRating
+- teamRank
+- standingsPosition
+- finalScore
+- actualStartingPitchers
+- completedGameState
+- finalStatus
+- modelProbability
+- odds
+- sportsbook
+- market
+- price
+- edge
+- ROI
+- impliedProbability
+- probability
+- winner
+- favorite
+- underdog
+- best bet
+- value
+- projected score
+- should win
+- likely winner
+- chance to win
+
+## Validation
+
+### Inventory guard
+- startDate: 2024-06-01
+- endDate: 2024-07-21
+- totalGames: 29
+- 2024-06: 17
+- 2024-07: 12
+- historicalFixtureInventoryTouched: false
+
+### Targeted tests
+- tests/prospective/mlb-team-recent-form-research.test.ts: 148 passed
+- tests/prospective/mlb-research-report-renderer.test.ts: 18 passed
+- tests/prospective/mlb-research-report-adapter.test.ts: 13 passed
+- tests/prospective/mlb-team-quality-context.test.ts: 21 passed
+- tests/prospective/mlb-weekly-prospective-research-construction.test.ts: 58 passed
+- tests/prospective: 337 passed
+- tests/backtesting: 699 passed
+- full suite: 1093 passed
+- TypeScript clean
+- build clean
+
+### Golden comparison
+Default Phase 5B: unchanged.
+Evidence Phase 5E: unchanged.
+Aggregate Phase 5H: unchanged.
+Result-metrics Phase 5K: unchanged.
+Schedule-context Phase 5N: unchanged.
+Team-quality Phase 5T: unchanged.
+
+### Report-preview commands
+Bare `--report-preview-local`:
+- ok: false
+- error: REPORT_PREVIEW_REQUIRES_FIXTURE_EVIDENCE
+- no absolute paths
+- no stack traces
+
+Explicit `--fixture-evidence-local --report-preview-local`:
+- ok: true
+- fixtureEvidenceLocal: true
+- reportPreviewLocal: true
+- reportPreview.rendererVersion: mlb-research-report-renderer-v1
+- reportPreview.rendererName: MLB_RESEARCH_REPORT_RENDERER
+- reportPreview.adapterVersion: mlb-research-report-adapter-v1
+- reportPreview.metadata.generatedAt: null
+- reportPreview.metadata.source: local-research-package
+- reportPreview.metadata.deterministic: true
+- gameCards and gameDetails counts match package game count
+- no prohibited fields as JSON keys
+
+Combined with schedule context: succeeds safely.
+Combined with team quality context: succeeds safely.
+Repeated explicit runs: byte-for-byte identical/deterministic.
+
+## Recommended Next Safe Phase
+
+Phase 5Z — add exact stdout golden for explicit `--fixture-evidence-local --report-preview-local`.
+
+Scope:
+- No default behavior change.
+- No file output.
+- No website/API implementation.
+- No modelProbability.
+- No picks/predictions/betting advice.
+- No raw outcomes.
+- No pitcher evidence.
+- No actual starters.
+- No live/API/web.
+- Preserve existing goldens.

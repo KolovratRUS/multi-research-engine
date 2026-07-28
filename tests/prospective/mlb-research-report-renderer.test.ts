@@ -41,11 +41,11 @@ function createResearchPackage(
             warnings: ['TEAM_FORM_EVIDENCE_INSUFFICIENT_GAMES'],
           },
           teamScheduleContext: {
-            awayTeamScheduleContext: {
+            awayScheduleContext: {
               status: 'partial',
               scheduleContextCompletenessLabel: 'partial',
             },
-            homeTeamScheduleContext: {
+            homeScheduleContext: {
               status: 'partial',
               scheduleContextCompletenessLabel: 'partial',
             },

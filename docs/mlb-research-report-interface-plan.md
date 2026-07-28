@@ -313,11 +313,26 @@ Recommended future phases:
 
 ### Phase 5Y: optional explicit CLI report-preview JSON mode
 
-- explicit flag only
-- no default behavior change
-- stdout-only unless file output explicitly scoped later
-- exact golden in later phase
-- preserve all existing goldens
+- Phase 5Y adds optional explicit `--report-preview-local` JSON CLI mode.
+- It requires `--fixture-evidence-local`.
+- It adds `reportPreviewLocal: true` and `reportPreview` only in explicit mode.
+- It adds no default behavior change.
+- It adds no file output.
+- It adds no website/API implementation.
+- It adds no new stdout golden.
+- It preserves Phase 5B/5E/5H/5K/5N/5T goldens.
+- It preserves Phase 5S team-quality CLI behavior.
+- It preserves Phase 5W adapter behavior.
+- It preserves Phase 5X renderer behavior.
+- It preserves Phase 5R/5U team-quality behavior.
+- No modelProbability.
+- No picks/predictions/betting advice.
+- No raw outcomes.
+- No pitcher evidence.
+- No actual starters.
+- No live/API/web or network standings/roster/schedule ingestion.
+- No historical fixture changes.
+- Recommended next safe phase is Phase 5Z.
 
 ### Phase 5Z: exact golden for report-preview mode
 
