@@ -293,7 +293,6 @@ Future implementation must pass:
 - no historical fixture changes
 
 Implementation must:
-
 - consume only `MLBReportPreviewApiHandlerSuccess.apiResponse` or narrowed view model
 - include UI boundary tests before component implementation
 - include safety search in CI or pre-merge gate
@@ -301,6 +300,10 @@ Implementation must:
 - not introduce package dependencies unless explicitly scoped
 - preserve all goldens
 - use explicit local-only mode for any future data fetching boundary
+
+Phase 6G adds synthetic, golden-free validation coverage for the Phase 6F boundary.
+It does not modify the builder or validator contract unless a real gap is discovered.
+It adds no UI implementation, no CSS, no routes, no server, no network, no CLI flag, no stdout golden change, no fixture change, and no package change.
 
 ## Non-Goals
 

@@ -154,6 +154,12 @@ const VIEW_MODEL_UNSAFE_SUBSTRINGS = new Set<string>([
   'win probability',
   'market edge',
   'sportsbook price',
+  'power ranking',
+  'team ranking',
+  'favorite',
+  'favourite',
+  'underdog',
+  'roi',
 ]);
 
 function checkProhibitedKeys(
@@ -174,6 +180,11 @@ function checkProhibitedKeys(
   }));
 }
 
+function buildUnsafePattern(term: string): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i');
+}
+
 function checkUnsafeStrings(
   value: unknown,
   path = 'viewModel',
@@ -182,7 +193,7 @@ function checkUnsafeStrings(
   const hits: string[] = [];
   const lower = serialized.toLowerCase();
   for (const term of VIEW_MODEL_UNSAFE_SUBSTRINGS) {
-    if (lower.includes(term)) {
+    if (buildUnsafePattern(term).test(lower)) {
       hits.push(term);
     }
   }
@@ -332,6 +343,124 @@ function validateViewModelShape(
     });
   }
 
+  if (Array.isArray(obj.sections)) {
+    for (let i = 0; i < obj.sections.length; i++) {
+      const section = obj.sections[i] as Record<string, unknown> | undefined;
+      if (!section || typeof section !== 'object') {
+        errors.push({
+          code: 'INVALID_SECTION_ENTRY',
+          path: `sections[${i}]`,
+          message: 'section entry must be an object.',
+        });
+      } else {
+        if (typeof section.heading !== 'string' || section.heading.length === 0) {
+          errors.push({
+            code: 'MISSING_SECTION_HEADING',
+            path: `sections[${i}].heading`,
+            message: 'section.heading is required.',
+          });
+        }
+        if (!Array.isArray(section.body)) {
+          errors.push({
+            code: 'INVALID_SECTION_BODY',
+            path: `sections[${i}].body`,
+            message: 'section.body must be an array.',
+          });
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(obj.gameCards)) {
+    for (let i = 0; i < obj.gameCards.length; i++) {
+      const card = obj.gameCards[i] as Record<string, unknown> | undefined;
+      if (!card || typeof card !== 'object') {
+        errors.push({
+          code: 'INVALID_GAME_CARD_ENTRY',
+          path: `gameCards[${i}]`,
+          message: 'game card entry must be an object.',
+        });
+      } else {
+        if (typeof card.gameId !== 'string' || card.gameId.length === 0) {
+          errors.push({
+            code: 'MISSING_GAME_CARD_GAME_ID',
+            path: `gameCards[${i}].gameId`,
+            message: 'gameCards[].gameId is required.',
+          });
+        }
+        if (typeof card.officialDate !== 'string' || card.officialDate.length === 0) {
+          errors.push({
+            code: 'INVALID_GAME_CARD_OFFICIAL_DATE',
+            path: `gameCards[${i}].officialDate`,
+            message: 'gameCards[].officialDate is required.',
+          });
+        }
+        if (typeof card.scheduledStartTime !== 'string' || card.scheduledStartTime.length === 0) {
+          errors.push({
+            code: 'INVALID_GAME_CARD_SCHEDULED_START',
+            path: `gameCards[${i}].scheduledStartTime`,
+            message: 'gameCards[].scheduledStartTime is required.',
+          });
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(obj.gameDetails)) {
+    for (let i = 0; i < obj.gameDetails.length; i++) {
+      const detail = obj.gameDetails[i] as Record<string, unknown> | undefined;
+      if (!detail || typeof detail !== 'object') {
+        errors.push({
+          code: 'INVALID_GAME_DETAIL_ENTRY',
+          path: `gameDetails[${i}]`,
+          message: 'game detail entry must be an object.',
+        });
+      } else {
+        if (typeof detail.heading !== 'string' || detail.heading.length === 0) {
+          errors.push({
+            code: 'MISSING_GAME_DETAIL_HEADING',
+            path: `gameDetails[${i}].heading`,
+            message: 'gameDetails[].heading is required.',
+          });
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(obj.warnings)) {
+    for (let i = 0; i < obj.warnings.length; i++) {
+      const warning = obj.warnings[i] as Record<string, unknown> | undefined;
+      if (!warning || typeof warning !== 'object') {
+        errors.push({
+          code: 'INVALID_WARNING_ENTRY',
+          path: `warnings[${i}]`,
+          message: 'warning entry must be an object.',
+        });
+      } else {
+        if (typeof warning.code !== 'string' || warning.code.length === 0) {
+          errors.push({
+            code: 'MISSING_WARNING_CODE',
+            path: `warnings[${i}].code`,
+            message: 'warning.code is required.',
+          });
+        }
+        if (typeof warning.message !== 'string' || warning.message.length === 0) {
+          errors.push({
+            code: 'MISSING_WARNING_MESSAGE',
+            path: `warnings[${i}].message`,
+            message: 'warning.message is required.',
+          });
+        }
+      }
+    }
+  } else if (obj.warnings !== undefined) {
+    errors.push({
+      code: 'INVALID_WARNINGS',
+      path: 'warnings',
+      message: 'warnings must be an array.',
+    });
+  }
+
   const metadata = obj.metadata as Record<string, unknown> | undefined;
   if (!metadata || typeof metadata !== 'object') {
     errors.push({
@@ -352,6 +481,41 @@ function validateViewModelShape(
         code: 'INVALID_DETERMINISTIC',
         path: 'metadata.deterministic',
         message: 'metadata.deterministic must be true.',
+      });
+    }
+    if (typeof metadata.handlerVersion !== 'string' || metadata.handlerVersion.length === 0) {
+      errors.push({
+        code: 'MISSING_METADATA_HANDLER_VERSION',
+        path: 'metadata.handlerVersion',
+        message: 'metadata.handlerVersion is required.',
+      });
+    }
+    if (typeof metadata.contractVersion !== 'string' || metadata.contractVersion.length === 0) {
+      errors.push({
+        code: 'MISSING_METADATA_CONTRACT_VERSION',
+        path: 'metadata.contractVersion',
+        message: 'metadata.contractVersion is required.',
+      });
+    }
+    if (typeof metadata.rendererVersion !== 'string' || metadata.rendererVersion.length === 0) {
+      errors.push({
+        code: 'MISSING_METADATA_RENDERER_VERSION',
+        path: 'metadata.rendererVersion',
+        message: 'metadata.rendererVersion is required.',
+      });
+    }
+    if (typeof metadata.adapterVersion !== 'string' || metadata.adapterVersion.length === 0) {
+      errors.push({
+        code: 'MISSING_METADATA_ADAPTER_VERSION',
+        path: 'metadata.adapterVersion',
+        message: 'metadata.adapterVersion is required.',
+      });
+    }
+    if (typeof metadata.generatedAt !== 'string' && metadata.generatedAt !== null) {
+      errors.push({
+        code: 'MISSING_METADATA_GENERATED_AT',
+        path: 'metadata.generatedAt',
+        message: 'metadata.generatedAt is required.',
       });
     }
   }

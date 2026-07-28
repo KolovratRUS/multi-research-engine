@@ -183,6 +183,7 @@ Run:
 - npm run inventory:mlb-fixtures
 - npm run prospective:mlb:dry-run-check
 - npx vitest run tests/prospective/mlb-report-preview-ui-view-model.test.ts --reporter=verbose
+- npx vitest run tests/prospective/mlb-report-preview-ui-view-model-synthetic.test.ts --reporter=verbose
 - npx vitest run tests/prospective/mlb-report-preview-api-handler.test.ts --reporter=verbose
 - npx vitest run tests/prospective/mlb-report-preview-api-contract.test.ts --reporter=verbose
 - npx vitest run tests/prospective --reporter=verbose
@@ -193,11 +194,11 @@ Run:
 - npm run build
 - git diff --check
 
-## Recommended Phase 6G
+## Phase 6G status
 
-Phase 6G — add UI view-model synthetic coverage.
-Scope:
-- local-only synthetic view-model fixtures
-- no components/CSS/routes/server/network/file output/CLI/goldens
-- expand prohibited-key/unsafe-phrase coverage
-- keep view-model contract stable
+Phase 6G adds synthetic, golden-free validation coverage for the Phase 6F boundary.
+It preserves the existing view-model contract and docs.
+It adds one new test file: `tests/prospective/mlb-report-preview-ui-view-model-synthetic.test.ts`.
+It adds one new doc file: `docs/mlb-report-preview-ui-view-model-synthetic-coverage.md`.
+It does not add UI implementation, components, CSS, routes, server/network files, CLI flags, fixtures, stdout goldens, or package changes.
+It does not modify historical fixtures or introduce live source support.

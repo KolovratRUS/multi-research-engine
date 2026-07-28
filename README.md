@@ -630,3 +630,27 @@ Scope for Phase 6F:
 - preserves Phase 5W adapter behavior
 - preserves Phase 5X renderer behavior
 
+Phase 6G adds synthetic, golden-free validation coverage for the Phase 6F MLB reportPreview UI view-model boundary.
+It adds no server/backend/frontend code.
+It adds no network behavior.
+It adds no CLI behavior.
+It adds no file output.
+It adds no new stdout golden.
+It adds no fixtures.
+It adds no generated goldens.
+It preserves Phase 5B/5E/5H/5K/5N/5T/5Z goldens.
+It preserves Phase 5Y report-preview CLI behavior.
+It preserves Phase 6F typed UI view-model contract.
+It preserves Phase 6D handler validation behavior.
+It preserves Phase 6C handler behavior.
+It preserves Phase 6B API contract behavior.
+It preserves Phase 5W adapter behavior.
+It preserves Phase 5X renderer behavior.
+No modelProbability.
+No picks/predictions/betting advice.
+No raw outcomes.
+No pitcher evidence.
+No actual starters.
+No live/API/web or network standings/roster/schedule ingestion.
+No historical fixture changes.
+
