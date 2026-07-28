@@ -325,30 +325,39 @@ This boundary plan explicitly excludes:
 - no CSS files
 - no app routes
 
-## Recommended Next Safe Phase
 
-Phase 6F — add typed UI view-model contract for handler success output only.
-Scope:
-- add types/views for safe UI props only
+
+## Recommended next safe phase
+
+Phase 6F — add typed UI view-model contract for MLB reportPreview handler success output only.
+Alternatively, next sport module planning if the user chooses.
+
+Scope for Phase 6F:
+- local-only typed view-model contract
+- no server/network
+- no UI implementation
 - no components
 - no CSS
-- no app routes
-- no server/network
+- no app/pages/routes
+- no frontend framework files
+- no HTTP routes
+- no website/API deployment
 - no file output
-- no CLI
-- no goldens
+- no CLI changes
+- no stdout golden
+- no golden changes
 - no fixtures
 - no modelProbability
 - no picks/predictions/betting advice
 - no raw outcomes
 - no pitcher evidence
 - no actual starters
-- preserve Phase 5B/5E/5H/5K/5N/5T/5Z goldens
-- preserve Phase 5Y report-preview CLI behavior
-- preserve Phase 6D handler validation behavior
-- preserve Phase 6C handler behavior
-- preserve Phase 6B API contract behavior
-- preserve Phase 5W adapter behavior
-- preserve Phase 5X renderer behavior
-
-Alternative: switch to next sport module planning if the user chooses.
+- no historical fixture changes
+- preserves Phase 5B/5E/5H/5K/5N/5T/5Z goldens
+- preserves Phase 5Y report-preview CLI behavior
+- preserves Phase 6E UI boundary plan
+- preserves Phase 6D handler validation behavior
+- preserves Phase 6C handler behavior
+- preserves Phase 6B API contract behavior
+- preserves Phase 5W adapter behavior
+- preserves Phase 5X renderer behavior
