@@ -492,3 +492,40 @@ No actual starters.
 No live/API/web or network standings/roster/schedule ingestion.
 No historical fixture changes.
 Recommended next safe phase is Phase 6E website UI component boundary planning only, or next sport module planning if the user chooses.
+
+
+## Recommended next safe phase
+
+Phase 6F — add typed UI view-model contract for MLB reportPreview handler success output only.
+Alternatively, next sport module planning if the user chooses.
+
+Scope for Phase 6F:
+- local-only typed view-model contract
+- no server/network
+- no UI implementation
+- no components
+- no CSS
+- no app/pages/routes
+- no frontend framework files
+- no HTTP routes
+- no website/API deployment
+- no file output
+- no CLI changes
+- no stdout golden
+- no golden changes
+- no fixtures
+- no modelProbability
+- no picks/predictions/betting advice
+- no raw outcomes
+- no pitcher evidence
+- no actual starters
+- no historical fixture changes
+- preserves Phase 5B/5E/5H/5K/5N/5T/5Z goldens
+- preserves Phase 5Y report-preview CLI behavior
+- preserves Phase 6E UI boundary plan
+- preserves Phase 6D handler validation behavior
+- preserves Phase 6C handler behavior
+- preserves Phase 6B API contract behavior
+- preserves Phase 5W adapter behavior
+- preserves Phase 5X renderer behavior
+

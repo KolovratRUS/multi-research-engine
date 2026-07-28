@@ -83,27 +83,38 @@ Metadata includes package/adapter versions, deterministic flag, source mode, and
 
 ## Recommended next safe phase
 
-## Phase 5Y Status
+Phase 6F — add typed UI view-model contract for MLB reportPreview handler success output only.
+Alternatively, next sport module planning if the user chooses.
 
-- Phase 5Y adds optional explicit `--report-preview-local` JSON CLI mode.
-- It requires `--fixture-evidence-local`.
-- It adds `reportPreviewLocal: true` and `reportPreview` only in explicit mode.
-- It adds no default behavior change.
-- It adds no file output.
-- It adds no website/API implementation.
-- It adds no new stdout golden.
-- It preserves Phase 5B/5E/5H/5K/5N/5T goldens.
-- It preserves Phase 5S team-quality CLI behavior.
-- It preserves Phase 5W adapter behavior.
-- It preserves Phase 5X renderer behavior.
-- It preserves Phase 5R/5U team-quality behavior.
-- No modelProbability.
-- No picks/predictions/betting advice.
-- No raw outcomes.
-- No pitcher evidence.
-- No actual starters.
-- No live/API/web or network standings/roster/schedule ingestion.
-- No historical fixture changes.
+Scope for Phase 6F:
+- local-only typed view-model contract
+- no server/network
+- no UI implementation
+- no components
+- no CSS
+- no app/pages/routes
+- no frontend framework files
+- no HTTP routes
+- no website/API deployment
+- no file output
+- no CLI changes
+- no stdout golden
+- no golden changes
+- no fixtures
+- no modelProbability
+- no picks/predictions/betting advice
+- no raw outcomes
+- no pitcher evidence
+- no actual starters
+- no historical fixture changes
+- preserves Phase 5B/5E/5H/5K/5N/5T/5Z goldens
+- preserves Phase 5Y report-preview CLI behavior
+- preserves Phase 6E UI boundary plan
+- preserves Phase 6D handler validation behavior
+- preserves Phase 6C handler behavior
+- preserves Phase 6B API contract behavior
+- preserves Phase 5W adapter behavior
+- preserves Phase 5X renderer behavior
 
 ## Phase 5Z Status
 
