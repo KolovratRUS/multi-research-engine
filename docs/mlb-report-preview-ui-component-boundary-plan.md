@@ -383,3 +383,18 @@ Scope for Phase 6F:
 - preserves Phase 6B API contract behavior
 - preserves Phase 5W adapter behavior
 - preserves Phase 5X renderer behavior
+
+## Phase 6J status
+
+Phase 6J adds documentation-only planning for a future framework adapter boundary.
+It inspects the repository and confirms an established Next.js application boundary exists,
+so Outcome A applies.
+It plans how a later adapter may consume only `MLBReportPreviewUIPresentation` inside the existing
+Next.js app, without adding a second framework.
+It adds no browser UI, HTML, CSS, JSX, TSX, framework implementation, route, server, network, CLI,
+fixture, golden, or package changes.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.
+Recommended next safe phase is the later framework-adapter implementation phase described in
+`docs/mlb-report-preview-framework-adapter-boundary-plan.md` after explicit implementation approval.

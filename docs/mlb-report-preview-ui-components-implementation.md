@@ -158,6 +158,8 @@ No file reads/writes, no CLI execution, no network requests, no browser APIs, no
 
 The builder consumes only the validated view model. It never exposes raw handler responses, report-preview payloads, historical fixtures, or research-package structures. It preserves safe labels, visible limitations, and conceptual separation between research strength, confidence, data quality, volatility, and model probability.
 
+This Phase 6I presentation contract is the sole allowed future adapter input. A later framework adapter must consume `MLBReportPreviewUIPresentation` only; it must not consume the view model, handler response, raw report preview, research package, CLI stdout, filesystem paths, or live/network responses directly.
+
 ## 18. Tests
 
 - `tests/prospective/mlb-report-preview-ui-components.test.ts`

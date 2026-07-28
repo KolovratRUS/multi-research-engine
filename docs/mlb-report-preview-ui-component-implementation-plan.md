@@ -389,6 +389,8 @@ A future component-contract implementation phase must satisfy before commit:
 - `git diff --check` clean
 - safety searches clean for forbidden terminology
 
+The future adapter boundary is recorded in `docs/mlb-report-preview-framework-adapter-boundary-plan.md`.
+
 ## 19. Explicit non-goals
 
 Phase 6H adds no:
