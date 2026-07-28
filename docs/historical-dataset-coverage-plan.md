@@ -444,3 +444,25 @@ No historical fixture changes.
 No file output.
 No package.json or package-lock.json changes.
 Recommended next safe phase is Phase 6B typed local API contract/schema for reportPreview only, or next sport module planning if the user chooses.
+
+Phase 6B adds a typed local API contract/schema for MLB reportPreview only.
+It adds no server/backend/frontend code.
+It adds no website/API implementation.
+It adds no network behavior.
+It adds no CLI behavior.
+It adds no file output.
+It adds no new stdout golden.
+It preserves Phase 5B/5E/5H/5K/5N/5T/5Z goldens.
+It preserves Phase 5Y report-preview CLI behavior.
+It preserves Phase 5W adapter behavior.
+It preserves Phase 5X renderer behavior.
+It preserves Phase 5S team-quality CLI behavior.
+It preserves Phase 5R/5U team-quality behavior.
+No modelProbability.
+No picks/predictions/betting advice.
+No raw outcomes.
+No pitcher evidence.
+No actual starters.
+No live/API/web or network standings/roster/schedule ingestion.
+No historical fixture changes.
+Recommended next safe phase is Phase 6C local in-process API adapter/handler using existing reportPreview contract, or next sport module planning if the user chooses.
