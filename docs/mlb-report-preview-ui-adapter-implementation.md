@@ -4,6 +4,10 @@
 
 Phase 6K implements the first framework-neutral adapter contract that consumes one validated `MLBReportPreviewUIPresentation` and produces deterministic semantic render instructions. This phase is local-only, deterministic, odds-blind, and framework-neutral. No browser UI, no framework dependencies, and no generated run artifacts were introduced.
 
+## 1a. Phase 6O status
+
+Phase 6O implemented the first local Next.js MLB report-preview page integration using the adapter contract defined in Phase 6K. It adds one server-only App Router page (`src/app/(app)/mlb/report-preview/page.tsx`), one production helper (`src/prospective/mlb/report-preview-local-page-document.ts`), and one focused page-integration test (`tests/prospective/mlb-report-preview-next-page.test.tsx`). The page renders the existing `MLBReportPreviewRenderer` with a deterministic, production-owned, local synthetic `MLBReportPreviewUIAdapterDocument`. No route handler, API route, CSS, layout, navigation, fixture, golden, or package changes were introduced.
+
 ## 2. Framework-neutral interpretation
 
 The adapter consumes only `MLBReportPreviewUIPresentation` and returns plain TypeScript semantic nodes. It must not:

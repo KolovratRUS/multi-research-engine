@@ -716,3 +716,15 @@ It adds no source, test, page, route, layout, CSS, package, fixture, or golden c
 No live/API/web calls. No odds. No sportsbook. No betting language.
 No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
 No historical fixture changes.
+
+Phase 6O implements the first local Next.js MLB report-preview page integration.
+It adds exactly 3 files:
+- `src/app/(app)/mlb/report-preview/page.tsx` — server-only App Router page.
+- `src/prospective/mlb/report-preview-local-page-document.ts` — deterministic production-owned local synthetic document builder.
+- `tests/prospective/mlb-report-preview-next-page.test.tsx` — 30 focused tests.
+The page renders the existing `MLBReportPreviewRenderer` with a local synthetic `MLBReportPreviewUIAdapterDocument`.
+No route handler, API route, CSS, layout, navigation, fixture, golden, or package changes.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.
+See docs/mlb-report-preview-next-renderer-implementation-plan.md for implementation boundary details.

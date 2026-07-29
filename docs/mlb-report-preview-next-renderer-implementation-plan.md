@@ -11,6 +11,8 @@ Immediate future implementation scope:
 - Route/page changes: 0.
 - CSS changes: 0.
 
+Phase 6O implemented the first local Next.js MLB report-preview page integration slice described in this plan.
+
 ## 2. Repository renderer evidence
 
 Inspected files:

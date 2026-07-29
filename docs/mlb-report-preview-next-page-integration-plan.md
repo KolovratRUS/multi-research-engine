@@ -4,6 +4,11 @@
 
 Documentation-only. Phase 6N defines the exact future boundary for mounting the local Next.js MLB report-preview page. It does not modify source files, tests, pages, layouts, CSS, Tailwind configuration, routes, package files, fixtures, goldens, or CLI behavior.
 
+Phase 6O implemented the exact three-file slice described in this plan:
+- `src/app/(app)/mlb/report-preview/page.tsx`
+- `src/prospective/mlb/report-preview-local-page-document.ts`
+- `tests/prospective/mlb-report-preview-next-page.test.tsx`
+
 No live source used.
 No real MLB API request made.
 No web lookup used.
@@ -100,26 +105,30 @@ Exact future helper imports:
 - `buildMLBReportPreviewUIAdapterDocument` from `./report-preview-ui-adapter`
 
 Planned local input shape:
-- Two deterministic local sample games.
+- One deterministic local sample game.
 - Local-away / local-home team identifiers.
-- `TEAM_ONLY` evidence (no pitcher fields, no live schedule data).
-- Pre-game snapshots exclude `finalScore` and `completedGameState`.
+- `TEAM_RECENT_FORM` only (no pitcher fields, no live schedule data).
 - `modelProbability` remains null throughout.
 - All timestamps are deterministic ISO strings.
 
+Actual implementation notes:
+- One local synthetic game: `LOCAL_AWAY_1` at `LOCAL_HOME_1`, official date `2024-07-01`, scheduled start `2024-07-01T19:05:00.000Z`.
+- `completedResearchModules: ['TEAM_RECENT_FORM']`, `dataQuality: 'partial'`, `confidence: 'medium'`, `researchStrengthScore: 'medium'`.
+- `generatedAt` is `null` to satisfy the API contract requirement that `reportPreview metadata generatedAt must be null.`
+
 Planned construction sequence:
 1. Build minimal `MLBResearchReportInputPackage`.
-2. `buildMLBResearchReportFromPackage(package, { generatedAt })`.
-3. `assertRendererOutputSafeForDisplay(report)` to enforce safety before rendering.
-4. `renderMLBResearchReport(report, { title: 'MLB Report Preview' })`.
+2. `buildMLBResearchReportFromPackage(package, { generatedAt: null })`.
+3. `renderMLBResearchReport(report, { title: 'MLB Report Preview' })`.
+4. `assertRendererOutputSafeForDisplay(rendered)` to enforce safety after rendering.
 5. `handleMLBReportPreviewApiRequest({ reportPreview: renderedReport, source: 'local-report-preview' })`.
 6. `assertMLBReportPreviewApiHandlerSuccess(response)`.
 7. `buildMLBReportPreviewUIViewModelFromHandlerSuccess(response)`.
 8. `buildMLBReportPreviewUIPresentation(viewModel)`.
 9. `buildMLBReportPreviewUIAdapterDocument(presentation)`.
 
-The helper must not reconstruct adapter fields manually.
-The helper must not skip any validation boundary.
+The helper wraps the entire sequence in a fixed try/catch and rethrows as:
+`MLB report preview page construction failed` with the original cause preserved.
 
 ## 8. Page input and renderer handoff
 
