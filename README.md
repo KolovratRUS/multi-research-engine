@@ -677,3 +677,12 @@ No live/API/web calls. No odds. No sportsbook. No betting language.
 No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
 No historical fixture changes.
 Recommended next safe phase is the later framework-adapter implementation phase described in `docs/mlb-report-preview-framework-adapter-boundary-plan.md` after explicit implementation approval.
+
+Phase 6K adds the framework-neutral MLB report-preview UI adapter contract.
+It consumes only `MLBReportPreviewUIPresentation` and produces deterministic semantic render instructions.
+See `docs/mlb-report-preview-ui-adapter-implementation.md`.
+It adds no browser UI, HTML, CSS, JSX, TSX, framework implementation, route, server, network, CLI, fixture, golden, or package changes.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.
+Recommended next safe phase is a future locally planned phase outside this adapter contract implementation.

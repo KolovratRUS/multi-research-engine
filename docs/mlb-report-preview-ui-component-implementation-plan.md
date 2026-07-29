@@ -412,3 +412,7 @@ Phase 6H adds no:
 - betting advice
 - prediction
 - live source
+
+## 20. Adapter implementation status
+
+Phase 6K implements the framework-neutral adapter boundary planned in `docs/mlb-report-preview-framework-adapter-boundary-plan.md`. It consumes only `MLBReportPreviewUIPresentation` and returns deterministic semantic node documents without framework dependencies.

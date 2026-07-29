@@ -6,6 +6,9 @@ Phase 6J is documentation-only.
 It inspects the repository for an established application/browser framework and plans a future
 framework adapter boundary for consuming only `MLBReportPreviewUIPresentation`.
 
+Phase 6K implements the framework-adapter contract from this plan without browser UI.
+See `docs/mlb-report-preview-ui-adapter-implementation.md`.
+
 Phase 6J adds no:
 - browser UI;
 - framework components;

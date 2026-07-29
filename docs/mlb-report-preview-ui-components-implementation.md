@@ -169,3 +169,7 @@ Coverage includes valid construction, exact label preservation, limitations visi
 ## 19. Explicit non-goals
 
 No browser UI, HTML/CSS/JSX/TSX, framework integration, routes, server code, network behavior, CLI flags, fixture changes, golden changes, or generated artifacts are added.
+
+## 20. Future adapter boundary
+
+Phase 6K consumes this presentation contract directly. A later framework adapter must consume `MLBReportPreviewUIPresentation` only; it must not consume the view model, handler response, raw report preview, research package, CLI stdout, filesystem paths, or live/network responses directly.
