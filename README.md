@@ -695,3 +695,16 @@ No live/API/web calls. No odds. No sportsbook. No betting language.
 No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
 No historical fixture changes.
 Recommended next safe phase is a future locally planned phase after explicit implementation approval.
+
+Phase 6M implements the first Next.js report-preview renderer slice.
+It adds one production TSX renderer and one test TSX file.
+The renderer accepts `MLBReportPreviewUIAdapterDocument`, asserts at boundary, and renders semantic HTML:
+`article > header, section, section, section, section, section, section` in exact adapter order.
+No `'use client'`. No hooks. No browser APIs. No fetching. No CSS. No route/page changes.
+Stable keys are scoped to the renderer. All adapter text is plain JSX text content.
+Warnings preserve all records in order; empty warnings omit the block. Limitations are last and visible.
+See `src/app/_components/mlb-report-preview/MLBReportPreviewRenderer.tsx`.
+See `tests/prospective/mlb-report-preview-next-renderer.test.tsx`.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.

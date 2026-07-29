@@ -506,7 +506,72 @@ After the actual future implementation, run:
 
 Code forbid/safety searches remain required.
 
-## 26. Deferred work
+## 26. Phase 6M completion notes
+
+Phase 6M implements the first Next.js report-preview renderer slice.
+
+Production file added:
+- `src/app/_components/mlb-report-preview/MLBReportPreviewRenderer.tsx`
+
+Test file added:
+- `tests/prospective/mlb-report-preview-next-renderer.test.tsx`
+
+Public exports:
+- `MLBReportPreviewRenderer`
+- `MLBReportPreviewRendererProps`
+
+Private helpers:
+- `renderNode`
+- `renderHeader`
+- `renderMetadata`
+- `renderSectionList`
+- `renderSection`
+- `renderGameCardList`
+- `renderGameDetailList`
+- `renderWarnings`
+- `renderLimitations`
+- `renderEmptyState`
+
+Assertion-first behavior:
+- `assertMLBReportPreviewUIAdapterDocument(document)` at component entry.
+
+Root order:
+- `header`
+- `metadata`
+- `section-list`
+- `game-card-list`
+- `game-detail-list`
+- `warnings`
+- `limitations`
+
+Semantic element mapping:
+- single root `<article>`
+- `<header>` for title metadata
+- `<section>` for each collection/group
+- `<dl><dt><dd>` for metadata fields
+- `<ul><li>` for cards/details/warnings/limitations
+- `<p>` for single-line body and empty state
+- `<h1>` for document title; `<h2>` for collection headings; `<h3>` for section/card/detail headings
+
+Empty lists/warnings behavior:
+- empty section list → renders only empty state paragraph; no fabricated section
+- empty card/detail list → renders empty state paragraph once
+- empty warnings + `emptyState === null` → returns `null`; warnings block omitted
+- non-empty warnings → renders every warning in order; `code + index` key
+
+Limitations behavior:
+- always rendered; always last; never hidden
+
+Keys:
+- stable renderer-owned keys derived from root kinds and stable identifiers
+- `header`, `metadata`, `section-list`, `game-card-list`, `game-detail-list`, `warnings`, `limitations`
+
+No CSS, no route/page, no pipeline integration.
+
+Focused renderer test count:
+- 37 tests
+
+## 27. Deferred work
 
 - Route/page integration;
 - pipeline integration or data fetching;
