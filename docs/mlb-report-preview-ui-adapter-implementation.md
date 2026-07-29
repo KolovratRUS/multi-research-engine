@@ -321,7 +321,7 @@ Phase 6K explicitly does not implement:
 
 ## 22. Renderer boundary
 
-The narrow next-renderer implementation slice is implemented in `src/app/_components/mlb-report-preview/MLBReportPreviewRenderer.tsx`. It consumes exactly one validated `MLBReportPreviewUIAdapterDocument` and renders semantic React elements using the repository's Next.js App Router. The renderer is synchronous, contains no client-specific code, no fetching, no state, no browser APIs, and no CSS. See `docs/mlb-report-preview-next-renderer-implementation-plan.md` for implementation notes.
+The narrow next-renderer implementation slice is implemented in `src/app/_components/mlb-report-preview/MLBReportPreviewRenderer.tsx`. It consumes exactly one validated `MLBReportPreviewUIAdapterDocument` and renders semantic React elements using the repository's Next.js App Router. The renderer is synchronous, contains no client-specific code, no fetching, no state, no browser APIs, and no CSS. See `docs/mlb-report-preview-next-renderer-implementation-plan.md` for implementation notes. Future page integration is planned in `docs/mlb-report-preview-next-page-integration-plan.md`.
 
 ## 23. Whether Phase 6I source hardening was required
 

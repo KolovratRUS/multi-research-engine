@@ -708,3 +708,11 @@ See `tests/prospective/mlb-report-preview-next-renderer.test.tsx`.
 No live/API/web calls. No odds. No sportsbook. No betting language.
 No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
 No historical fixture changes.
+
+Phase 6N plans the first local Next.js MLB report-preview page-integration slice.
+It defines one server-only App Router page, one local production-owned document helper, and one focused page-integration test.
+See docs/mlb-report-preview-next-page-integration-plan.md.
+It adds no source, test, page, route, layout, CSS, package, fixture, or golden changes in Phase 6N.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.

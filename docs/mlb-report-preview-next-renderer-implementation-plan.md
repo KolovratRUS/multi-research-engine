@@ -573,7 +573,7 @@ Focused renderer test count:
 
 ## 27. Deferred work
 
-- Route/page integration;
+- Route/page integration (planned in `docs/mlb-report-preview-next-page-integration-plan.md`);
 - pipeline integration or data fetching;
 - browser fetching or client fetching;
 - API route creation;
