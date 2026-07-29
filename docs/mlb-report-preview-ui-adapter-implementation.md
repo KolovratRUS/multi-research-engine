@@ -319,6 +319,10 @@ Phase 6K explicitly does not implement:
 * framework-specific props, event handlers, or styling;
 * Phase 6I source or tests changes (no defect was discovered).
 
-## 22. Whether Phase 6I source hardening was required
+## 22. Future renderer boundary
+
+The immediate next boundary is a narrow next renderer implementation slice that will consume exactly one validated `MLBReportPreviewUIAdapterDocument` and render semantic React elements using the repository's Next.js App Router. That slice is planned in `docs/mlb-report-preview-next-renderer-implementation-plan.md`.
+
+## 23. Whether Phase 6I source hardening was required
 
 No. Phase 6I source hardening was not required for Phase 6K. The Phase 6I presentation, view-model, and contracts remain unchanged. Phase 6K adds a new adapter module and its isolated validator.

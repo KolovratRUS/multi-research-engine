@@ -9,6 +9,9 @@ framework adapter boundary for consuming only `MLBReportPreviewUIPresentation`.
 Phase 6K implements the framework-adapter contract from this plan without browser UI.
 See `docs/mlb-report-preview-ui-adapter-implementation.md`.
 
+Phase 6L plans the first Next.js renderer slice that will consume exactly one validated `MLBReportPreviewUIAdapterDocument`.
+See `docs/mlb-report-preview-next-renderer-implementation-plan.md`.
+
 Phase 6J adds no:
 - browser UI;
 - framework components;

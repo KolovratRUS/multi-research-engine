@@ -686,3 +686,12 @@ No live/API/web calls. No odds. No sportsbook. No betting language.
 No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
 No historical fixture changes.
 Recommended next safe phase is a future locally planned phase outside this adapter contract implementation.
+
+Phase 6L plans the first Next.js report-preview renderer slice.
+It documents the narrow renderer-only implementation boundary that will consume exactly one validated `MLBReportPreviewUIAdapterDocument`.
+See `docs/mlb-report-preview-next-renderer-implementation-plan.md`.
+It adds no React components, JSX, TSX, routes, pages, layouts, CSS, server handlers, network behavior, fixtures, goldens, or package changes.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.
+Recommended next safe phase is a future locally planned phase after explicit implementation approval.
