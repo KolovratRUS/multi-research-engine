@@ -728,3 +728,11 @@ No live/API/web calls. No odds. No sportsbook. No betting language.
 No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
 No historical fixture changes.
 See docs/mlb-report-preview-next-renderer-implementation-plan.md for implementation boundary details.
+
+Phase 6P adds a documentation-only plan for adding one narrow local-only dashboard navigation link to `/mlb/report-preview`.
+It adds no source code, no tests, no pages, no routes, no layouts, no CSS, no packages, no fixtures, and no golden changes.
+Future implementation would modify only `src/app/(app)/dashboard/page.tsx` and add `tests/prospective/mlb-report-preview-dashboard-navigation.test.tsx`.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.
+See docs/mlb-report-preview-dashboard-navigation-plan.md.

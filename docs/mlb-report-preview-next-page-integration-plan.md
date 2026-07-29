@@ -357,3 +357,11 @@ Phase 6N does not create page files, helper files, or tests.
 Phase 6N does not modify production TypeScript/TSX, layout, route handler, style, configuration, package, or fixture files.
 Phase 6N does not perform any implementation.
 Phase 6N does not speculate about Phase 6O.
+
+## 21. Future dashboard navigation (Phase 6P)
+
+Phase 6P plans one narrow, local-only dashboard navigation link to `/mlb/report-preview`.
+See `docs/mlb-report-preview-dashboard-navigation-plan.md`.
+It retains the same explicit exclusion boundary: no live data, no betting terminology, no model probability, and no dashboard redesign.
+Future implementation would add one `next/link` anchor directly in `src/app/(app)/dashboard/page.tsx` and one focused navigation test file.
+No component, layout, CSS, package, or route changes are planned.
