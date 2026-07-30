@@ -365,3 +365,13 @@ See `docs/mlb-report-preview-dashboard-navigation-plan.md`.
 It retains the same explicit exclusion boundary: no live data, no betting terminology, no model probability, and no dashboard redesign.
 Future implementation would add one `next/link` anchor directly in `src/app/(app)/dashboard/page.tsx` and one focused navigation test file.
 No component, layout, CSS, package, or route changes are planned.
+
+## 22. Implemented dashboard navigation (Phase 6Q)
+
+Phase 6Q implements the planned narrow local-only dashboard navigation link to `/mlb/report-preview`.
+It modifies only `src/app/(app)/dashboard/page.tsx` and adds `tests/prospective/mlb-report-preview-dashboard-navigation.test.tsx` with 25 focused tests.
+The implementation adds one ordinary Next.js `Link` after the dashboard heading and before the Research Status section.
+The dashboard remains a server component. No component, layout, CSS, package, fixture, or golden changes are introduced.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.

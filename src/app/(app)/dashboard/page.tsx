@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 
+import Link from 'next/link';
 import { getDashboardStats, getRecentMultis } from '@/server/actions';
 import type { DashboardStats } from '@/server/actions';
 
@@ -16,6 +17,10 @@ export default async function DashboardPage() {
   return (
     <main className="max-w-4xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-6">Multi Research Engine — Dashboard</h1>
+
+      <p className="text-sm text-gray-600">
+        <Link href="/mlb/report-preview">MLB Report Preview</Link>
+      </p>
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-2">Research Status</h2>

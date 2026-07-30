@@ -4,6 +4,15 @@
 
 Documentation-only.
 
+## 1a. Phase 6Q status
+
+Phase 6Q implements the planned narrow local-only dashboard navigation link to `/mlb/report-preview`.
+It modifies only `src/app/(app)/dashboard/page.tsx` and adds `tests/prospective/mlb-report-preview-dashboard-navigation.test.tsx` with 25 focused tests.
+No component, layout, route, CSS, package, fixture, or golden changes.
+No live/API/web calls. No odds. No sportsbook. No betting language.
+No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
+No historical fixture changes.
+
 ## 2. Current route evidence
 
 Dashboard and report-preview route structure.
@@ -55,7 +64,7 @@ Optional supporting copy: `View the local deterministic MLB research preview.`
 
 Option A: Add one ordinary Next.js `Link` directly to `src/app/(app)/dashboard/page.tsx`
 - Evidence: Dashboard is a server component. Next.js `Link` is server-compatible.
-- The dashboard already imports React and renders semantic JSX.
+- The dashboard already renders semantic JSX without a client directive.
 - The page is small (76 lines) with no existing navigation or client logic.
 - No prior `next/link` usage exists anywhere in `src/app`.
 - Adding one import and one anchor element is the smallest possible slice.
