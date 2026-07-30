@@ -25,7 +25,11 @@ export function MLBReportPreviewRenderer({
 }: MLBReportPreviewRendererProps) {
   assertMLBReportPreviewUIAdapterDocument(document);
 
-  return <article>{document.nodes.map((node) => renderNode(node))}</article>;
+  return (
+    <article className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+      {document.nodes.map((node) => renderNode(node))}
+    </article>
+  );
 }
 
 function renderNode(node: MLBReportPreviewUIAdapterNode) {
@@ -51,10 +55,10 @@ function renderNode(node: MLBReportPreviewUIAdapterNode) {
 
 function renderHeader(node: MLBReportPreviewUIAdapterHeaderNode) {
   return (
-    <header key="header">
-      <h1>{node.title}</h1>
-      <p>{node.subtitle}</p>
-      <dl>
+    <header key="header" className="space-y-4">
+      <h1 className="text-2xl font-semibold">{node.title}</h1>
+      <p className="text-sm text-gray-600">{node.subtitle}</p>
+      <dl className="space-y-1">
         <div>
           <dt>Generated at</dt>
           <dd>{node.generatedAtLabel}</dd>
@@ -78,9 +82,9 @@ function renderMetadata(node: MLBReportPreviewUIAdapterMetadataNode) {
   const generatedAt = node.generatedAt ?? 'Not provided';
 
   return (
-    <section key="metadata">
-      <h2>Technical metadata</h2>
-      <dl>
+    <section key="metadata" className="space-y-3">
+      <h2 className="text-lg font-medium">Technical metadata</h2>
+      <dl className="space-y-1">
         <div>
           <dt>Handler version</dt>
           <dd>{handlerVersion}</dd>
@@ -116,11 +120,15 @@ function renderMetadata(node: MLBReportPreviewUIAdapterMetadataNode) {
 
 function renderSectionList(node: MLBReportPreviewUIAdapterSectionListNode) {
   if (node.sections.length === 0 && node.emptyState !== null) {
-    return <section key="section-list">{renderEmptyState(node.emptyState)}</section>;
+    return (
+      <section key="section-list" className="space-y-3">
+        {renderEmptyState(node.emptyState)}
+      </section>
+    );
   }
 
   return (
-    <section key="section-list">
+    <section key="section-list" className="space-y-3">
       {node.sections.map((section, sectionIndex) =>
         renderSection(section, sectionIndex),
       )}
@@ -137,8 +145,8 @@ function renderSection(
 
   if (body.length === 0 && node.emptyState !== null) {
     return (
-      <section key={`${heading}-${index}`}>
-        <h3>{heading}</h3>
+      <section key={`${heading}-${index}`} className="space-y-3">
+        <h3 className="text-lg font-medium">{heading}</h3>
         {renderEmptyState(node.emptyState)}
       </section>
     );
@@ -146,17 +154,17 @@ function renderSection(
 
   if (body.length === 1) {
     return (
-      <section key={`${heading}-${index}`}>
-        <h3>{heading}</h3>
+      <section key={`${heading}-${index}`} className="space-y-3">
+        <h3 className="text-lg font-medium">{heading}</h3>
         <p>{body[0]}</p>
       </section>
     );
   }
 
   return (
-    <section key={`${heading}-${index}`}>
-      <h3>{heading}</h3>
-      <ul>
+    <section key={`${heading}-${index}`} className="space-y-3">
+      <h3 className="text-lg font-medium">{heading}</h3>
+      <ul className="list-disc pl-5 space-y-1">
         {body.map((line, lineIndex) => (
           <li key={`${index}-${lineIndex}`}>{line}</li>
         ))}
@@ -167,18 +175,22 @@ function renderSection(
 
 function renderGameCardList(node: MLBReportPreviewUIAdapterGameCardListNode) {
   if (node.gameCards.length === 0 && node.emptyState !== null) {
-    return <section key="game-card-list">{renderEmptyState(node.emptyState)}</section>;
+    return (
+      <section key="game-card-list" className="space-y-3">
+        {renderEmptyState(node.emptyState)}
+      </section>
+    );
   }
 
   return (
-    <section key="game-card-list">
-      <h2>Game cards</h2>
-      <ul>
+    <section key="game-card-list" className="space-y-3">
+      <h2 className="text-lg font-medium">Game cards</h2>
+      <ul className="list-disc pl-5 space-y-1">
         {node.gameCards.map((card) => (
           <li key={card.gameId}>
             <article>
               <h3>{card.heading}</h3>
-              <dl>
+              <dl className="space-y-1">
                 <div>
                   <dt>Official date</dt>
                   <dd>{card.officialDate}</dd>
@@ -226,18 +238,22 @@ function renderGameCardList(node: MLBReportPreviewUIAdapterGameCardListNode) {
 
 function renderGameDetailList(node: MLBReportPreviewUIAdapterGameDetailListNode) {
   if (node.gameDetails.length === 0 && node.emptyState !== null) {
-    return <section key="game-detail-list">{renderEmptyState(node.emptyState)}</section>;
+    return (
+      <section key="game-detail-list" className="space-y-3">
+        {renderEmptyState(node.emptyState)}
+      </section>
+    );
   }
 
   return (
-    <section key="game-detail-list">
-      <h2>Game details</h2>
-      <ul>
+    <section key="game-detail-list" className="space-y-3">
+      <h2 className="text-lg font-medium">Game details</h2>
+      <ul className="list-disc pl-5 space-y-1">
         {node.gameDetails.map((detail) => (
           <li key={detail.gameId}>
             <article>
               <h3>{detail.heading}</h3>
-              <dl>
+              <dl className="space-y-1">
                 <div>
                   <dt>Available research modules</dt>
                   <dd>{detail.availableResearchModules}</dd>
@@ -282,13 +298,24 @@ function renderWarnings(node: MLBReportPreviewUIAdapterWarningsNode) {
   }
 
   if (node.warnings.length === 0 && node.emptyState !== null) {
-    return <section key="warnings">{renderEmptyState(node.emptyState)}</section>;
+    return (
+      <section
+        key="warnings"
+        className="rounded border border-gray-200 bg-gray-50 p-3"
+      >
+        {renderEmptyState(node.emptyState)}
+      </section>
+    );
   }
 
   return (
-    <section aria-label="Warnings" key="warnings">
-      <h2>Warnings</h2>
-      <ul>
+    <section
+      aria-label="Warnings"
+      key="warnings"
+      className="rounded border border-gray-200 bg-gray-50 p-3"
+    >
+      <h2 className="text-lg font-medium">Warnings</h2>
+      <ul className="list-disc pl-5 space-y-1">
         {node.warnings.map((warning, index) => (
           <li key={`${warning.code}-${index}`}>
             <strong>{warning.code}</strong>
@@ -302,9 +329,12 @@ function renderWarnings(node: MLBReportPreviewUIAdapterWarningsNode) {
 
 function renderLimitations(node: MLBReportPreviewUIAdapterLimitationsNode) {
   return (
-    <section key="limitations">
-      <h2>{node.heading}</h2>
-      <ul>
+    <section
+      key="limitations"
+      className="rounded border border-gray-200 bg-gray-50 p-3"
+    >
+      <h2 className="text-lg font-medium">{node.heading}</h2>
+      <ul className="list-disc pl-5 space-y-1">
         {node.notes.map((note, index) => (
           <li key={index}>{note}</li>
         ))}

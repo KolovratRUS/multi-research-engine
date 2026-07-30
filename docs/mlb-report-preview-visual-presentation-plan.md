@@ -377,3 +377,16 @@ Broader design system, visualizations, interactivity, live data ingestion, addit
 ## 23. Explicit non-goals
 
 Phase 6R does not implement any code changes. It does not add styling, tests, or documentation links. Phase 6R produces only this plan file and narrow documentation updates. Phase 6R must not style or modify the page <main>.
+
+## 24. Phase 6S implementation status
+
+- Option A implemented on `src/app/_components/mlb-report-preview/MLBReportPreviewRenderer.tsx`.
+- Focused presentation test file: `tests/prospective/mlb-report-preview-next-renderer-presentation.test.tsx`.
+- 25 focused tests.
+- The page `<main>` remains unchanged.
+- The renderer root `<article>` owns containment and outer spacing.
+- Production change is class-only: static Tailwind utility classes added to existing JSX elements.
+- Zero new production imports.
+- Warnings and limitations use neutral containers.
+- Limitations remain last.
+- No page, dashboard, layout, CSS, Tailwind configuration, package, fixture, golden, or script changes.

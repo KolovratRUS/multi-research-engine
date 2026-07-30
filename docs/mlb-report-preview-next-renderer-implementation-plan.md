@@ -575,7 +575,37 @@ No CSS, no route/page, no pipeline integration.
 Focused renderer test count:
 - 37 tests
 
-## 27. Deferred work
+## 27. Phase 6S completion notes
+
+Phase 6S implements the first narrow visual-presentation boundary on the local `/mlb/report-preview` renderer.
+
+Production file modified:
+- `src/app/_components/mlb-report-preview/MLBReportPreviewRenderer.tsx`
+
+Test file added:
+- `tests/prospective/mlb-report-preview-next-renderer-presentation.test.tsx`
+
+Boundaries:
+- Production change is class-only: static Tailwind utility classes added to existing JSX elements.
+- Zero new production imports.
+- No element, text, order, logic, data, type, or adapter change.
+- Page `<main>` is unchanged.
+- Renderer root `<article>` owns containment and outer spacing.
+- Header uses `space-y-4`.
+- Title uses `text-2xl font-semibold`.
+- Existing section headings use `text-lg font-medium`.
+- Warnings and limitations use neutral structural containers only.
+- Limitations remain last.
+
+Presentation test coverage:
+- 25 focused tests
+- exact renderer production import allowlist
+- approved-class allowlist
+- no prohibited analytical colour mapping
+- no inline styles, client directive, hooks, browser APIs, or event handlers
+- no visual labels tied to analytical values
+
+## 28. Deferred work
 
 - Route/page integration (planned in `docs/mlb-report-preview-next-page-integration-plan.md`);
 - pipeline integration or data fetching;
@@ -585,7 +615,7 @@ Focused renderer test count:
 - final CSS, Tailwind class design, or visual redesign;
 - deployment configuration.
 
-## 27. Explicit non-goals
+## 29. Explicit non-goals
 
 Phase 6L does not implement:
 

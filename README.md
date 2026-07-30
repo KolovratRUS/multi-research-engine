@@ -751,3 +751,18 @@ No live/API/web calls. No odds. No sportsbook. No betting language.
 No modelProbability. No picks. No predictions. No raw outcomes. No pitcher evidence. No actual starters.
 No historical fixture changes.
 See docs/mlb-report-preview-visual-presentation-plan.md.
+
+Phase 6S implements the first narrow visual-presentation boundary on the local `/mlb/report-preview` renderer.
+It touches only `src/app/_components/mlb-report-preview/MLBReportPreviewRenderer.tsx` and adds `tests/prospective/mlb-report-preview-next-renderer-presentation.test.tsx` with 25 focused presentation tests.
+The page `<main>` remains unchanged.
+The renderer root `<article>` owns containment and outer spacing.
+Production change is class-only: static Tailwind utility classes added to existing JSX elements.
+Zero new production imports.
+No element, text, order, logic, data, type, or adapter change.
+Warnings and limitations use neutral containers.
+Limitations remain last.
+No page, dashboard, layout, CSS, package, fixture, golden, or script changes.
+No modelProbability. No picks/predictions/betting advice. No raw outcomes. No pitcher evidence. No actual starters.
+No live/API/web or network standings/roster/schedule ingestion.
+No historical fixture changes.
+See docs/mlb-report-preview-visual-presentation-plan.md.
