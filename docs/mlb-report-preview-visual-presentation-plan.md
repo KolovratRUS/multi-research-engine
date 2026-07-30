@@ -390,3 +390,15 @@ Phase 6R does not implement any code changes. It does not add styling, tests, or
 - Warnings and limitations use neutral containers.
 - Limitations remain last.
 - No page, dashboard, layout, CSS, Tailwind configuration, package, fixture, golden, or script changes.
+
+## 25. Phase 6T browser acceptance plan
+
+Phase 6T is documentation-only for the local browser-level visual acceptance boundary.
+It does not implement browser automation, test code, or browser configuration.
+Option B — Manual local browser acceptance procedure — is selected.
+No browser was launched during Phase 6T.
+No browser automation package, configuration, script, or test was added.
+No source, test, package, configuration, CI, fixture, golden, or script file changed.
+Phase 6T does not verify visual appearance.
+It only defines a future manual local procedure.
+See `docs/mlb-report-preview-browser-acceptance-plan.md`.

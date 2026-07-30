@@ -766,3 +766,9 @@ No modelProbability. No picks/predictions/betting advice. No raw outcomes. No pi
 No live/API/web or network standings/roster/schedule ingestion.
 No historical fixture changes.
 See docs/mlb-report-preview-visual-presentation-plan.md.
+
+Phase 6T adds a documentation-only manual local browser-acceptance plan for the MLB report-preview UI.
+Option B is selected because no repository-owned automated browser-test infrastructure is available.
+No browser was launched and no source, test, package, configuration, CI, fixture, golden, or script file changed.
+Phase 6T does not verify visual appearance; it only defines a future local manual procedure.
+See docs/mlb-report-preview-browser-acceptance-plan.md.
