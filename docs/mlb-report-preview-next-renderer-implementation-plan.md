@@ -13,6 +13,8 @@ Immediate future implementation scope:
 
 Phase 6O implemented the first local Next.js MLB report-preview page integration slice described in this plan.
 
+Phase 6R is a documentation-only visual-presentation plan for this renderer. See `docs/mlb-report-preview-visual-presentation-plan.md`.
+
 ## 2. Repository renderer evidence
 
 Inspected files:
