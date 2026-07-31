@@ -787,3 +787,16 @@ No screenshots committed.
 No live, API, web, or external-network data used.
 No source, test, package, Prisma schema, migration, configuration, CI, fixture, golden, or script changes.
 See docs/mlb-report-preview-browser-acceptance-plan.md and docs/mlb-report-preview-visual-presentation-plan.md.
+
+Phase 7A is documentation-only.
+It plans the first Tennis sport-specific research module.
+The first Tennis contract is local, deterministic, synthetic, singles-only, and pre-match only.
+Phase 7A adds no Tennis runtime source, tests, fixtures, goldens, commands, routes, UI, API, database, live ingestion, predictions, selections, multis, staking, or result processing.
+The absence of those features is a Phase 7A scope statement, not a permanent product prohibition.
+Future Tennis modules may use time-safe sport data such as rankings and historical results when explicitly planned and protected against future-data leakage.
+Future Tennis outputs are intended to include odds-blind model probabilities, predicted winners, multi construction, and staking guidance.
+Sportsbook odds, betting prices, implied market probabilities, market movement, price-based value/edge, and payout information are permanently prohibited from influencing the engine.
+Locked MLB behavior and goldens remain unchanged.
+Phase 7B remains the planned next Tennis implementation slice when Tennis resumes.
+Tennis implementation is paused after Phase 7A while the project prioritizes completion of the full odds-blind MLB V1.
+See docs/tennis-research-module-boundary-plan.md.
