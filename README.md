@@ -819,4 +819,22 @@ Model-generated probability field names remain permitted for future forecasting 
 Phase 8B does not train a model, generate probabilities, select winners, build multis, recommend stakes, persist data, add routes, or deploy.
 Exactly 20 Phase 8B tests cover the contract and firewall.
 The next safe phase is Phase 8C: real MLB sport-data source evaluation and the provider-neutral canonical pregame snapshot contract.
-See docs/mlb-v1-prediction-contract-implementation.md.
+See docs/mlb-v1-sport-data-source-evaluation.md and docs/mlb-v1-pregame-snapshot-contract-implementation.md.
+
+Phase 8C evaluates current MLB sport-data source roles and implements the provider-neutral canonical pregame snapshot contract.
+
+The canonical snapshot represents one pregame MLB game and preserves stable game identity, cutoff timestamps, source provenance, starting-pitcher states, completeness, warnings, and provider-neutral sport-data sections.
+
+The snapshot rejects sportsbook and market-derived data through the permanent Phase 8B firewall.
+
+It also rejects provider response envelopes, credentials, model outputs, predictions, recommendations, multis, stakes, grading data, and target-game outcomes.
+
+Phase 8C performs no live API request, adds no provider adapter, stores no credentials, persists no snapshot, and schedules no ingestion.
+
+The source evaluation distinguishes verified facts, repository observations, inference, recommendation, and unknowns.
+
+Exactly 18 Phase 8C tests cover the canonical snapshot contract.
+
+The next safe phase is Phase 8D: historical labelled dataset construction and leakage protections.
+
+See docs/mlb-v1-sport-data-source-evaluation.md and docs/mlb-v1-pregame-snapshot-contract-implementation.md.
