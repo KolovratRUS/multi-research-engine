@@ -106,92 +106,92 @@ A canonical pregame snapshot source role must satisfy:
 
 ### 9.1 MLB Stats API
 
-**Source title:** MLB Stats API  
-**Organization:** Major League Baseball  
-**Official URL:** https://statsapi.mlb.com/  
-**Accessed:** 2026-07-31  
-**Available roles:** official schedule and game identity; team and player identity; starting-pitcher information; team and pitcher statistics; venue and park context.  
-**Assessment:** SUPPORTED for schedule, probable pitchers, venue, team stats, and pitcher stats as observed in the repository and inferred from endpoint paths. Advanced hitting/pitching splits are present but Statcast-range metrics are not all confirmed in the examined endpoints. Historical depth and point-in-time behavior are UNKNOWN because the API documentation is not publicly accessible without Okta registration as of access date.  
+**Source title:** MLB Stats API
+**Organization:** Major League Baseball
+**Official URL:** https://statsapi.mlb.com/
+**Accessed:** 2026-07-31
+**Available roles:** official schedule and game identity; team and player identity; starting-pitcher information; team and pitcher statistics; venue and park context.
+**Assessment:** SUPPORTED for schedule, probable pitchers, venue, team stats, and pitcher stats as observed in the repository and inferred from endpoint paths. Advanced hitting/pitching splits are present but Statcast-range metrics are not all confirmed in the examined endpoints. Historical depth and point-in-time behavior are UNKNOWN because the API documentation is not publicly accessible without Okta registration as of access date.
 **Cited evidence:** `src/lib/research-data/mlb/stats-api-client.ts` lines 193-311 demonstrate live use of schedule, probable pitchers, season stats, game logs, team stats, venue, and boxscore/feed/live endpoints. docs.statsapi.mlb.com present but gated behind Okta login on 2026-07-31.
 
 ### 9.2 MLB Stats API — undocumented public usage
 
-**Source title:** MLB Stats API undocumented public usage  
-**Organization:** Major League Baseball  
-**Official URL:** https://statsapi.mlb.com/  
-**Accessed:** 2026-07-31  
-**Available roles:** same as 9.1.  
-**Assessment:** UNKNOWN. Third-party community discussions suggest only individual, non-commercial, non-bulk use is permitted, but no official public terms page was accessible on 2026-07-31. Commercial-use and redistribution permissions must not be assumed.  
+**Source title:** MLB Stats API undocumented public usage
+**Organization:** Major League Baseball
+**Official URL:** https://statsapi.mlb.com/
+**Accessed:** 2026-07-31
+**Available roles:** same as 9.1.
+**Assessment:** UNKNOWN. Third-party community discussions suggest only individual, non-commercial, non-bulk use is permitted, but no official public terms page was accessible on 2026-07-31. Commercial-use and redistribution permissions must not be assumed.
 **Cited evidence:** Reddit discussion r/mlbdata references license ambiguity; MLB official terms page does not explicitly grant data-scraping permissions.
 
 ### 9.3 Retrosheet
 
-**Source title:** Retrosheet  
-**Organization:** Retrosheet  
-**Official URL:** https://www.retrosheet.org/  
-**Accessed:** 2026-07-31  
-**Available roles:** historical point-in-time reconstruction; historical team and player identity; historical game identity for regular season, All-Star, and postseason.  
-**Assessment:** SUPPORTED for historical game outcomes and play-by-play backfill. UNSUPPORTED for live pregame schedule, probable pitchers, lineups, and weather because Retrosheet publishes post-hoc data files, not a live API. Data coverage from 1910 onward with some gaps pre-1910 and a few missing games pre-1969 per verified notice text. Licensing explicitly permits commercial use and redistribution with attribution.  
+**Source title:** Retrosheet
+**Organization:** Retrosheet
+**Official URL:** https://www.retrosheet.org/
+**Accessed:** 2026-07-31
+**Available roles:** historical point-in-time reconstruction; historical team and player identity; historical game identity for regular season, All-Star, and postseason.
+**Assessment:** SUPPORTED for historical game outcomes and play-by-play backfill. UNSUPPORTED for live pregame schedule, probable pitchers, lineups, and weather because Retrosheet publishes post-hoc data files, not a live API. Data coverage from 1910 onward with some gaps pre-1910 and a few missing games pre-1969 per verified notice text. Licensing explicitly permits commercial use and redistribution with attribution.
 **Cited evidence:** Retrosheet notice text at https://www.retrosheet.org/notice.txt confirms commercial-use permission with attribution requirement. CSV and event file inventories from 1910-2025 verified on the site.
 
 ### 9.4 Baseball Savant / Statcast CSV
 
-**Source title:** Baseball Savant Statcast CSV Downloads  
-**Organization:** Major League Baseball  
-**Official URL:** https://baseballsavant.mlb.com/csv-docs  
-**Accessed:** 2026-07-31  
-**Available roles:** advanced tracking metrics; pitch-level and game-level Statcast data; player-level percentile rankings.  
-**Assessment:** PARTIAL for advanced metrics. The CSV download interface is official and documented. Commercial-use and programmatic access terms are UNKNOWN because no explicit API license beyond manual CSV export is documented at the verified URL.  
+**Source title:** Baseball Savant Statcast CSV Downloads
+**Organization:** Major League Baseball
+**Official URL:** https://baseballsavant.mlb.com/csv-docs
+**Accessed:** 2026-07-31
+**Available roles:** advanced tracking metrics; pitch-level and game-level Statcast data; player-level percentile rankings.
+**Assessment:** PARTIAL for advanced metrics. The CSV download interface is official and documented. Commercial-use and programmatic access terms are UNKNOWN because no explicit API license beyond manual CSV export is documented at the verified URL.
 **Cited evidence:** https://baseballsavant.mlb.com/csv-docs confirms CSV columns and query scope. No programmatic API endpoint license found on that page.
 
 ### 9.5 FanGraphs
 
-**Source title:** FanGraphs  
-**Organization:** FanGraphs  
-**Official URL:** https://www.fangraphs.com/about/terms-of-service  
-**Accessed:** 2026-07-31  
-**Available roles:** team statistics; pitcher statistics; projected and modeled metrics (excluded from snapshot); leaderboards.  
-**Assessment:** PARTIAL for sport-data display. FanGraphs terms explicitly prohibit reproduction, duplication, copying, sale, trade, resale, or commercial exploitation. Snapshot ingestion or redistribution is blocked by documented license.  
+**Source title:** FanGraphs
+**Organization:** FanGraphs
+**Official URL:** https://www.fangraphs.com/about/terms-of-service
+**Accessed:** 2026-07-31
+**Available roles:** team statistics; pitcher statistics; projected and modeled metrics (excluded from snapshot); leaderboards.
+**Assessment:** PARTIAL for sport-data display. FanGraphs terms explicitly prohibit reproduction, duplication, copying, sale, trade, resale, or commercial exploitation. Snapshot ingestion or redistribution is blocked by documented license.
 **Cited evidence:** https://www.fangraphs.com/about/terms-of-service states explicit commercial-use prohibition.
 
 ### 9.6 Sports Reference / Baseball-Reference
 
-**Source title:** Sports Reference Terms of Use  
-**Organization:** Sports Reference LLC  
-**Official URL:** https://www.sports-reference.com/termsofuse.html  
-**Accessed:** 2026-07-31  
-**Available roles:** historical box scores, standings, leaders, schedules.  
-**Assessment:** PARTIAL for historical reference. License is limited, personal, non-exclusive, non-sublicensable, non-assignable, non-transferable, and revocable. Commercial use and redistribution are not permitted.  
+**Source title:** Sports Reference Terms of Use
+**Organization:** Sports Reference LLC
+**Official URL:** https://www.sports-reference.com/termsofuse.html
+**Accessed:** 2026-07-31
+**Available roles:** historical box scores, standings, leaders, schedules.
+**Assessment:** PARTIAL for historical reference. License is limited, personal, non-exclusive, non-sublicensable, non-assignable, non-transferable, and revocable. Commercial use and redistribution are not permitted.
 **Cited evidence:** https://www.sports-reference.com/termsofuse.html section 5 and 19.
 
 ### 9.7 Sportradar MLB
 
-**Source title:** Sportradar MLB API  
-**Organization:** Sportradar  
-**Official URL:** https://developer.sportradar.com/baseball/reference/mlb-overview  
-**Accessed:** 2026-07-31  
-**Available roles:** schedule, standings, team/player identities, statistics, venue context, odds.  
-**Assessment:** SUPPORTED in principle but UNKNOWN for cost, historical point-in-time depth, and exact schema. Commercial license requires a paid agreement. Odds feeds are bundled and must be excluded under the odds-blind firewall.  
+**Source title:** Sportradar MLB API
+**Organization:** Sportradar
+**Official URL:** https://developer.sportradar.com/baseball/reference/mlb-overview
+**Accessed:** 2026-07-31
+**Available roles:** schedule, standings, team/player identities, statistics, venue context, odds.
+**Assessment:** SUPPORTED in principle but UNKNOWN for cost, historical point-in-time depth, and exact schema. Commercial license requires a paid agreement. Odds feeds are bundled and must be excluded under the odds-blind firewall.
 **Cited evidence:** Official developer portal overview as of 2026-07-31.
 
 ### 9.8 api-sports.io (RapidAPI)
 
-**Source title:** API Sports Baseball  
-**Organization:** API Sports  
-**Official URL:** https://api-sports.io/documentation/baseball/v1  
-**Accessed:** 2026-07-31  
-**Available roles:** schedule, teams, players, statistics, standings.  
-**Assessment:** PARTIAL. Documentation is public. Licensing is unknown for bulk historical point-in-time reconstruction. Requires RapidAPI key. Rate limits are documented per endpoint.  
+**Source title:** API Sports Baseball
+**Organization:** API Sports
+**Official URL:** https://api-sports.io/documentation/baseball/v1
+**Accessed:** 2026-07-31
+**Available roles:** schedule, teams, players, statistics, standings.
+**Assessment:** PARTIAL. Documentation is public. Licensing is unknown for bulk historical point-in-time reconstruction. Requires RapidAPI key. Rate limits are documented per endpoint.
 **Cited evidence:** https://api-sports.io/documentation/baseball/v1 documents X-RateLimit-Limit and X-RateLimit-Remaining headers.
 
 ### 9.9 Weather providers
 
-**Source title:** OpenWeather / WeatherAPI / NOAA  
-**Organization:** varies  
-**Official URLs:** https://openweathermap.org/, https://www.weatherapi.com/, https://www.noaa.gov/  
-**Accessed:** 2026-07-31  
-**Available roles:** venue weather context (temperature, precipitation, wind, humidity).  
-**Assessment:** NOT APPLICABLE for baseball identity or statistics. REQUIRED as a separate weather-only source role. Licensing and terms vary by provider; unspecified here because weather is a narrow, replaceable supplement.  
+**Source title:** OpenWeather / WeatherAPI / NOAA
+**Organization:** varies
+**Official URLs:** https://openweathermap.org/, https://www.weatherapi.com/, https://www.noaa.gov/
+**Accessed:** 2026-07-31
+**Available roles:** venue weather context (temperature, precipitation, wind, humidity).
+**Assessment:** NOT APPLICABLE for baseball identity or statistics. REQUIRED as a separate weather-only source role. Licensing and terms vary by provider; unspecified here because weather is a narrow, replaceable supplement.
 **Cited evidence:** General knowledge of public weather API and data providers; no commercial-use claims are made.
 
 ## 10. Schedule and official game identity
