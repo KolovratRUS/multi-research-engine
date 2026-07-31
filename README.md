@@ -810,3 +810,13 @@ Phase 8A adds no MLB V1 runtime implementation.
 Tennis remains safely planned and paused after Phase 7A.
 The next implementation phase is Phase 8B: the MLB prediction-domain contract and odds-contamination firewall.
 See docs/mlb-v1-prediction-system-boundary-plan.md and docs/mlb-v1-odds-contamination-audit.md.
+
+Phase 8B implements the MLB V1 prediction-domain contract and permanent odds-contamination firewall.
+The input contract represents one pregame MLB game targeting the official final winner, including extra innings.
+The contract includes stable game identity, timestamps, neutral-site and doubleheader metadata, data completeness, starting-pitcher availability states, and a recursively guarded research payload.
+The firewall rejects sportsbook, odds, price, payout, market-implied probability, market-movement, price-derived value/edge, and Kelly concepts.
+Model-generated probability field names remain permitted for future forecasting phases.
+Phase 8B does not train a model, generate probabilities, select winners, build multis, recommend stakes, persist data, add routes, or deploy.
+Exactly 20 Phase 8B tests cover the contract and firewall.
+The next safe phase is Phase 8C: real MLB sport-data source evaluation and the provider-neutral canonical pregame snapshot contract.
+See docs/mlb-v1-prediction-contract-implementation.md.
