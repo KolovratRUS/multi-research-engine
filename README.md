@@ -800,3 +800,13 @@ Locked MLB behavior and goldens remain unchanged.
 Phase 7B remains the planned next Tennis implementation slice when Tennis resumes.
 Tennis implementation is paused after Phase 7A while the project prioritizes completion of the full odds-blind MLB V1.
 See docs/tennis-research-module-boundary-plan.md.
+
+Phase 8A is documentation and audit only.
+It plans the complete odds-blind MLB V1 prediction product.
+MLB V1 is intended to include real sport-data ingestion, historical labelled datasets, leakage-safe forecasting, model-generated probabilities, predicted winners, multi construction, staking guidance, immutable recommendations, grading, performance reporting, UI, and production deployment.
+Sportsbook odds, betting prices, market-implied probabilities, market movement, price-derived value or edge, payout information, and Kelly staking are permanently prohibited.
+Model-generated probabilities are permitted and required.
+Phase 8A adds no MLB V1 runtime implementation.
+Tennis remains safely planned and paused after Phase 7A.
+The next implementation phase is Phase 8B: the MLB prediction-domain contract and odds-contamination firewall.
+See docs/mlb-v1-prediction-system-boundary-plan.md and docs/mlb-v1-odds-contamination-audit.md.
