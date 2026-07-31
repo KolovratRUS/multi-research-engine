@@ -498,3 +498,21 @@ Phase 6T does not:
 - claim overflow was tested
 - claim browser infrastructure exists unless repository evidence proves it
 - claim browser infrastructure is absent without inspecting packages, configuration, scripts, tests, and CI
+
+## 23. Phase 6U manual acceptance result
+
+- Date: 2026-07-30.
+- Command: npm run dev -- --hostname 127.0.0.1 --port 3000
+- Isolated temporary PostgreSQL: `/tmp/phase6u-browser-acceptance`, port 5433.
+- Existing port 5432 service: untouched.
+- Next.js server shutdown: completed after acceptance.
+- Temporary file cleanup: completed.
+- Owner-assisted Google Chrome acceptance.
+- Chrome DevTools Responsive mode.
+- Desktop viewport 1440 × 900 — dashboard PASS; report preview PASS.
+- Small-screen viewport 390 × 844 — dashboard PASS; report preview PASS.
+- No red application-console errors at either viewport.
+- No horizontal overflow observed at either viewport.
+- Limitations remained final at both viewports.
+- No source, test, package, Prisma schema, migration, configuration, CI, fixture, golden, or script changes.
+- No external-network data was used.

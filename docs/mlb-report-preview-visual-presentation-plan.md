@@ -392,7 +392,6 @@ Phase 6R does not implement any code changes. It does not add styling, tests, or
 - No page, dashboard, layout, CSS, Tailwind configuration, package, fixture, golden, or script changes.
 
 ## 25. Phase 6T browser acceptance plan
-
 Phase 6T is documentation-only for the local browser-level visual acceptance boundary.
 It does not implement browser automation, test code, or browser configuration.
 Option B — Manual local browser acceptance procedure — is selected.
@@ -402,3 +401,17 @@ No source, test, package, configuration, CI, fixture, golden, or script file cha
 Phase 6T does not verify visual appearance.
 It only defines a future manual local procedure.
 See `docs/mlb-report-preview-browser-acceptance-plan.md`.
+
+## 26. Phase 6U manual browser acceptance status
+
+- Date: 2026-07-30.
+- Owner-assisted Google Chrome acceptance.
+- Chrome DevTools Responsive mode.
+- Baseline: 819178297040d18fd913805878a382ab4aca3856.
+- Desktop 1440 × 900: dashboard PASS; report-preview PASS; no horizontal overflow; limitations final.
+- Small screen 390 × 844: dashboard PASS; report-preview PASS; no horizontal overflow; limitations final.
+- No red application-console errors observed.
+- Temporary isolated PostgreSQL on port 5433.
+- Temporary database removed afterward.
+- Existing port 5432 untouched.
+- No source, test, package, Prisma schema, migration, configuration, CI, fixture, golden, or script changes.

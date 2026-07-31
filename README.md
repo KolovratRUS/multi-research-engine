@@ -772,3 +772,18 @@ Option B is selected because no repository-owned automated browser-test infrastr
 No browser was launched and no source, test, package, configuration, CI, fixture, golden, or script file changed.
 Phase 6T does not verify visual appearance; it only defines a future local manual procedure.
 See docs/mlb-report-preview-browser-acceptance-plan.md.
+
+Phase 6U manual browser acceptance — completed 2026-07-30.
+Owner-assisted Google Chrome acceptance in Chrome DevTools Responsive mode.
+Baseline: 819178297040d18fd913805878a382ab4aca3856.
+Command: npm run dev -- --hostname 127.0.0.1 --port 3000
+Desktop viewport 1440 × 900 — dashboard PASS; report-preview PASS; no horizontal overflow; limitations final.
+Small viewport 390 × 844 — dashboard PASS; report-preview PASS; no horizontal overflow; limitations final.
+No red application-console errors observed.
+Isolated temporary PostgreSQL on port 5433.
+Temporary database removed afterward.
+Existing port 5432 untouched.
+No screenshots committed.
+No live, API, web, or external-network data used.
+No source, test, package, Prisma schema, migration, configuration, CI, fixture, golden, or script changes.
+See docs/mlb-report-preview-browser-acceptance-plan.md and docs/mlb-report-preview-visual-presentation-plan.md.
