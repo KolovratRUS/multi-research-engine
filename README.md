@@ -844,7 +844,20 @@ Each example validates one Phase 8C canonical pregame snapshot. Official final o
 Phase 8D performs no live ingestion, adds no provider adapter, stores no credentials, persists no dataset, and performs no feature extraction, training, inference, routing, or UI rendering.
 
 Exactly 20 Phase 8D tests cover the dataset contract.
+See docs/mlb-v1-historical-labelled-dataset-contract-implementation.md.
 
 The next safe phase is Phase 8E: the leakage-safe MLB feature-vector contract and deterministic feature-extraction boundary.
 
-See docs/mlb-v1-historical-labelled-dataset-contract-implementation.md.
+Phase 8E implements a declarative provider-neutral feature manifest.
+Feature extraction accepts only a validated Phase 8C pregame snapshot.
+The extractor cannot access Phase 8D labels or historical examples.
+Numerical values are preserved exactly.
+Boolean values are encoded as 1 or 0.
+Missing values use explicit REJECT or USE_DEFAULT policies.
+Feature ordering is deterministic and manifest-defined.
+Generated vectors contain only snapshot/game identity, cutoff metadata, feature IDs, finite values, and missing flags.
+The permanent odds-blind firewall remains active.
+Phase 8E performs no live ingestion, persistence, label joining, training, inference, probability generation, routes, or UI.
+Exactly 20 Phase 8E tests cover the boundary.
+The next safe phase is Phase 8F.
+See docs/mlb-v1-feature-vector-contract-implementation.md.
