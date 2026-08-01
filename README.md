@@ -835,6 +835,16 @@ The source evaluation distinguishes verified facts, repository observations, inf
 
 Exactly 18 Phase 8C tests cover the canonical snapshot contract.
 
-The next safe phase is Phase 8D: historical labelled dataset construction and leakage protections.
+The next safe phase is Phase 8D: provider-neutral historical labelled dataset construction and leakage protections.
 
-See docs/mlb-v1-sport-data-source-evaluation.md and docs/mlb-v1-pregame-snapshot-contract-implementation.md.
+Phase 8D implements the historical labelled dataset contract with exact reconstruction cutoff equality, chronological train/validation/test splits, embargo windows, duplicate-game prevention, and permanent odds-blind boundaries.
+
+Each example validates one Phase 8C canonical pregame snapshot. Official final outcomes are permitted only inside `label`. Outcome fields are rejected at the dataset root, split policy, example root, reconstruction, label source, and snapshot levels.
+
+Phase 8D performs no live ingestion, adds no provider adapter, stores no credentials, persists no dataset, and performs no feature extraction, training, inference, routing, or UI rendering.
+
+Exactly 20 Phase 8D tests cover the dataset contract.
+
+The next safe phase is Phase 8E: the leakage-safe MLB feature-vector contract and deterministic feature-extraction boundary.
+
+See docs/mlb-v1-historical-labelled-dataset-contract-implementation.md.
