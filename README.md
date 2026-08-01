@@ -879,3 +879,20 @@ Phase 8F performs no live ingestion, persistence, training, inference, probabili
 Exactly 20 Phase 8F tests cover the boundary.
 The next safe phase is Phase 8G.
 See docs/mlb-v1-training-matrix-contract-implementation.md.
+
+Phase 8G implements the deterministic MLB model-training configuration contract.
+It declares one L2 binary logistic-regression algorithm family.
+It declares deterministic batch-gradient-descent parameters without executing fitting.
+It preserves raw finite feature values and Phase 8E missing indicators.
+It validates a Phase 8F training matrix before constructing an evaluation plan.
+The plan preserves feature IDs, chronological splits, windows, embargoes, and counts.
+TRAIN is reserved for future fitting.
+VALIDATION is reserved for future configuration selection using LOG_LOSS.
+TEST remains held out until the configuration is locked.
+Reported future metrics are LOG_LOSS, BRIER_SCORE, and ROC_AUC.
+The plan contains no rows, targets, labels, scores, winners, fitted parameters, or predictions.
+The permanent odds-blind firewall remains active.
+Phase 8G performs no live ingestion, persistence, fitting, inference, probability generation, routes, or UI.
+Exactly 20 Phase 8G tests cover the boundary.
+The next safe phase is Phase 8H.
+See docs/mlb-v1-model-training-configuration-evaluation-plan-implementation.md.
