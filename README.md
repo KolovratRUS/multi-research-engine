@@ -861,3 +861,21 @@ Phase 8E performs no live ingestion, persistence, label joining, training, infer
 Exactly 20 Phase 8E tests cover the boundary.
 The next safe phase is Phase 8F.
 See docs/mlb-v1-feature-vector-contract-implementation.md.
+
+The next safe phase is Phase 8F: the leakage-safe MLB training-matrix contract and deterministic feature-label join boundary.
+
+Phase 8F implements a leakage-safe training-matrix boundary.
+A Phase 8E feature manifest and Phase 8D historical dataset are validated first.
+Each Phase 8E feature vector is extracted only from its Phase 8C pregame snapshot.
+Official labels are joined only after feature extraction succeeds.
+Home wins encode as 1 and away wins encode as 0.
+Matrix rows exclude final scores, winner identity, label timestamps, and label provenance.
+TRAIN, VALIDATION, and TEST assignments remain chronological.
+Split windows and embargo boundaries are preserved.
+Every row has one consistent feature schema.
+Matrix ordering is deterministic.
+The permanent odds-blind firewall remains active.
+Phase 8F performs no live ingestion, persistence, training, inference, probability generation, routes, or UI.
+Exactly 20 Phase 8F tests cover the boundary.
+The next safe phase is Phase 8G.
+See docs/mlb-v1-training-matrix-contract-implementation.md.
