@@ -896,3 +896,20 @@ Phase 8G performs no live ingestion, persistence, fitting, inference, probabilit
 Exactly 20 Phase 8G tests cover the boundary.
 The next safe phase is Phase 8H.
 See docs/mlb-v1-model-training-configuration-evaluation-plan-implementation.md.
+
+Phase 8H implements the deterministic MLB logistic-regression fit and validation contract.
+Configuration, evaluation plan, and training matrix are validated first.
+TRAIN alone influences fitting.
+VALIDATION alone influences aggregate evaluation.
+TEST remains completely held out.
+Initialization uses zero coefficients and zero intercept.
+Fitting uses deterministic full-batch gradient descent.
+Raw values and missing indicators use separate coefficients.
+Aggregate validation metrics are LOG_LOSS, BRIER_SCORE, and ROC_AUC.
+No row-level probabilities or predictions are returned.
+No odds or market inputs are used.
+The permanent odds-blind firewall remains active.
+Phase 8H adds no live ingestion, persistence, inference route, recommendation, multi, staking, grading, route, or UI.
+Exactly 20 Phase 8H tests cover the boundary.
+Phase 8I is next.
+See docs/mlb-v1-deterministic-logistic-regression-fit-validation-implementation.md.
