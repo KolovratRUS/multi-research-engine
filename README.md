@@ -911,5 +911,21 @@ No odds or market inputs are used.
 The permanent odds-blind firewall remains active.
 Phase 8H adds no live ingestion, persistence, inference route, recommendation, multi, staking, grading, route, or UI.
 Exactly 20 Phase 8H tests cover the boundary.
-Phase 8I is next.
+The next safe phase is Phase 8I.
 See docs/mlb-v1-deterministic-logistic-regression-fit-validation-implementation.md.
+
+Phase 8I implements held-out TEST evaluation for a frozen Phase 8H model.
+The Phase 8H fit-validation result, Phase 8G evaluation plan, and Phase 8F training matrix are validated first.
+TRAIN and VALIDATION row content are not revisited.
+Only TEST rows influence TEST metrics.
+The frozen model is not fitted or modified.
+TEST aggregate metrics are LOG_LOSS, BRIER_SCORE, and ROC_AUC.
+No row-level TEST probabilities or predictions are returned.
+The output includes an offline release-candidate record.
+The release candidate is not persisted, registered, served, or deployed.
+No odds or betting-market inputs are used.
+The permanent odds-blind firewall remains active.
+Phase 8I adds no live ingestion, live inference, recommendation, multi, staking, grading, route, or UI.
+Exactly 20 Phase 8I tests cover the boundary.
+The next safe phase is Phase 8J.
+See docs/mlb-v1-held-out-test-evaluation-model-release-implementation.md.
