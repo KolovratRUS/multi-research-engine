@@ -929,3 +929,28 @@ Phase 8I adds no live ingestion, live inference, recommendation, multi, staking,
 Exactly 20 Phase 8I tests cover the boundary.
 The next safe phase is Phase 8J.
 See docs/mlb-v1-held-out-test-evaluation-model-release-implementation.md.
+Phase 8J implements pure offline single-game MLB pregame inference.
+The Phase 8I combined released-model result is validated first.
+Its nested Phase 8H fit-validation result is validated first.
+Its nested Phase 8I TEST evaluation is validated first.
+Its nested Phase 8I release record is validated first.
+Invalid nested release status maps to RELEASE_STATUS_MISMATCH.
+Phase 8C owns team distinctness; invalid team snapshots map to SNAPSHOT_INVALID.
+Phase 8E validates successful extracted vectors; extraction failure maps to one FEATURE_EXTRACTION_FAILED issue.
+Phase 8J emits neither TEAM_IDENTITY_MISMATCH nor FEATURE_VECTOR_INVALID.
+Nested model, TEST, release, and evaluation IDs must agree.
+Phase 8E leakage-safe feature extraction is performed.
+The Phase 8H model remains frozen and unmodified.
+Raw and missing-indicator channels use separate coefficients.
+A stable sigmoid produces the home-win probability.
+Away probability is the exact complement.
+HOME_AT_OR_ABOVE_0_5_V1 is the deterministic decision policy.
+The output contains the predicted side and predicted team ID.
+No feature vector, raw score, validation metric, or TEST metric is returned.
+No odds or market input is used.
+The permanent odds-blind firewall remains active.
+Phase 8J does not clamp finite scores.
+Phase 8J adds no ingestion, persistence, route, UI, recommendation, multi, staking, grading, or deployment.
+Exactly 20 Phase 8J tests cover the boundary.
+The next safe phase is Phase 8K.
+See docs/mlb-v1-offline-pregame-inference-implementation.md.
