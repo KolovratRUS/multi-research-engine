@@ -981,3 +981,24 @@ Ownership:
 - Duplicate game IDs are rejected separately.
 - Doubleheaders remain representable through distinct game IDs.
 - Per-game `dataCutoffAt` values are preserved and may differ.
+
+Phase 8L constructs deterministic offline MLB single-pick recommendation sets.
+Its only model input is a validated Phase 8K prediction slate.
+It does not rerun inference or rebuild the prediction slate.
+It emits exactly one recommendation per validated prediction.
+It applies no confidence threshold, suppression rule, or abstention.
+Recommended side and team exactly preserve the Phase 8J prediction.
+Model confidence is the recommended-side probability.
+Model uncertainty is the opposite-side probability.
+Recommendations are ordered by confidence descending and then deterministic identifiers.
+Exact 0.5 remains a HOME recommendation under the locked Phase 8J policy.
+The output is odds-independent.
+Phase 8L adds no multis, staking, grading, persistence, routes, or UI.
+Exactly 20 Phase 8L tests cover the boundary.
+The next safe phase is Phase 8M.
+See docs/mlb-v1-offline-single-pick-recommendation-implementation.md.
+
+`recommendationId` is deterministically derived from `inferenceId`.
+Repeated inference identity therefore repeats recommendation identity.
+Phase 8L reports that collision as `DUPLICATE_RECOMMENDATION_ID`.
+Phase 8L does not emit `DUPLICATE_INFERENCE_ID`.
