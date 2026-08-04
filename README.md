@@ -954,3 +954,30 @@ Phase 8J adds no ingestion, persistence, route, UI, recommendation, multi, staki
 Exactly 20 Phase 8J tests cover the boundary.
 The next safe phase is Phase 8K.
 See docs/mlb-v1-offline-pregame-inference-implementation.md.
+Phase 8K constructs deterministic offline daily MLB prediction slates.
+Inputs are complete validated Phase 8J per-game inference outputs.
+Phase 8K does not rerun inference.
+Phase 8K does not read snapshots, features, coefficients, VALIDATION metrics, or TEST metrics.
+All entries in one slate share exact release/model/manifest lineage and official date.
+Per-game data cutoffs are preserved and may differ.
+Canonical order is gameId, then snapshotId, then inferenceId.
+Duplicate inference and game IDs are rejected.
+Doubleheaders remain representable through distinct game IDs.
+The slate is odds-independent.
+Phase 8K adds no recommendations, multis, stakes, grading, persistence, routes, or UI.
+Exactly 20 Phase 8K tests cover the boundary.
+The next safe phase is Phase 8L.
+See docs/mlb-v1-offline-prediction-slate-implementation.md.
+
+Ownership:
+- Phase 8J deterministically derives each `inferenceId` from `releaseId` and `snapshotId`.
+- Every entry in one Phase 8K slate shares the same `releaseId`.
+- Therefore, a repeated `snapshotId` necessarily repeats `inferenceId`.
+- Repeated snapshot identity is rejected as `DUPLICATE_INFERENCE_ID`.
+- Phase 8K does not emit `DUPLICATE_SNAPSHOT_ID`.
+- Phase 8J owns the fixed `algorithm`, `decisionPolicy`, `sport`, `target`, and `targetEncoding` literals.
+- Corruption of a fixed Phase 8J literal maps to `INFERENCE_INVALID`.
+- Phase 8K owns reachable homogeneity for `releaseId`, `modelId`, `planId`, `matrixId`, `configId`, and `manifestId`.
+- Duplicate game IDs are rejected separately.
+- Doubleheaders remain representable through distinct game IDs.
+- Per-game `dataCutoffAt` values are preserved and may differ.
