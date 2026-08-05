@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertNoOddsContamination,
   isProhibitedOddsKey,
+  isProhibitedOddsBoundaryKey,
   type OddsContaminationViolation,
 } from '@/prediction/firewall/odds-contamination-guard';
 
@@ -179,15 +180,74 @@ describe('odds-contamination-guard', () => {
   });
 
   it('rejects expected value, value edge and edge fields', () => {
-    const value = {
-      expectedValue: 0,
-      valueEdge: 0.1,
-      edge: 0.05,
-    };
+    const keys = [
+      'sportsbook',
+      'odds',
+      'price',
+      'line',
+      'market',
+      'edge',
+      'value',
+      'stake',
+      'grade',
+      'safeMetadata',
+    ];
+    for (const key of keys) {
+      expect(isProhibitedOddsKey(key)).toBe(
+        key === 'sportsbook' ||
+        key === 'odds' ||
+        key === 'price' ||
+        key === 'edge',
+      );
+      expect(isProhibitedOddsBoundaryKey(key)).toBe(
+        key === 'sportsbook' ||
+        key === 'odds' ||
+        key === 'price' ||
+        key === 'line' ||
+        key === 'market' ||
+        key === 'edge' ||
+        key === 'value',
+      );
+    }
 
-    expect(() => assertNoOddsContamination(value)).toThrow(
-      'ODDS_CONTAMINATION detected',
-    );
+    const globalProhibitedKeys = [
+      'sportsbook',
+      'odds',
+      'price',
+      'edge',
+    ];
+    for (const key of globalProhibitedKeys) {
+      expect(() => assertNoOddsContamination({ [key]: 0 })).toThrow(
+        'ODDS_CONTAMINATION detected',
+      );
+    }
+
+    const boundaryOnlyKeys = [
+      'line',
+      'market',
+      'value',
+    ];
+    for (const key of boundaryOnlyKeys) {
+      expect(() => assertNoOddsContamination({ [key]: 0 })).not.toThrow();
+    }
+
+    expect(() => assertNoOddsContamination({ stake: 0 })).not.toThrow();
+    expect(() => assertNoOddsContamination({ grade: 0 })).not.toThrow();
+    expect(() => assertNoOddsContamination({ safeMetadata: 0 })).not.toThrow();
+
+    expect(() =>
+      assertNoOddsContamination({
+        vector: {
+          values: [
+            {
+              featureId: 'f-1',
+              value: 1,
+              wasMissing: false,
+            },
+          ],
+        },
+      }),
+    ).not.toThrow();
   });
 
   it('rejects Kelly and Kelly-fraction variants', () => {
@@ -417,6 +477,7 @@ describe('odds-contamination-guard', () => {
     expect(exportedNames).toEqual([
       'OddsContaminationViolation',
       'isProhibitedOddsKey',
+      'isProhibitedOddsBoundaryKey',
       'assertNoOddsContamination',
     ]);
 

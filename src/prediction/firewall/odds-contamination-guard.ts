@@ -66,6 +66,12 @@ const NORMALIZED_PROHIBITED_KEYS = new Set<string>([
   'marketavailable',
 ]);
 
+const NORMALIZED_BOUNDARY_ONLY_PROHIBITED_KEYS = new Set<string>([
+  'line',
+  'market',
+  'value',
+]);
+
 const PROHIBITED_STRING_VALUES = new Set<string>([
   'sportsbook',
   'bookmaker',
@@ -106,6 +112,16 @@ function isPlainObject(input: unknown): input is Record<string, unknown> {
 
 export function isProhibitedOddsKey(key: string): boolean {
   return NORMALIZED_PROHIBITED_KEYS.has(normalizeKey(key));
+}
+
+export function isProhibitedOddsBoundaryKey(key: string): boolean {
+  const normalizedKey = normalizeKey(key);
+
+  if (NORMALIZED_PROHIBITED_KEYS.has(normalizedKey)) {
+    return true;
+  }
+
+  return NORMALIZED_BOUNDARY_ONLY_PROHIBITED_KEYS.has(normalizedKey);
 }
 
 function appendViolation(

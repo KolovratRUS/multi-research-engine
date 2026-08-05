@@ -1002,3 +1002,50 @@ See docs/mlb-v1-offline-single-pick-recommendation-implementation.md.
 Repeated inference identity therefore repeats recommendation identity.
 Phase 8L reports that collision as `DUPLICATE_RECOMMENDATION_ID`.
 Phase 8L does not emit `DUPLICATE_INFERENCE_ID`.
+
+Phase 8M constructs deterministic offline MLB multi-candidate sets.
+Its only production input is a validated Phase 8L single-pick recommendation set.
+It does not rerun inference.
+It does not rebuild Phase 8J, 8K, or 8L artifacts.
+It preserves exact Phase 8L recommendation object references inside newly allocated candidate-leg arrays.
+It constructs every unique unordered two-leg combination exactly once.
+It constructs every unique unordered three-leg combination exactly once.
+It constructs no other leg count.
+It applies no threshold, filtering, suppression, cap, limit, preference, or abstention.
+One source recommendation produces a valid empty candidate array.
+Candidate totals are:
+- one source → zero candidates;
+- two sources → one candidate;
+- three sources → four candidates;
+- four sources → ten candidates;
+- five sources → twenty candidates.
+`candidateId` is deterministically derived from the candidate leg recommendation-ID combination.
+Repeated valid candidate combination therefore repeats candidate identity.
+Phase 8M reports that collision as `DUPLICATE_CANDIDATE_ID`.
+Phase 8M does not emit `DUPLICATE_CANDIDATE_COMBINATION`.
+Phase 8M does not emit `DUPLICATE_LEG_INFERENCE_ID`.
+Repeated recommendation identity inside one candidate is owned by `DUPLICATE_LEG_RECOMMENDATION_ID`.
+Distinct recommendation identities referring to the same game are owned by `DUPLICATE_LEG_GAME_ID`.
+Source recommendation IDs use ascending JavaScript code-unit order.
+Candidate legs use game ID ascending, snapshot ID ascending, inference ID ascending.
+Candidates use minimum confidence descending, mean confidence descending, leg count ascending, candidate ID ascending.
+`minimumLegConfidence` is the exact minimum selected-side confidence.
+`meanLegConfidence` is the arithmetic mean.
+`maximumLegUncertainty` is the exact maximum leg uncertainty.
+mean confidence is not a calibrated joint probability.
+Validated Phase 8L selected-side confidence is never below `0.5`.
+Phase 8M remains odds-blind.
+The shared firewall owns odds-contamination classification.
+The recursive shared firewall retains its locked baseline-compatible global inventory.
+`isProhibitedOddsKey` owns globally unambiguous recursive concepts.
+Phase 8M uses the shared `isProhibitedOddsBoundaryKey` helper for root-level odds concepts.
+The shared boundary helper additionally owns exact normalized `line`, `market`, and `value`.
+Phase 8M contains no local odds vocabulary.
+Legitimate nested generic fields such as feature-vector `value` are not globally treated as betting concepts solely because of their exact key name.
+Root sportsbook, odds, price, line, market, edge, and value remain `ODDS_CONTAMINATION`.
+Root stake and grade remain `PROHIBITED_CONCEPT`.
+Phase 8M does not select final multis, calculate stakes, grade outcomes, persist output, add routes, add UI, use sportsbook prices, use implied probability, use market comparison, use value or edge, or calculate payout or joint probability.
+The shared firewall test file contains exactly 10 explicit tests.
+Phase 8M contains exactly 20 explicit tests.
+See docs/mlb-v1-offline-multi-candidate-implementation.md.
+The recommended next phase is Phase 8N — Implement deterministic offline MLB multi recommendation selection from validated multi-candidate sets without staking, routes, or UI.
