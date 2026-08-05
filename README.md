@@ -1069,3 +1069,13 @@ Phase 8N contains exactly 20 explicit tests.
 See docs/mlb-v1-offline-multi-recommendation-implementation.md.
 
 The recommended next phase is Phase 8O — Implement deterministic confidence/risk staking guidance from validated multi recommendations without routes or UI.
+
+Phase 8O creates deterministic offline MLB multi-risk guidance from a validated embedded Phase 8N multi-recommendation set. It uses only validated model-owned Phase 8N information. Its exact policy is `MODEL_CONFIDENCE_CONCENTRATION_RISK_UNITS_V1`. All output units are abstract integer risk units. No currency, bankroll, monetary amount, sportsbook odds, price, line, edge, value, payout, profit, return, route, UI, persistence, or current time is allowed.
+
+Phase 8O preserves the exact `sourceMultiRecommendationSet` reference embedded from the Phase 8N multi-recommendation set. It derives guidance entries solely from `sourceMultiRecommendationSet.selectedRecommendations`. It never rebuilds upstream artifacts. Confidence bands use exact direct comparisons against validated Phase 8M `minimumLegConfidence` and `meanLegConfidence` values. The mean-confidence bonus is at most one unit. The three-leg penalty subtracts one unit. Maximum uncertainty is never double-counted. `sharedRecommendationIds` are derived incrementally in JavaScript code-unit order. The portfolio cap is six units. Higher-index-first reduction is applied when the cap is exceeded. Zero-unit identities and references are preserved exactly. Structural clones are accepted without mutation.
+
+The shared firewall owns root odds contamination via `isProhibitedOddsBoundaryKey` and recursive `assertNoOddsContamination`. Root `stake` and `grade` remain Phase 8O-owned `PROHIBITED_CONCEPT` outcomes. Unsupported non-firewall-owned root fields are classified as `UNKNOWN_FIELD`. The builder accepts `unknown`, validates the Phase 8N source before inspection, allocates new Phase 8O structures, validates generated output, and returns no partial output.
+
+Phase 8O contains exactly twenty explicit tests. See `docs/mlb-v1-offline-multi-risk-guidance-implementation.md`.
+
+Phase 8P — Implement deterministic timestamped MLB recommendation bundle composition from validated single-pick, multi-recommendation, and risk-guidance artifacts without routes, UI, grading, or persistence.
