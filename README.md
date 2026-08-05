@@ -1049,3 +1049,23 @@ The shared firewall test file contains exactly 10 explicit tests.
 Phase 8M contains exactly 20 explicit tests.
 See docs/mlb-v1-offline-multi-candidate-implementation.md.
 The recommended next phase is Phase 8N — Implement deterministic offline MLB multi recommendation selection from validated multi-candidate sets without staking, routes, or UI.
+
+Phase 8N selects deterministic offline MLB multi recommendations from a validated embedded Phase 8M candidate set.
+The source candidate set is embedded so the artifact is self-contained.
+Selection policy is `BEST_CANDIDATE_PER_LEG_COUNT_V1`.
+The first canonical two-leg candidate is selected when present.
+The first canonical three-leg candidate is selected when present.
+Selection preserves source-relative Phase 8M order.
+No threshold or abstention is applied.
+Overlap between distinct selected candidates is valid and deferred to Phase 8O.
+Selected recommendation identity reuses `candidateId`.
+The builder preserves exact Phase 8M candidate-set, candidate, leg, and Phase 8L recommendation references.
+Public validation accepts structural equivalents and does not require reference equality.
+Root sportsbook, odds, price, line, market, edge, and value map to `ODDS_CONTAMINATION`.
+Root stake and grade map to `PROHIBITED_CONCEPT`.
+Phase 8N contains no local odds vocabulary.
+It does not calculate joint probability, payout, stake, grading, routes, UI, persistence, or live inference.
+Phase 8N contains exactly 20 explicit tests.
+See docs/mlb-v1-offline-multi-recommendation-implementation.md.
+
+The recommended next phase is Phase 8O — Implement deterministic confidence/risk staking guidance from validated multi recommendations without routes or UI.
