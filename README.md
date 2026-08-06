@@ -1079,3 +1079,11 @@ The shared firewall owns root odds contamination via `isProhibitedOddsBoundaryKe
 Phase 8O contains exactly twenty explicit tests. See `docs/mlb-v1-offline-multi-risk-guidance-implementation.md`.
 
 Phase 8P — Implement deterministic timestamped MLB recommendation bundle composition from validated single-pick, multi-recommendation, and risk-guidance artifacts without routes, UI, grading, or persistence.
+
+Phase 8P creates deterministic timestamped offline MLB recommendation bundles from validated upstream artifacts. It uses only validated model-owned information. Its exact policy is `ALL_VALIDATED_ARTIFACTS_V1`. The bundle is self-contained, explicitly timestamped, and lineage-consistent. No currency, bankroll, monetary amount, sportsbook odds, price, line, edge, value, payout, profit, return, route, UI, persistence, grading, or current time is allowed.
+
+Phase 8P preserves the exact `sourceSinglePickRecommendationSet`, `sourceMultiRecommendationSet`, and `sourceMultiRiskGuidanceSet` references. It derives the deterministic bundle identity from the embedded source identities and the explicit caller-owned `recommendedAt`. It never rebuilds upstream artifacts. The shared firewall owns root odds contamination via `isProhibitedOddsBoundaryKey` and recursive `assertNoOddsContamination`. Root `stake` and `grade` remain `PROHIBITED_CONCEPT` outcomes. Unsupported non-firewall-owned root fields are classified as `UNKNOWN_FIELD`. The builder accepts `unknown`, validates each upstream source before bundle semantics, allocates new Phase 8P structures, validates generated output, and returns no partial output.
+
+Phase 8P contains exactly twenty explicit tests. See `docs/mlb-v1-offline-recommendation-bundle-implementation.md`.
+
+Phase 8Q — Implement deterministic offline grading of timestamped MLB recommendation bundles against validated official final-game outcomes without routes, UI, persistence, or performance aggregation.
