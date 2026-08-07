@@ -1086,4 +1086,8 @@ Phase 8P preserves the exact `sourceSinglePickRecommendationSet`, `sourceMultiRe
 
 Phase 8P contains exactly twenty explicit tests. See `docs/mlb-v1-offline-recommendation-bundle-implementation.md`.
 
-Phase 8Q — Implement deterministic offline grading of timestamped MLB recommendation bundles against validated official final-game outcomes without routes, UI, persistence, or performance aggregation.
+Phase 8Q — Implement deterministic offline validation and publication of caller-supplied official-final MLB game outcomes without recommendations, grading, routes, UI, persistence, or performance aggregation.
+
+Phase 8Q validates caller-supplied official-final MLB game facts into a standalone deterministic publication contract (`MLBOfflineOfficialFinalGameOutcomeSet`) that is independent of the historical training dataset. Every entry must use `OFFICIAL_FINAL`, canonical Gregorian dates, canonical UTC timestamps, consistent home and away scores, a matching winning team, valid chronology, and explicit source provenance. Outcome identities bind every canonical result and provenance field, while the root identity binds the complete canonically ordered publication. Counts and ID mappings are validated deterministically, and empty publications are valid. No recommendation, grading, aggregation, network, clock, randomness, route, UI, persistence, odds, or monetary concept is allowed. Phase 8Q contains exactly twenty explicit tests. See `docs/mlb-v1-offline-official-final-game-outcome-set-implementation.md`.
+
+Phase 8R — Implement deterministic offline grading of timestamped MLB recommendation bundles against validated Phase 8Q official final-game outcome sets without routes, UI, persistence, or performance aggregation.
