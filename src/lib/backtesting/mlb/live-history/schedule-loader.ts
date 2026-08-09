@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { MLBHistoricalCacheConfig, CanonicalHistoricalScheduleGame, CanonicalHistoricalGameStatus, HistoricalStarterSource, CacheProvenance, MLBHistoricalCache } from './types';
+import type { MLBHistoricalCacheConfig, CanonicalHistoricalScheduleGame, CanonicalHistoricalGameStatus, HistoricalStarterSource, CacheProvenance, MLBHistoricalCache, MLBHistoricalCacheWithProvenance } from './types';
 import type { MLBHistoricalHttpClient } from './client';
 import { MLBScheduleResponseSchema } from './schemas';
 import { buildHistoricalCacheKey } from './cache';
@@ -15,7 +15,8 @@ export function createScheduleLoader(options: ScheduleLoaderOptions) {
   const { client, cache, forceRefresh } = options;
   const getNow = options.now ?? (() => new Date());
   const endpoint = '/api/v1/schedule';
-  const inFlight = new Map<string, Promise<z.infer<typeof MLBScheduleResponseSchema>>>();
+  const provenanceCapable = isMLBHistoricalCacheWithProvenance(cache);
+  const inFlight = new Map<string, Promise<{ readonly response: z.infer<typeof MLBScheduleResponseSchema>; readonly provenance: CacheProvenance }>>();
 
   function makeKey(params: Record<string, unknown>): string {
     return buildHistoricalCacheKey(endpoint, params);
@@ -27,10 +28,10 @@ export function createScheduleLoader(options: ScheduleLoaderOptions) {
       const useForceRefresh = options?.forceRefresh ?? forceRefresh;
       const key = makeKey(params);
 
-      if (!useForceRefresh) {
-        const cached = await cache.get(endpoint, params, MLBScheduleResponseSchema);
+      if (!useForceRefresh && provenanceCapable) {
+        const cached = await cache.getWithProvenance(endpoint, params, MLBScheduleResponseSchema);
         if (cached) {
-          return parseScheduleResponse(cached);
+          return parseScheduleResponse(cached.value, cached.provenance);
         }
       }
 
@@ -39,19 +40,20 @@ export function createScheduleLoader(options: ScheduleLoaderOptions) {
         pending = (async () => {
           const response = await client.getJson(endpoint, params, MLBScheduleResponseSchema);
           const now = getNow();
-          await cache.set(endpoint, params, response, {
+          const acquisitionProvenance = {
             endpoint,
             fetchedAt: now,
             sourceTimestamp: null,
-          });
-          return response;
+          };
+          await cache.set(endpoint, params, response, acquisitionProvenance);
+          return { response, provenance: acquisitionProvenance };
         })();
         inFlight.set(key, pending);
       }
 
       try {
-        const response = await pending;
-        return parseScheduleResponse(response);
+        const { response, provenance } = await pending;
+        return parseScheduleResponse(response, provenance);
       } finally {
         if (inFlight.get(key) === pending) {
           inFlight.delete(key);
@@ -61,7 +63,16 @@ export function createScheduleLoader(options: ScheduleLoaderOptions) {
   };
 }
 
-function parseScheduleResponse(response: z.infer<typeof MLBScheduleResponseSchema>): CanonicalHistoricalScheduleGame[] {
+function isMLBHistoricalCacheWithProvenance(
+  cache: MLBHistoricalCache,
+): cache is MLBHistoricalCacheWithProvenance {
+  return typeof (cache as MLBHistoricalCacheWithProvenance).getWithProvenance === 'function';
+}
+
+function parseScheduleResponse(
+  response: z.infer<typeof MLBScheduleResponseSchema>,
+  provenance: CacheProvenance,
+): CanonicalHistoricalScheduleGame[] {
   const records: CanonicalHistoricalScheduleGame[] = [];
   for (const dateBlock of response.dates) {
     for (const game of dateBlock.games) {
@@ -103,11 +114,7 @@ function parseScheduleResponse(response: z.infer<typeof MLBScheduleResponseSchem
         awayStarterSource: awayProbablePitcherId ? 'SCHEDULE_PROBABLE_TIMESTAMP_UNKNOWN' : 'UNAVAILABLE',
         rescheduledFromGamePk: game.rescheduledFromGamePk ?? null,
         warnings,
-        provenance: {
-          endpoint: '/api/v1/schedule',
-          fetchedAt: new Date(),
-          sourceTimestamp: null,
-        },
+        provenance,
       });
     }
   }

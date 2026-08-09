@@ -436,17 +436,24 @@ D2-B tests must cover at minimum:
 
 ## 27. Exact D2-B change surface
 
-D2_B_CAN_BE_IMPLEMENTED_WITH_NEW_FILES_ONLY = YES
-
-CREATE:
-- `src/prediction/mlb/mlb-historical-materialization-source-adapter.ts`
-- `src/prediction/mlb/mlb-historical-dataset-materializer.ts`
-- `scripts/materialize-mlb-historical-dataset.ts`
-- `tests/prediction/mlb/mlb-historical-materialization-source-adapter.test.ts`
-- `tests/prediction/mlb/mlb-historical-dataset-materializer.test.ts`
+D2_B_CAN_BE_IMPLEMENTED_WITH_NEW_FILES_ONLY = NO
 
 MODIFY:
-- None
+- src/lib/backtesting/mlb/live-history/types.ts
+- src/lib/backtesting/mlb/live-history/cache.ts
+- src/lib/backtesting/mlb/live-history/schedule-loader.ts
+- src/lib/backtesting/mlb/live-history/outcome-loader.ts
+- src/lib/backtesting/mlb/live-history/pitcher-feed-loader.ts
+- src/lib/backtesting/mlb/live-history/team-game-source.ts
+- src/lib/backtesting/mlb/live-history/pitcher-appearance-source.ts
+- tests/backtesting/live-history/cache.test.ts
+- tests/backtesting/live-history/outcome-loader.test.ts
+- tests/backtesting/live-history/pitcher-feed-loader.test.ts
+- tests/backtesting/live-history/team-game-source.test.ts
+- tests/backtesting/live-history/pitcher-appearance-source.test.ts
+- tests/backtesting/live-history/schedule-loader.test.ts
+- src/prediction/mlb/mlb-historical-materialization-source-adapter.ts
+- tests/prediction/mlb/mlb-historical-materialization-source-adapter.test.ts
 
 No package.json modification required because `npx tsx scripts/materialize-mlb-historical-dataset.ts` is a valid invocation without a registered npm script.
 
@@ -488,10 +495,24 @@ tests/prediction/mlb/mlb-historical-materialization-source-adapter.test.ts
 tests/prediction/mlb/mlb-historical-dataset-materializer.test.ts
 
 MODIFY =
-None
+src/lib/backtesting/mlb/live-history/types.ts
+src/lib/backtesting/mlb/live-history/cache.ts
+src/lib/backtesting/mlb/live-history/schedule-loader.ts
+src/lib/backtesting/mlb/live-history/outcome-loader.ts
+src/lib/backtesting/mlb/live-history/pitcher-feed-loader.ts
+src/lib/backtesting/mlb/live-history/team-game-source.ts
+src/lib/backtesting/mlb/live-history/pitcher-appearance-source.ts
+tests/backtesting/live-history/cache.test.ts
+tests/backtesting/live-history/outcome-loader.test.ts
+tests/backtesting/live-history/pitcher-feed-loader.test.ts
+tests/backtesting/live-history/team-game-source.test.ts
+tests/backtesting/live-history/pitcher-appearance-source.test.ts
+tests/backtesting/live-history/schedule-loader.test.ts
+src/prediction/mlb/mlb-historical-materialization-source-adapter.ts
+tests/prediction/mlb/mlb-historical-materialization-source-adapter.test.ts
 
 D2_B_CAN_BE_IMPLEMENTED_WITH_NEW_FILES_ONLY =
-YES
+NO
 
 NETWORK USE =
 YES — real MLB historical source acquisition via existing MLBStatsApiClient

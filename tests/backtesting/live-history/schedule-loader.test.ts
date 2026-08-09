@@ -334,4 +334,24 @@ describe('createScheduleLoader', () => {
     expect(fetchImplA).toHaveBeenCalledTimes(1);
     expect(fetchImplB).toHaveBeenCalledTimes(1);
   });
+
+  it('cache hit preserves original cached provenance instead of current time', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, schedulePayload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache, now: () => new Date('2024-06-01T12:00:00Z') });
+
+    const first = await loader.loadForDateRange('2024-06-15', '2024-06-15');
+    expect(first).toHaveLength(1);
+    expect(first[0].provenance.fetchedAt).toEqual(new Date('2024-06-01T12:00:00Z'));
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const laterLoader = createScheduleLoader({ client, cache, now: () => new Date('2025-01-01T00:00:00Z') });
+    const second = await laterLoader.loadForDateRange('2024-06-15', '2024-06-15');
+
+    expect(second).toHaveLength(1);
+    expect(second[0].provenance.fetchedAt).toEqual(new Date('2024-06-01T12:00:00Z'));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });

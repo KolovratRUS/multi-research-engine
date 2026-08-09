@@ -228,6 +228,32 @@ export interface MLBHistoricalCache {
   clearStats(): void;
 }
 
+export interface MLBHistoricalCacheWithProvenance
+  extends MLBHistoricalCache {
+  getWithProvenance<T>(
+    endpoint: string,
+    params: Record<string, unknown>,
+    dataSchema: ZodType<T>,
+  ): Promise<{ readonly value: T; readonly provenance: CacheProvenance } | null>;
+}
+
+export type MLBHistoricalAcquisitionProvenance = CacheProvenance;
+
+export interface MLBHistoricalOutcomeWithProvenance {
+  readonly outcome: CanonicalHistoricalOutcome;
+  readonly provenance: MLBHistoricalAcquisitionProvenance;
+}
+
+export interface MLBHistoricalTeamGamesWithProvenance {
+  readonly games: readonly CompletedHistoricalTeamGame[];
+  readonly provenance: readonly MLBHistoricalAcquisitionProvenance[];
+}
+
+export interface MLBHistoricalPitcherAppearancesWithProvenance {
+  readonly appearances: readonly HistoricalPitcherAppearance[];
+  readonly provenance: readonly MLBHistoricalAcquisitionProvenance[];
+}
+
 export interface TeamHistoricalAggregate {
   readonly teamId: number;
   readonly gamesPlayed: number;

@@ -1,8 +1,16 @@
 import { z } from 'zod';
-import type { MLBHistoricalCacheConfig, CanonicalHistoricalScheduleGame, CanonicalHistoricalOutcome, CanonicalHistoricalGameStatus, HistoricalStarterSource, CacheProvenance, MLBHistoricalCache, HistoricalCompletionTimeSource } from './types';
+import type {
+  CanonicalHistoricalOutcome,
+  CacheProvenance,
+  MLBHistoricalCache,
+  MLBHistoricalCacheWithProvenance,
+  HistoricalCompletionTimeSource,
+  MLBHistoricalAcquisitionProvenance,
+  MLBHistoricalOutcomeWithProvenance,
+} from './types';
 import type { MLBHistoricalHttpClient } from './client';
 import { MLBOutcomeFeedSchema } from './schemas';
-import { extractLastCompletedPlayEnd, type CompletionProxyExtraction } from './completion-extractor';
+import { extractLastCompletedPlayEnd } from './completion-extractor';
 
 export interface OutcomeLoaderOptions {
   readonly client: MLBHistoricalHttpClient;
@@ -12,31 +20,134 @@ export interface OutcomeLoaderOptions {
 }
 
 export function createOutcomeLoader(options: OutcomeLoaderOptions) {
-  const { client, cache, forceRefresh } = options;
+  const { client, cache } = options;
   const getNow = options.now ?? (() => new Date());
+  const defaultForceRefresh = options.forceRefresh ?? false;
+
+  const provenanceCapable = isMLBHistoricalCacheWithProvenance(cache);
 
   return {
-    async loadOutcome(gamePk: number, options?: { forceRefresh?: boolean }): Promise<CanonicalHistoricalOutcome> {
-      const endpoint = `/api/v1.1/game/${gamePk}/feed/live`;
-      const params = { gamePk };
-      const useForceRefresh = options?.forceRefresh ?? forceRefresh;
-      if (!useForceRefresh) {
-        const cached = await cache.get(endpoint, params, MLBOutcomeFeedSchema);
-        if (cached) {
-          return normalizeOutcome(cached, gamePk);
-        }
+    async loadOutcome(
+      gamePk: number,
+      options?: { forceRefresh?: boolean },
+    ): Promise<CanonicalHistoricalOutcome> {
+      if (!provenanceCapable) {
+        return loadOutcomeLegacy(gamePk, {
+          client,
+          cache,
+          forceRefresh: Boolean(options?.forceRefresh ?? defaultForceRefresh),
+          getNow,
+        });
       }
+      const { outcome } = await loadOutcomeWithProvenanceInner(gamePk, {
+        client,
+        cache: cache as MLBHistoricalCacheWithProvenance,
+        forceRefresh: Boolean(options?.forceRefresh ?? defaultForceRefresh),
+        getNow,
+      });
+      return outcome;
+    },
 
-      const raw = await client.getJson(endpoint, params, MLBOutcomeFeedSchema);
-      const now = getNow();
-      await cache.set(endpoint, params, raw, {
+    async loadOutcomeWithProvenance(
+      gamePk: number,
+      options?: { forceRefresh?: boolean },
+    ): Promise<MLBHistoricalOutcomeWithProvenance> {
+      if (!provenanceCapable) {
+        throw new Error(
+          'Outcome provenance loader requires MLBHistoricalCacheWithProvenance capability',
+        );
+      }
+      return loadOutcomeWithProvenanceInner(gamePk, {
+        client,
+        cache: cache as MLBHistoricalCacheWithProvenance,
+        forceRefresh: Boolean(options?.forceRefresh ?? defaultForceRefresh),
+        getNow,
+      });
+    },
+  };
+}
+
+function isMLBHistoricalCacheWithProvenance(
+  cache: MLBHistoricalCache,
+): cache is MLBHistoricalCacheWithProvenance {
+  return typeof (cache as MLBHistoricalCacheWithProvenance).getWithProvenance === 'function';
+}
+
+async function loadOutcomeLegacy(
+  gamePk: number,
+  options: {
+    readonly client: MLBHistoricalHttpClient;
+    readonly cache: MLBHistoricalCache;
+    readonly forceRefresh: boolean;
+    readonly getNow: () => Date;
+  },
+): Promise<CanonicalHistoricalOutcome> {
+  const endpoint = `/api/v1.1/game/${gamePk}/feed/live`;
+  const params = { gamePk };
+  const forceRefresh = options.forceRefresh;
+
+  let raw: z.infer<typeof MLBOutcomeFeedSchema>;
+  if (!forceRefresh) {
+    const cached = await options.cache.get(endpoint, params, MLBOutcomeFeedSchema);
+    if (cached) {
+      raw = cached;
+    } else {
+      raw = await options.client.getJson(endpoint, params, MLBOutcomeFeedSchema);
+      await options.cache.set(endpoint, params, raw, {
         endpoint,
-        fetchedAt: now,
+        fetchedAt: options.getNow(),
         sourceTimestamp: null,
       });
+    }
+  } else {
+    raw = await options.client.getJson(endpoint, params, MLBOutcomeFeedSchema);
+    await options.cache.set(endpoint, params, raw, {
+      endpoint,
+      fetchedAt: options.getNow(),
+      sourceTimestamp: null,
+    });
+  }
 
-      return normalizeOutcome(raw, gamePk);
-    },
+  return normalizeOutcome(raw, gamePk);
+}
+
+async function loadOutcomeWithProvenanceInner(
+  gamePk: number,
+  options: {
+    readonly client: MLBHistoricalHttpClient;
+    readonly cache: MLBHistoricalCacheWithProvenance;
+    readonly forceRefresh: boolean;
+    readonly getNow: () => Date;
+  },
+): Promise<MLBHistoricalOutcomeWithProvenance> {
+  const endpoint = `/api/v1.1/game/${gamePk}/feed/live`;
+  const params = { gamePk };
+  const forceRefresh = options.forceRefresh;
+
+  let raw: z.infer<typeof MLBOutcomeFeedSchema>;
+  let provenance: MLBHistoricalAcquisitionProvenance;
+
+  if (!forceRefresh) {
+    const cached = await options.cache.getWithProvenance(endpoint, params, MLBOutcomeFeedSchema);
+    if (cached) {
+      raw = cached.value;
+      provenance = cached.provenance;
+    } else {
+      raw = await options.client.getJson(endpoint, params, MLBOutcomeFeedSchema);
+      const now = options.getNow();
+      provenance = { endpoint, fetchedAt: now, sourceTimestamp: null };
+      await options.cache.set(endpoint, params, raw, provenance);
+    }
+  } else {
+    raw = await options.client.getJson(endpoint, params, MLBOutcomeFeedSchema);
+    const now = options.getNow();
+    provenance = { endpoint, fetchedAt: now, sourceTimestamp: null };
+    await options.cache.set(endpoint, params, raw, provenance);
+  }
+
+  return {
+    outcome: normalizeOutcome(raw, gamePk),
+    provenance,
   };
 }
 

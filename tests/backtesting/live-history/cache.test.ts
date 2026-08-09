@@ -108,4 +108,95 @@ describe('createMLBHistoricalCache', () => {
     const files = await fs.readdir(root);
     expect(files.some((f) => f.endsWith('.tmp'))).toBe(false);
   });
+
+  it('getWithProvenance returns exact payload and provenance on cache hit', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-cache-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const schema = z.object({ data: z.string() });
+    const storedProvenance = { endpoint: '/ep', fetchedAt: new Date('2024-01-01T00:00:00Z'), sourceTimestamp: null as Date | null };
+    await cache.set('/ep', { id: 1 }, { data: 'hello' }, storedProvenance);
+
+    const result = await cache.getWithProvenance('/ep', { id: 1 }, schema);
+
+    expect(result).not.toBeNull();
+    expect(result!.value).toEqual({ data: 'hello' });
+    expect(result!.provenance.endpoint).toBe('/ep');
+    expect(result!.provenance.fetchedAt).toEqual(new Date('2024-01-01T00:00:00Z'));
+    expect(result!.provenance.sourceTimestamp).toBeNull();
+  });
+
+  it('getWithProvenance returns null on cache miss', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-cache-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const schema = z.object({ data: z.string() });
+
+    const result = await cache.getWithProvenance('/ep', { id: 1 }, schema);
+
+    expect(result).toBeNull();
+  });
+
+  it('getWithProvenance later read does not modify stored provenance', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-cache-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const schema = z.object({ data: z.string() });
+    const storedProvenance = { endpoint: '/ep', fetchedAt: new Date('2024-01-01T00:00:00Z'), sourceTimestamp: null as Date | null };
+    await cache.set('/ep', { id: 1 }, { data: 'hello' }, storedProvenance);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const result = await cache.getWithProvenance('/ep', { id: 1 }, schema);
+
+    expect(result).not.toBeNull();
+    expect(result!.provenance.fetchedAt).toEqual(new Date('2024-01-01T00:00:00Z'));
+  });
+
+  it('get still returns payload only after getWithProvenance added', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-cache-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const schema = z.object({ data: z.string() });
+    await cache.set('/ep', { id: 1 }, { data: 'hello' }, { endpoint: '/ep', fetchedAt: new Date(), sourceTimestamp: null });
+
+    const hit = await cache.get('/ep', { id: 1 }, schema);
+
+    expect(hit).toEqual({ data: 'hello' });
+    expect(cache.stats()).toEqual({ hits: 1, misses: 0, writes: 1, corruptions: 0, versionMismatches: 0 });
+  });
+
+  it('getWithProvenance increments hits and misses like get', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-cache-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const schema = z.object({ data: z.string() });
+
+    await cache.getWithProvenance('/miss', {}, schema);
+    expect(cache.stats()).toEqual({ hits: 0, misses: 1, writes: 0, corruptions: 0, versionMismatches: 0 });
+
+    await cache.set('/hit', {}, { data: 'ok' }, { endpoint: '/hit', fetchedAt: new Date(), sourceTimestamp: null });
+    await cache.getWithProvenance('/hit', {}, schema);
+    expect(cache.stats()).toEqual({ hits: 1, misses: 1, writes: 1, corruptions: 0, versionMismatches: 0 });
+  });
+
+  it('getWithProvenance preserves non-null sourceTimestamp across cache round trip', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-cache-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const schema = z.object({ data: z.string() });
+    const sourceTimestamp = new Date('2024-01-01T06:00:00Z');
+    await cache.set('/ep', { id: 1 }, { data: 'hello' }, { endpoint: '/ep', fetchedAt: new Date('2024-01-01T00:00:00Z'), sourceTimestamp });
+
+    const result = await cache.getWithProvenance('/ep', { id: 1 }, schema);
+
+    expect(result).not.toBeNull();
+    expect(result!.provenance.sourceTimestamp).toEqual(sourceTimestamp);
+  });
+
+  it('version mismatch via getWithProvenance increments versionMismatches and misses', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-cache-'));
+    const writeCache = createMLBHistoricalCache({ root, version: 'v1' });
+    const schema = z.object({ data: z.string() });
+    await writeCache.set('/ep', {}, { data: 'hello' }, { endpoint: '/ep', fetchedAt: new Date(), sourceTimestamp: null });
+
+    const readCache = createMLBHistoricalCache({ root, version: 'v2' });
+    const result = await readCache.getWithProvenance('/ep', {}, schema);
+
+    expect(result).toBeNull();
+    expect(readCache.stats()).toEqual({ hits: 0, misses: 1, writes: 0, corruptions: 0, versionMismatches: 1 });
+  });
 });

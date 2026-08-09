@@ -243,4 +243,51 @@ describe('createPitcherFeedLoader', () => {
 
     expect(payload).toEqual(frozen);
   });
+
+  it('network miss stores and returns exact acquisition provenance', async () => {
+    const payload = basePayload();
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const cache = createMLBHistoricalCache({ root: tempRoot, version: 'v1' });
+    const loader = createPitcherFeedLoader({ client, cache, now: () => new Date('2024-06-01T12:00:00Z') });
+
+    const result = await loader.loadGameFeedWithProvenance(1001);
+
+    expect(result.feed.gamePk).toBe(1001);
+    expect(result.provenance.fetchedAt).toEqual(new Date('2024-06-01T12:00:00Z'));
+    expect(result.provenance.endpoint).toBe('/api/v1.1/game/{gamePk}/feed/live');
+  });
+
+  it('cache hit preserves original cached provenance instead of current time', async () => {
+    const payload = basePayload();
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const cache = createMLBHistoricalCache({ root: tempRoot, version: 'v1' });
+    const loader = createPitcherFeedLoader({ client, cache, now: () => new Date('2024-06-01T12:00:00Z') });
+
+    await loader.loadGameFeedWithProvenance(1001);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const laterLoader = createPitcherFeedLoader({ client, cache, now: () => new Date('2025-01-01T00:00:00Z') });
+    const result = await laterLoader.loadGameFeedWithProvenance(1001);
+
+    expect(result.feed.gamePk).toBe(1001);
+    expect(result.provenance.fetchedAt).toEqual(new Date('2024-06-01T12:00:00Z'));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('force refresh performs new network acquisition with new provenance', async () => {
+    const payload = basePayload();
+    const fetchImpl = vi.fn().mockImplementation(() => makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const cache = createMLBHistoricalCache({ root: tempRoot, version: 'v1' });
+    const firstLoader = createPitcherFeedLoader({ client, cache, now: () => new Date('2024-06-01T12:00:00Z') });
+    const secondLoader = createPitcherFeedLoader({ client, cache, now: () => new Date('2024-06-02T12:00:00Z') });
+
+    const first = await firstLoader.loadGameFeedWithProvenance(1001);
+    const second = await secondLoader.loadGameFeedWithProvenance(1001, { forceRefresh: true });
+
+    expect(first.provenance.fetchedAt).toEqual(new Date('2024-06-01T12:00:00Z'));
+    expect(second.provenance.fetchedAt).toEqual(new Date('2024-06-02T12:00:00Z'));
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
 });

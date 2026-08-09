@@ -413,4 +413,51 @@ describe('createOutcomeLoader', () => {
     expect(outcome.homeScore).toBe(0);
     expect(outcome.awayScore).toBe(0);
   });
+
+  it('network miss stores and returns exact acquisition provenance', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, outcomePayload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-outcome-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createOutcomeLoader({ client, cache, now: () => new Date('2024-06-01T12:00:00Z') });
+
+    const result = await loader.loadOutcomeWithProvenance(100);
+
+    expect(result.outcome.gamePk).toBe(100);
+    expect(result.provenance.fetchedAt).toEqual(new Date('2024-06-01T12:00:00Z'));
+    expect(result.provenance.endpoint).toBe('/api/v1.1/game/100/feed/live');
+  });
+
+  it('cache hit preserves original cached provenance instead of current time', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, outcomePayload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-outcome-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createOutcomeLoader({ client, cache, now: () => new Date('2024-06-01T12:00:00Z') });
+
+    await loader.loadOutcomeWithProvenance(100);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const laterLoader = createOutcomeLoader({ client, cache, now: () => new Date('2025-01-01T00:00:00Z') });
+    const result = await laterLoader.loadOutcomeWithProvenance(100);
+
+    expect(result.provenance.fetchedAt).toEqual(new Date('2024-06-01T12:00:00Z'));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('force refresh performs new network acquisition with new provenance', async () => {
+    const payload = outcomePayload;
+    const fetchImpl = vi.fn().mockImplementation(() => makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-outcome-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const firstLoader = createOutcomeLoader({ client, cache, now: () => new Date('2024-06-01T12:00:00Z') });
+    const secondLoader = createOutcomeLoader({ client, cache, now: () => new Date('2024-06-02T12:00:00Z') });
+
+    const first = await firstLoader.loadOutcomeWithProvenance(100);
+    const second = await secondLoader.loadOutcomeWithProvenance(100, { forceRefresh: true });
+
+    expect(first.provenance.fetchedAt).toEqual(new Date('2024-06-01T12:00:00Z'));
+    expect(second.provenance.fetchedAt).toEqual(new Date('2024-06-02T12:00:00Z'));
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
 });

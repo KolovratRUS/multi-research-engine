@@ -1,8 +1,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { z } from 'zod';
-import type { CacheStats, CacheEnvelope, CacheProvenance, MLBHistoricalCacheConfig, MLBHistoricalCache } from './types';
+import { z, type ZodType } from 'zod';
+import type { CacheStats, CacheEnvelope, CacheProvenance, MLBHistoricalCacheConfig, MLBHistoricalCache, MLBHistoricalCacheWithProvenance } from './types';
 import { CacheEnvelopeSchema, CacheStatsSchema } from './schemas';
 
 const SENSITIVE_PARAM_NAMES = new Set([
@@ -17,7 +17,7 @@ const SENSITIVE_PARAM_NAMES = new Set([
 
 type MemoryCacheStats = z.infer<typeof CacheStatsSchema>;
 
-export function createMLBHistoricalCache(config: MLBHistoricalCacheConfig): MLBHistoricalCache {
+export function createMLBHistoricalCache(config: MLBHistoricalCacheConfig): MLBHistoricalCacheWithProvenance {
   const stats: MemoryCacheStats = {
     hits: 0,
     misses: 0,
@@ -28,25 +28,13 @@ export function createMLBHistoricalCache(config: MLBHistoricalCacheConfig): MLBH
 
   return {
     async get(endpoint, params, dataSchema) {
-      const safeParams = normalizeCacheParams(sanitizeCacheParams(params)) as Record<string, unknown>;
-      const key = buildHistoricalCacheKey(endpoint, safeParams);
-      const filePath = getCachePath(config, key);
-      try {
-        const raw = await fs.readFile(filePath, 'utf8');
-        const parsed = JSON.parse(raw) as Record<string, unknown>;
-        const envelope = CacheEnvelopeSchema(dataSchema).parse(parsed);
-        if (envelope.version !== config.version) {
-          stats.versionMismatches += 1;
-          stats.misses += 1;
-          return null;
-        }
-        const value = dataSchema.parse(envelope.data as unknown);
-        stats.hits += 1;
-        return value;
-      } catch (error) {
-        await handleCacheMiss(error, filePath, stats);
-        return null;
-      }
+      const result = await readCacheEnvelope(config, endpoint, params, dataSchema, stats);
+      return result?.value ?? null;
+    },
+
+    async getWithProvenance(endpoint, params, dataSchema) {
+      const result = await readCacheEnvelope(config, endpoint, params, dataSchema, stats);
+      return result ?? null;
     },
 
     async set(endpoint, params, data, provenance) {
@@ -81,6 +69,34 @@ export function createMLBHistoricalCache(config: MLBHistoricalCacheConfig): MLBH
       stats.versionMismatches = 0;
     },
   };
+}
+
+async function readCacheEnvelope<T>(
+  config: MLBHistoricalCacheConfig,
+  endpoint: string,
+  params: Record<string, unknown>,
+  dataSchema: ZodType<T>,
+  stats: MemoryCacheStats,
+): Promise<{ readonly value: T; readonly provenance: CacheProvenance } | null> {
+  const safeParams = normalizeCacheParams(sanitizeCacheParams(params)) as Record<string, unknown>;
+  const key = buildHistoricalCacheKey(endpoint, safeParams);
+  const filePath = getCachePath(config, key);
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const envelope = CacheEnvelopeSchema(dataSchema).parse(parsed);
+    if (envelope.version !== config.version) {
+      stats.versionMismatches += 1;
+      stats.misses += 1;
+      return null;
+    }
+    const value = dataSchema.parse(envelope.data as unknown);
+    stats.hits += 1;
+    return { value, provenance: envelope.provenance };
+  } catch (error) {
+    await handleCacheMiss(error, filePath, stats);
+    return null;
+  }
 }
 
 export function buildHistoricalCacheKey(
