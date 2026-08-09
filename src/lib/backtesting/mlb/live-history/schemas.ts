@@ -40,6 +40,7 @@ export const MLBScheduleGameSchema = z.object({
     .nullable()
     .optional(),
   doubleHeader: z.string().optional(),
+  gameType: z.string().min(1).optional(),
   gameNumber: z.number().optional(),
   scheduledInnings: z.number().nullable().optional(),
   rescheduleDate: z.string().optional(),

@@ -354,4 +354,223 @@ describe('createScheduleLoader', () => {
     expect(second[0].provenance.fetchedAt).toEqual(new Date('2024-06-01T12:00:00Z'));
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  it('preserves raw regular-season gameType without mapping', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-06-15',
+          games: [
+            {
+              gamePk: 201,
+              officialDate: '2024-06-15',
+              gameDate: '2024-06-15T19:05:00Z',
+              gameType: 'R',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'N',
+              gameNumber: 1,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+    const games = await loader.loadForDateRange('2024-06-15', '2024-06-15');
+    expect(games).toHaveLength(1);
+    expect(games[0].rawGameType).toBe('R');
+  });
+
+  it('preserves raw postseason gameType without mapping', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-10-15',
+          games: [
+            {
+              gamePk: 202,
+              officialDate: '2024-10-15',
+              gameDate: '2024-10-15T19:05:00Z',
+              gameType: 'P',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'N',
+              gameNumber: 1,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+    const games = await loader.loadForDateRange('2024-10-15', '2024-10-15');
+    expect(games).toHaveLength(1);
+    expect(games[0].rawGameType).toBe('P');
+  });
+
+  it('preserves raw spring-training and all-star gameTypes without mapping', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-02-15',
+          games: [
+            {
+              gamePk: 203,
+              officialDate: '2024-02-15',
+              gameDate: '2024-02-15T19:05:00Z',
+              gameType: 'S',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'N',
+              gameNumber: 1,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+    const games = await loader.loadForDateRange('2024-02-15', '2024-02-15');
+    expect(games).toHaveLength(1);
+    expect(games[0].rawGameType).toBe('S');
+  });
+
+  it('preserves raw exhibition gameType without mapping', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-02-15',
+          games: [
+            {
+              gamePk: 204,
+              officialDate: '2024-02-15',
+              gameDate: '2024-02-15T19:05:00Z',
+              gameType: 'I',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'N',
+              gameNumber: 1,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+    const games = await loader.loadForDateRange('2024-02-15', '2024-02-15');
+    expect(games).toHaveLength(1);
+    expect(games[0].rawGameType).toBe('I');
+  });
+
+  it('maps missing upstream gameType to null instead of defaulting to regular season', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-06-15',
+          games: [
+            {
+              gamePk: 205,
+              officialDate: '2024-06-15',
+              gameDate: '2024-06-15T19:05:00Z',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'N',
+              gameNumber: 1,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+    const games = await loader.loadForDateRange('2024-06-15', '2024-06-15');
+    expect(games).toHaveLength(1);
+    expect(games[0].rawGameType).toBeNull();
+  });
+
+  it('preserves rawGameType across cache hit without additional fetch', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-06-15',
+          games: [
+            {
+              gamePk: 206,
+              officialDate: '2024-06-15',
+              gameDate: '2024-06-15T19:05:00Z',
+              gameType: 'A',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'N',
+              gameNumber: 1,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+
+    const first = await loader.loadForDateRange('2024-06-15', '2024-06-15');
+    expect(first[0].rawGameType).toBe('A');
+
+    const second = await loader.loadForDateRange('2024-06-15', '2024-06-15');
+    expect(second[0].rawGameType).toBe('A');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });

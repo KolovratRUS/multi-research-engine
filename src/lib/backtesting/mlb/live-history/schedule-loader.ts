@@ -112,6 +112,7 @@ function parseScheduleResponse(
         awayProbablePitcherId,
         homeStarterSource: homeProbablePitcherId ? 'SCHEDULE_PROBABLE_TIMESTAMP_UNKNOWN' : 'UNAVAILABLE',
         awayStarterSource: awayProbablePitcherId ? 'SCHEDULE_PROBABLE_TIMESTAMP_UNKNOWN' : 'UNAVAILABLE',
+        rawGameType: game.gameType ?? null,
         rescheduledFromGamePk: game.rescheduledFromGamePk ?? null,
         warnings,
         provenance,

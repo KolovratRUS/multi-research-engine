@@ -37,6 +37,7 @@ export interface CanonicalHistoricalScheduleGame {
   readonly homeStarterSource: HistoricalStarterSource;
   readonly awayStarterSource: HistoricalStarterSource;
   readonly rescheduledFromGamePk: number | null;
+  readonly rawGameType?: string | null;
   readonly warnings: readonly string[];
   readonly provenance: {
     readonly endpoint: string;

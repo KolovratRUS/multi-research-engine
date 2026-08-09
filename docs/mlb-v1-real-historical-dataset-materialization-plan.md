@@ -179,15 +179,18 @@ For predictor truth: an archival schedule row showing `FINAL` becomes `UNKNOWN` 
 
 ## 12. Game-type source
 
-Raw MLB schedule `gameType` codes are retained by the schedule loader:
-- `R` → `REGULAR_SEASON`
-- `S` → `SPRING_TRAINING`
-- `A` → `ALL_STAR`
-- `P` / `F` / `D` / `L` / `W` → `POSTSEASON`
-- `I` → `OTHER`
-- unknown → fail closed
+Raw MLB schedule `gameType` codes are preserved by the schedule loader as raw `gameType` in the parsed Zod schema and forwarded as `CanonicalHistoricalScheduleGame.rawGameType` without interpretation.
 
-D2-B should use the same mapping as the existing real-data bridge (`mapGameType` in `mlb-real-data-pregame-snapshot-bridge.ts`) and reject unsupported codes rather than defaulting to `REGULAR_SEASON`.
+The schedule layer does NOT map the code into:
+- `REGULAR_SEASON`
+- `SPRING_TRAINING`
+- `POSTSEASON`
+- `ALL_STAR`
+- `OTHER`
+
+The historical canonical snapshot adapter remains the sole mapping authority and rejects unsupported codes rather than defaulting to `REGULAR_SEASON`.
+
+D2-B uses the same mapping as the existing real-data bridge (`mapGameType` in `mlb-real-data-pregame-snapshot-bridge.ts`) and rejects unsupported codes rather than defaulting to `REGULAR_SEASON`.
 
 ## 13. Venue / neutral-site truth
 
@@ -440,6 +443,7 @@ D2_B_CAN_BE_IMPLEMENTED_WITH_NEW_FILES_ONLY = NO
 
 MODIFY:
 - src/lib/backtesting/mlb/live-history/types.ts
+- src/lib/backtesting/mlb/live-history/schemas.ts
 - src/lib/backtesting/mlb/live-history/cache.ts
 - src/lib/backtesting/mlb/live-history/schedule-loader.ts
 - src/lib/backtesting/mlb/live-history/outcome-loader.ts
@@ -496,6 +500,7 @@ tests/prediction/mlb/mlb-historical-dataset-materializer.test.ts
 
 MODIFY =
 src/lib/backtesting/mlb/live-history/types.ts
+src/lib/backtesting/mlb/live-history/schemas.ts
 src/lib/backtesting/mlb/live-history/cache.ts
 src/lib/backtesting/mlb/live-history/schedule-loader.ts
 src/lib/backtesting/mlb/live-history/outcome-loader.ts
