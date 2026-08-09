@@ -29,6 +29,8 @@
           "venue": { "id": 1001, "name": "Fixture Stadium" },
           "dayNight": "day",
           "scheduledInnings": 9,
+          "gameType": "R",
+          "gameNumber": 1,
           "doubleHeader": "N",
           "seriesGameNumber": 1,
           "gamesInSeries": 3,

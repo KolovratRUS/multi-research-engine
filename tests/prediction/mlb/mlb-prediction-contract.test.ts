@@ -239,8 +239,8 @@ describe('mlb-prediction-contract', () => {
     }
   });
 
-  it('accepts explicit true/false neutralSite and rejects missing, non-boolean, and unknown homeAdvantage', () => {
-    const valid = buildValidInput({
+  it('accepts true/false/null neutralSite and rejects missing, non-boolean, and unknown homeAdvantage', () => {
+    const validTrue = buildValidInput({
       game: {
         gameId: 'game-valid',
         scheduledStartAt: FROZEN_TIMESTAMP,
@@ -252,7 +252,35 @@ describe('mlb-prediction-contract', () => {
       },
     });
 
-    expect(validateMLBPredictionInputContract(valid).ok).toBe(true);
+    expect(validateMLBPredictionInputContract(validTrue).ok).toBe(true);
+
+    const validFalse = buildValidInput({
+      game: {
+        gameId: 'game-valid',
+        scheduledStartAt: FROZEN_TIMESTAMP,
+        homeTeamId: 'home-valid',
+        awayTeamId: 'away-valid',
+        venueId: null,
+        neutralSite: false,
+        doubleheader: null,
+      },
+    });
+
+    expect(validateMLBPredictionInputContract(validFalse).ok).toBe(true);
+
+    const validNull = buildValidInput({
+      game: {
+        gameId: 'game-valid',
+        scheduledStartAt: FROZEN_TIMESTAMP,
+        homeTeamId: 'home-valid',
+        awayTeamId: 'away-valid',
+        venueId: null,
+        neutralSite: null,
+        doubleheader: null,
+      },
+    });
+
+    expect(validateMLBPredictionInputContract(validNull).ok).toBe(true);
 
     expect(validateMLBPredictionInputContract(buildValidInput({
       game: {
@@ -274,6 +302,17 @@ describe('mlb-prediction-contract', () => {
         awayTeamId: 'away-bad',
         venueId: null,
         homeAdvantage: false,
+        doubleheader: null,
+      },
+    })).ok).toBe(false);
+
+    expect(validateMLBPredictionInputContract(buildValidInput({
+      game: {
+        gameId: 'game-bad',
+        scheduledStartAt: FROZEN_TIMESTAMP,
+        homeTeamId: 'home-bad',
+        awayTeamId: 'away-bad',
+        venueId: null,
         doubleheader: null,
       },
     })).ok).toBe(false);

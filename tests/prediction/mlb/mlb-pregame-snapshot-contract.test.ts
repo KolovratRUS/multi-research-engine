@@ -149,6 +149,48 @@ describe('mlb-pregame-snapshot-contract', () => {
     })).ok).toBe(false);
   });
 
+  it('accepts true/false/null neutralSite and rejects missing and non-boolean values', () => {
+    expect(validateMLBCanonicalPregameSnapshot(buildValidSnapshot({
+      game: buildGame({ neutralSite: true }),
+    })).ok).toBe(true);
+
+    expect(validateMLBCanonicalPregameSnapshot(buildValidSnapshot({
+      game: buildGame({ neutralSite: false }),
+    })).ok).toBe(true);
+
+    expect(validateMLBCanonicalPregameSnapshot(buildValidSnapshot({
+      game: buildGame({ neutralSite: null }),
+    })).ok).toBe(true);
+
+    expect(validateMLBCanonicalPregameSnapshot(buildValidSnapshot({
+      game: buildGame({ neutralSite: 'yes' }),
+    })).ok).toBe(false);
+
+    expect(validateMLBCanonicalPregameSnapshot(buildValidSnapshot({
+      game: buildGame({ neutralSite: 1 }),
+    })).ok).toBe(false);
+
+    expect(validateMLBCanonicalPregameSnapshot(buildValidSnapshot({
+      game: buildGame({ neutralSite: {} }),
+    })).ok).toBe(false);
+
+    const missingNeutralSite = buildValidSnapshot({
+      game: buildGame({ neutralSite: undefined }),
+    }) as Record<string, unknown>;
+
+    const gameValue = missingNeutralSite.game;
+    if (
+      gameValue !== undefined &&
+      gameValue !== null &&
+      typeof gameValue === 'object'
+    ) {
+      const gameRecord = gameValue as Record<string, unknown>;
+      delete gameRecord.neutralSite;
+    }
+
+    expect(validateMLBCanonicalPregameSnapshot(missingNeutralSite).ok).toBe(false);
+  });
+
   it('validates doubleheader identity', () => {
     expect(validateMLBCanonicalPregameSnapshot(buildValidSnapshot({
       game: buildGame({

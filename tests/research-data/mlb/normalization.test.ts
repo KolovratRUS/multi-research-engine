@@ -11,6 +11,8 @@ import type { MLBScheduleGame, PitcherRecentStart, PitcherSeasonStatsResult } fr
 function makeScheduleGame(overrides: Partial<MLBScheduleGame> = {}): MLBScheduleGame {
   return {
     gamePk: 1,
+    gameType: 'R',
+    gameNumber: 1,
     officialDate: '2026-06-26',
     gameDate: '2026-06-26T10:00:00.000Z',
     startTimeUtc: new Date('2026-06-26T10:00:00.000Z'),
@@ -46,6 +48,8 @@ describe('normalizeSchedule', () => {
           games: [
             {
               gamePk: 824255,
+              gameType: 'R',
+              gameNumber: 1,
               gameDate: '2026-06-26T10:00:00.000Z',
               officialDate: '2026-06-26',
               status: { abstractGameState: 'Preview', codedGameState: 'P', detailedState: 'Pre-Game', startTimeTBD: false },
@@ -78,6 +82,9 @@ describe('normalizeSchedule', () => {
     expect(games).toHaveLength(1);
     const game = games[0];
     expect(game.gamePk).toBe(824255);
+    expect(game.gameType).toBe('R');
+    expect(game.gameNumber).toBe(1);
+    expect(game.seriesGameNumber).toBe(1);
     expect(game.homeTeamName).toBe('Red Sox');
     expect(game.awayTeamName).toBe('Yankees');
     expect(game.probablePitchers.away).toEqual({
@@ -90,6 +97,45 @@ describe('normalizeSchedule', () => {
       warnings: [],
     });
     expect(game.probablePitchers.home).toBeNull();
+  });
+
+  it('preserves raw gameType and distinct gameNumber from seriesGameNumber', () => {
+    const raw = {
+      totalItems: 1,
+      dates: [
+        {
+          date: '2026-06-26',
+          games: [
+            {
+              gamePk: 999,
+              gameType: 'S',
+              gameNumber: 2,
+              gameDate: '2026-06-26T10:00:00.000Z',
+              officialDate: '2026-06-26',
+              status: { abstractGameState: 'Preview', codedGameState: 'P', detailedState: 'Pre-Game', startTimeTBD: false },
+              teams: {
+                away: { team: { id: 1, name: 'Away' }, leagueRecord: { wins: 0, losses: 0, pct: '.000' } },
+                home: { team: { id: 2, name: 'Home' }, leagueRecord: { wins: 0, losses: 0, pct: '.000' } },
+              },
+              venue: { id: 1, name: 'Stadium' },
+              dayNight: 'day',
+              scheduledInnings: 9,
+              doubleHeader: 'Y',
+              seriesGameNumber: 5,
+              gamesInSeries: 3,
+              seriesDescription: 'Regular',
+            },
+          ],
+        },
+      ],
+    };
+
+    const games = normalizeSchedule(raw);
+    expect(games).toHaveLength(1);
+    expect(games[0].gameType).toBe('S');
+    expect(games[0].gameNumber).toBe(2);
+    expect(games[0].seriesGameNumber).toBe(5);
+    expect(games[0].gameNumber).not.toBe(games[0].seriesGameNumber);
   });
 });
 

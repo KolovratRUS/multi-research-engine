@@ -104,6 +104,8 @@ export function normalizeSchedule(raw: unknown): MLBScheduleGame[] {
       date: string;
       games: Array<{
         gamePk: number;
+        gameType: string;
+        gameNumber: number;
         gameDate: string;
         officialDate: string;
         status: {
@@ -141,6 +143,8 @@ export function normalizeSchedule(raw: unknown): MLBScheduleGame[] {
       const status = mapGameStatus(game.status.codedGameState);
       games.push({
         gamePk: game.gamePk,
+        gameType: game.gameType,
+        gameNumber: game.gameNumber,
         officialDate: game.officialDate,
         gameDate: game.gameDate,
         startTimeUtc: new Date(game.gameDate),

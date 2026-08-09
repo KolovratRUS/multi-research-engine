@@ -341,6 +341,8 @@ function inferRoofType(raw: {
 
 export const ScheduleGameSchema = z.object({
   gamePk: z.number(),
+  gameType: z.string(),
+  gameNumber: z.number().int(),
   gameDate: z.string(),
   officialDate: z.string(),
   status: z.object({

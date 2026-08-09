@@ -35,7 +35,7 @@ export type MLBPredictionInputContract = Readonly<{
     homeTeamId: string;
     awayTeamId: string;
     venueId: string | null;
-    neutralSite: boolean;
+    neutralSite: boolean | null;
     doubleheader: null | Readonly<{
       doubleheaderId: string;
       gameNumber: 1 | 2;
@@ -432,8 +432,8 @@ export function validateMLBPredictionInputContract(
       }
     }
 
-    if (typeof game.neutralSite !== 'boolean') {
-      issues.push(issue('INVALID_BOOLEAN', '$.game.neutralSite', 'neutralSite must be a boolean'));
+    if (typeof game.neutralSite !== 'boolean' && game.neutralSite !== null) {
+      issues.push(issue('INVALID_BOOLEAN', '$.game.neutralSite', 'neutralSite must be a boolean or null'));
     }
 
     if (game.doubleheader !== null && !isPlainObject(game.doubleheader)) {

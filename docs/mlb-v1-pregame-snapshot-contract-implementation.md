@@ -38,7 +38,7 @@ Missing required root fields emit `MISSING_FIELD`. Unknown root fields emit `UNK
 
 Required game fields: `gameId`, `scheduledStartAt`, `officialDate`, `season`, `gameType`, `status`, `homeTeamId`, `awayTeamId`, `venueId`, `neutralSite`, `doubleheader`.
 
-`gameId`, `homeTeamId`, and `awayTeamId` are string identifiers. `doubleheader` may be `null` or a plain object with `doubleheaderId` and `gameNumber`. `gameNumber` must be `1` or `2`.
+`gameId`, `homeTeamId`, and `awayTeamId` are string identifiers. `venueId` is a string or null. `neutralSite` is a required boolean or null: `true` means known neutral-site game, `false` means known non-neutral-site game, and `null` means authoritative ingestion did not establish neutral-site status. `doubleheader` may be `null` or a plain object with `doubleheaderId` and `gameNumber`. `gameNumber` must be `1` or `2`.
 
 ## 10. Pregame-only status boundary
 

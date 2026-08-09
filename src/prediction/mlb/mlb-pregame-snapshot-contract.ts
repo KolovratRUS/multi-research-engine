@@ -130,7 +130,7 @@ export type MLBCanonicalPregameSnapshot = Readonly<{
     homeTeamId: string;
     awayTeamId: string;
     venueId: string | null;
-    neutralSite: boolean;
+    neutralSite: boolean | null;
     doubleheader: null | Readonly<{
       doubleheaderId: string;
       gameNumber: 1 | 2;
@@ -874,8 +874,8 @@ function validateGame(
   if (neutralSiteResult.kind === 'missing') {
     pushIssue('MISSING_FIELD', '$.game.neutralSite', 'neutralSite is required', issues);
   } else if (neutralSiteResult.kind === 'data') {
-    if (typeof neutralSiteResult.value !== 'boolean') {
-      pushIssue('INVALID_BOOLEAN', '$.game.neutralSite', 'neutralSite must be a boolean', issues);
+    if (typeof neutralSiteResult.value !== 'boolean' && neutralSiteResult.value !== null) {
+      pushIssue('INVALID_BOOLEAN', '$.game.neutralSite', 'neutralSite must be a boolean or null', issues);
     }
   }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   ScheduleResponseSchema,
+  ScheduleGameSchema,
   FeedLiveResponseSchema,
   PersonStatsResponseSchema,
   PersonGameLogResponseSchema,
@@ -22,7 +23,33 @@ describe('MLB client endpoint-specific Zod validation', () => {
     expect(parsed.dates).toHaveLength(1);
     expect(parsed.dates[0].games).toHaveLength(1);
     expect(parsed.dates[0].games[0].gamePk).toBe(100001);
+    expect(parsed.dates[0].games[0].gameType).toBe('R');
+    expect(parsed.dates[0].games[0].gameNumber).toBe(1);
     expect(parsed.dates[0].games[0].teams.away.team.name).toBe('Fixture Team Alpha');
+  });
+
+  it('rejects fractional gameNumber in schedule schema', () => {
+    expect(() =>
+      ScheduleGameSchema.parse({
+        gamePk: 1,
+        gameType: 'R',
+        gameNumber: 1.5,
+        gameDate: '2026-06-26T10:00:00.000Z',
+        officialDate: '2026-06-26',
+        status: { abstractGameState: 'Preview', codedGameState: 'P', detailedState: 'Pre-Game', startTimeTBD: false },
+        teams: {
+          away: { team: { id: 1, name: 'Away' }, leagueRecord: { wins: 0, losses: 0, pct: '.000' } },
+          home: { team: { id: 2, name: 'Home' }, leagueRecord: { wins: 0, losses: 0, pct: '.000' } },
+        },
+        venue: { id: 1, name: 'Stadium' },
+        dayNight: 'day',
+        scheduledInnings: 9,
+        doubleHeader: 'N',
+        seriesGameNumber: 1,
+        gamesInSeries: 1,
+        seriesDescription: 'Regular',
+      }),
+    ).toThrow();
   });
 
   it('validates game feed fixture and infers typed response', () => {

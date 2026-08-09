@@ -289,7 +289,7 @@ MLB Stats API has observed retryable HTTP statuses (408, 429, 502, 503, 504) han
 
 ## 24. Doubleheaders, neutral sites, postponements, and cancellations
 
-MLB Stats API schedule response verifies `doubleHeader` string, `gameNumber` integer, cancelled/postponed detailed states, and venue hydration. Retrosheet event files capture game metadata but require post-processing to reconstruct doubleheader relationships. Neutral-site treatment in the repository is explicit through `neutralSite: boolean` rather than `homeAdvantage`.
+MLB Stats API schedule response verifies `doubleHeader` string, `gameNumber` integer, cancelled/postponed detailed states, and venue hydration. Retrosheet event files capture game metadata but require post-processing to reconstruct doubleheader relationships. Neutral-site treatment in the repository is explicit through `neutralSite: boolean | null` rather than `homeAdvantage`.
 
 ## 25. Provider-specific schema risks
 

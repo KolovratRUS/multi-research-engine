@@ -6,6 +6,8 @@ export const MLB_FIXTURE_SCHEDULE = {
       games: [
         {
           gamePk: 100001,
+          gameType: 'R',
+          gameNumber: 1,
           gameDate: '2026-06-26T22:10:00Z',
           officialDate: '2026-06-26',
           status: {

@@ -11,6 +11,8 @@ describe('Unknown venue weather bypass', () => {
         games: [
           {
             gamePk: 999999,
+            gameType: 'R',
+            gameNumber: 1,
             officialDate: '2026-06-26',
             gameDate: '2026-06-26T22:10:00Z',
             startTimeUtc: new Date('2026-06-26T22:10:00Z'),
@@ -80,6 +82,8 @@ describe('Unknown venue weather bypass', () => {
     const snapshot = await adapter.buildGameSnapshot(
       {
         gamePk: 999999,
+        gameType: 'R',
+        gameNumber: 1,
         officialDate: '2026-06-26',
         gameDate: '2026-06-26T22:10:00Z',
         startTimeUtc: new Date('2026-06-26T22:10:00Z'),

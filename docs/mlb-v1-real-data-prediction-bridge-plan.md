@@ -253,24 +253,24 @@ No coefficient files (JSON, CSV, or TS with embedded vectors) exist under `src/`
 
 | Prediction requirement | Bridge input source field | Transform needed? | Deterministic? | Missing? | Failure / availability behavior |
 |---|---|---|---|---|---|
-| gameId | `scheduleGame.gamePk` | Yes: number → string (`game-${id}`) | Yes | No | FAIL_CLOSED if missing |
+| gameId | `scheduleGame.gamePk` | Yes: number → string (`String(scheduleGame.gamePk)`) | Yes | No | FAIL_CLOSED if missing |
 | officialDate | `scheduleGame.officialDate` | Yes: copy exact string | Yes | No | FAIL_CLOSED if missing |
 | scheduledStartAt | `scheduleGame.startTimeUtc` | Yes: Date → RFC3339 | Yes | No | FAIL_CLOSED if missing |
 | homeTeamId | `scheduleGame.homeTeamId` | Yes: number → string | Yes | No | FAIL_CLOSED if missing |
 | awayTeamId | `scheduleGame.awayTeamId` | Yes: number → string | Yes | No | FAIL_CLOSED if missing |
 | snapshotId | Bridge-generated | Deterministic: `${gameId}::${dataCutoffAtMs}::pregame-snapshot-v1` | Yes | N/A | Auto-generated |
-| capturedAt | `researchSnapshot.provenance[0].fetchedAt` | Yes: Date → RFC3339 | Yes | No | FAIL_CLOSED if no provenance |
+| capturedAt | `max(researchSnapshot.provenance[*].fetchedAt)` | Yes: Date → RFC3339 | Yes | No | FAIL_CLOSED if no provenance |
 | dataCutoffAt | Latest provider fetchedAt in snapshot provenance | Yes: Date → RFC3339 | Yes | No | EXPLICIT_UNAVAILABLE if no provenance |
-| sourceUpdatedAt | `researchSnapshot.event.updatedAt` | Yes: Date → RFC3339 | Yes | No | NULL if absent |
+| sourceUpdatedAt | `provenance[i].sourceTimestamp ?? null` | Yes: Date → RFC3339 per source | Yes | No | NULL if absent |
 | dataCompleteness | `researchSnapshot.completeness` (0–100) | Map: 100→COMPLETE, 1–99→PARTIAL, 0→INSUFFICIENT | Yes | No | EXPLICIT_UNAVAILABLE if completeness missing |
 | homeStartingPitcher | `researchSnapshot.probablePitchers.home` | Map `PitcherAssignment` → `MLBAvailabilityState` | Yes | Yes | EXPLICIT_UNAVAILABLE_STATE if null |
 | awayStartingPitcher | `researchSnapshot.probablePitchers.away` | Map `PitcherAssignment` → `MLBAvailabilityState` | Yes | Yes | EXPLICIT_UNAVAILABLE_STATE if null |
 | venueId | `scheduleGame.venueId` | Yes: number → string | Yes | Yes | NULL if venue absent |
-| neutralSite | Not in research/schedule types | Deterministic fallback: false | Yes | Yes | SAFE_FALLBACK_ALLOWED: false |
-| doubleheader | `scheduleGame.doubleHeader` | Map string → canonical object | Yes | Yes | FAIL_CLOSED if ambiguous |
+| neutralSite | Not in research/schedule types | NULL when source does not establish the fact; map authoritative value when available | Yes | Yes | EXPLICIT_UNAVAILABLE if missing |
+| doubleheader | `scheduleGame.doubleHeader` | Map string → canonical object; canonical `gameNumber` comes from `scheduleGame.gameNumber` | Yes | Yes | FAIL_CLOSED if ambiguous |
 | season | `scheduleGame.gameDate` | Yes: Date → year number | Yes | No | FAIL_CLOSED if missing |
-| gameType | Not in research/schedule types | SAFE_FALLBACK_ALLOWED: REGULAR_SEASON | Yes | Yes | SAFE_FALLBACK_ALLOWED |
-| status | `researchSnapshot.event.status` | Map to `MLBPregameGameStatus` | Yes | No | FAIL_CLOSED if ineligible (FINAL/LIVE/CANCELLED/POSTPONED) |
+| gameType | `scheduleGame.gameType` | Explicit deterministic mapping: R → REGULAR_SEASON, S → SPRING_TRAINING, A → ALL_STAR, P/F/D/L/W → POSTSEASON, I → OTHER; unknown code → FAIL_CLOSED | Yes | Yes | FAIL_CLOSED for unsupported code |
+| status | `researchSnapshot.event.status` | Map to `MLBPregameGameStatus` | Yes | No | FAIL_CLOSED for LIVE/FINAL/POSTPONED/CANCELLED |
 | homeTeamName | `scheduleGame.homeTeamName` | Copy | Yes | No | FAIL_CLOSED if missing |
 | awayTeamName | `scheduleGame.awayTeamName` | Copy | Yes | No | FAIL_CLOSED if missing |
 | leagueRecord | Not in current bridge scope | EXPLICIT_UNAVAILABLE | N/A | Yes | OUT_OF_SCOPE_FOR_THIS_BRIDGE |
@@ -376,12 +376,12 @@ Failure boundary: Calls `validateMLBOfflinePregameInference` and returns issues.
 | probable pitcher missing | EXPLICIT_UNAVAILABLE_STATE | `homeStartingPitcher` / `awayStartingPitcher` set to `UNAVAILABLE`. Bridge does not fabricate pitcher identity. |
 | pitcher announced after initial fetch | SAFE_FALLBACK_ALLOWED if re-fetch occurs before `dataCutoffAt`; otherwise EXPLICIT_UNAVAILABLE_STATE | Re-fetch is a deterministic provider call, not randomness. If post-cutoff, the announcement is too late for pregame prediction. |
 | team stats unavailable | EXPLICIT_UNAVAILABLE_STATE | Team stats section marked `UNAVAILABLE`. Scoring module handles missing groups via abstention or renormalization. |
-| game postponed / cancelled | FAIL_CLOSED | Bridge rejects non-eligible game statuses. No prediction is produced. |
+| game postponed / cancelled | FAIL_CLOSED | Bridge rejects non-eligible game statuses. No prediction-ready canonical bridge output is produced. |
 | doubleheader identity | FAIL_CLOSED if ambiguous | Bridge requires explicit `doubleHeader` string and derives canonical `doubleheaderId` + `gameNumber`. If ambiguous, validation fails. |
 | scheduled start changes | EXPLICIT_UNAVAILABLE if change occurs after `dataCutoffAt`; otherwise rebuild snapshot upstream | Post-cutoff start change is post-start contamination. Pre-cutoff change triggers deterministic upstream rebuild. |
-| missing venue data | EXPLICIT_UNAVAILABLE_STATE | Venue section marked `UNAVAILABLE`. `venueId` set to null. `neutralSite` falls back to false. |
+| missing venue data | EXPLICIT_UNAVAILABLE_STATE | Venue section marked `UNAVAILABLE`. `venueId` set to null. `neutralSite` set to null when authoritative ingestion does not establish the fact. |
 | partial research provider failure | EXPLICIT_UNAVAILABLE for failed subsection | Affected section marked `UNAVAILABLE`. `dataCompleteness` set to `PARTIAL` or `INSUFFICIENT`. |
-| stale snapshot | FAIL_CLOSED if older than staleness threshold; EXPLICIT_UNAVAILABLE if within threshold but subsection stale | Staleness is measured from `provenance[0].fetchedAt` to `dataCutoffAt`. |
+| stale snapshot | FAIL_CLOSED if older than staleness threshold; EXPLICIT_UNAVAILABLE if within threshold but subsection stale | Staleness is measured from `dataCutoffAt` (latest provenance `fetchedAt`) to the evaluation time. |
 | data cutoff at/after game start | FAIL_CLOSED | Bridge enforces `dataCutoffAt < scheduledStartAt` strictly. Equality is contamination. |
 
 ## 13. Pregame temporal safety

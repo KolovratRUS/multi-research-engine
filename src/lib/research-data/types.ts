@@ -185,6 +185,8 @@ export interface MLBVenue {
 
 export interface MLBScheduleGame {
   gamePk: number;
+  gameType: string;
+  gameNumber: number;
   officialDate: string;
   gameDate: string;
   startTimeUtc: Date;

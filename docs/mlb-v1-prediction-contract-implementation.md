@@ -51,7 +51,7 @@ Target: `OFFICIAL_FINAL_GAME_WINNER`
 
 The target means official final winner, extra innings included, pregame only, one scheduled MLB game at a time.
 
-Game identity fields: `gameId`, `scheduledStartAt`, `homeTeamId`, `awayTeamId`, `venueId` (string | null), `neutralSite` (boolean), `doubleheader` (null | { doubleheaderId, gameNumber: 1 | 2 }).
+Game identity fields: `gameId`, `scheduledStartAt`, `homeTeamId`, `awayTeamId`, `venueId` (string | null), `neutralSite` (boolean | null), `doubleheader` (null | { doubleheaderId, gameNumber: 1 | 2 }).
 
 Snapshot fields: `snapshotId`, `capturedAt`, `dataCutoffAt`, `sourceUpdatedAt` (string | null), `dataCompleteness` (`COMPLETE` | `PARTIAL` | `INSUFFICIENT`).
 
@@ -104,7 +104,7 @@ The validators do not use the current clock and do not invent a maximum snapshot
 
 Validators enforce:
 - `homeTeamId !== awayTeamId`
-- `neutralSite` is an explicit boolean
+- `neutralSite` is an explicit boolean or null
 - `venueId` is a string or null
 - `doubleheader` is null or an exact two-field object
 - `doubleheader.gameNumber` is exactly 1 or 2
@@ -264,7 +264,7 @@ The test verifies exact static module sources by parsing actual `import` and `ex
 3. Accepts only OFFICIAL_FINAL_GAME_WINNER and rejects regulation-only, totals, run-line, and live targets
 4. Accepts valid timestamp ordering and rejects cutoff/capture/start violations and missing timezone
 5. Rejects identical team IDs and empty identifiers
-6. Accepts explicit true/false neutralSite and rejects missing, non-boolean, and unknown homeAdvantage
+6. Accepts true/false/null neutralSite and rejects missing, non-boolean, and unknown homeAdvantage
 7. Accepts null and valid game 1/2 doubleheaders and rejects unsupported numbers, missing IDs, and unknown fields
 8. Accepts all four availability states and rejects arbitrary state strings
 9. Validates PENDING_MODEL, NO_SELECTION, and MODEL_ERROR with matching noSelectionReason rules
