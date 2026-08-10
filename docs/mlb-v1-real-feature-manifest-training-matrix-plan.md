@@ -379,9 +379,7 @@ All features are derived from canonical snapshot `sections` payloads only.
 No label, no reconstruction, no provenance timestamp, no identifier is used as a numeric feature.
 
 Feature ID | Section ID | payloadPath | valueKind | missingPolicy | defaultValue | Classification | Can default equal observed? | Current extractor support
-`gameType` | `section-game-context` | `gameType` | NUMBER | USE_DEFAULT | 0 | DIRECT_SOURCE_FEATURE | yes (REGULAR_SEASON maps to 0) | DIRECTLY_SUPPORTED
-`neutralSite` | `section-game-context` | `neutralSite` | NUMBER | USE_DEFAULT | 0 | DIRECT_SOURCE_FEATURE | yes (false/null map to 0) | DIRECTLY_SUPPORTED
-`doubleHeaderGameNumber` | `section-game-context` | `doubleheader.gameNumber` | NUMBER | USE_DEFAULT | 0 | DIRECT_SOURCE_FEATURE | yes (non-doubleheader maps to 0) | DIRECTLY_SUPPORTED
+`doubleHeaderGameNumber` | `section-game-context` | `doubleHeaderGameNumber` | NUMBER | USE_DEFAULT | 0 | DIRECT_SOURCE_FEATURE | yes (non-doubleheader property is absent) | DIRECTLY_SUPPORTED
 `scheduledInnings` | `section-game-context` | `scheduledInnings` | NUMBER | USE_DEFAULT | 9 | DIRECT_SOURCE_FEATURE | yes (standard 9) | DIRECTLY_SUPPORTED
 `homeWinRate` | `section-home-batting` | `seasonStats.winRate` | NUMBER | USE_DEFAULT | 0.5 | DIRECT_SOURCE_FEATURE | yes (0.5 is plausible observed value) | DIRECTLY_SUPPORTED
 `awayWinRate` | `section-away-batting` | `seasonStats.winRate` | NUMBER | USE_DEFAULT | 0.5 | DIRECT_SOURCE_FEATURE | yes (0.5 is plausible observed value) | DIRECTLY_SUPPORTED
@@ -402,20 +400,8 @@ Note: `homeAdvantage` is NOT included in V1. It is a constant value of 1 for eve
 
 Categorical encoding:
 
-`gameType`:
-REGULAR_SEASON -> 0
-POSTSEASON -> 1
-SPRING_TRAINING -> 2
-ALL_STAR -> 3
-OTHER -> 4
-
-`neutralSite`:
-true -> 1
-false -> 0
-null -> 0
-
 `doubleHeaderGameNumber`:
-null -> 0
+absent -> USE_DEFAULT 0
 1 -> 1
 2 -> 2
 
@@ -489,11 +475,11 @@ If future phases require learned preprocessing parameters:
 
 ## 9. Categorical encoding policy
 
-Four categorical/boolean concepts are encoded in V1:
+Four categorical/boolean concepts were evaluated for V1 encoding:
 
-1. `gameType` (5 values)
-2. `neutralSite` (3 states: true, false, null)
-3. `doubleHeaderGameNumber` (3 states: null, 1, 2)
+1. `gameType` (5 values) — DEFERRED FROM V1 because the canonical predictor value is categorical/string and no legitimate numeric model encoding is currently implemented.
+2. `neutralSite` (3 states: true, false, null) — DEFERRED FROM V1 because truthful unknown/null is possible and the current V1 direct feature boundary does not provide a justified encoding.
+3. `doubleHeaderGameNumber` (2 states: 1, 2; non-doubleheader property is absent) — RETAINED as a direct numeric field from the repaired GAME_CONTEXT payload.
 
 Encoding is deterministic numeric mapping owned by the manifest.
 The manifest is versioned.
@@ -1023,13 +1009,13 @@ PARALLEL_TRAINING_MATRIX_CONTRACT = NO
 
 PROPOSED_FEATURE_COUNT_BEFORE_CORRECTION = 21
 
-FINAL_V1_MODEL_FEATURE_COUNT = 16
+FINAL_V1_MODEL_FEATURE_COUNT = 14 after R2B GAME_CONTEXT augmentation
 
-DIRECT_SOURCE_FEATURES = 16
+DIRECT_SOURCE_FEATURES = 14
 
 DERIVED_NON_MISSINGNESS_FEATURES = 0
 
-MODEL_VISIBLE_MISSINGNESS_FEATURES = 16 (paired `wasMissing` flags, one per feature)
+MODEL_VISIBLE_MISSINGNESS_FEATURES = 14 (paired `wasMissing` flags, one per feature)
 
 TEAM_STAT_REPRESENTATION = HOME + AWAY RAW ONLY
 

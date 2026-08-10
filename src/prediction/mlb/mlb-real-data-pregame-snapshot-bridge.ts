@@ -288,6 +288,13 @@ function deriveSections(
       scheduledInnings: scheduleGame.scheduledInnings,
       seriesDescription: scheduleGame.seriesDescription,
       doubleHeader: scheduleGame.doubleHeader,
+      doubleHeaderGameNumber:
+        String(scheduleGame.doubleHeader).trim() === 'Y' ||
+        String(scheduleGame.doubleHeader).trim() === 'S'
+          ? ((scheduleGame.gameNumber === 1 || scheduleGame.gameNumber === 2)
+              ? (scheduleGame.gameNumber as 1 | 2)
+              : undefined)
+          : undefined,
     }) as Record<string, unknown>,
   });
 

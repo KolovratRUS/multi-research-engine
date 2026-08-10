@@ -593,6 +593,44 @@ describe('mlb-historical-canonical-snapshot-adapter', () => {
     }
   });
 
+  it('GAME_CONTEXT doubleHeaderGameNumber matches canonical root game.doubleheader.gameNumber for doubleheader games', () => {
+    const input = buildAdapterInput({
+      scheduleGame: buildScheduleGame({
+        doubleheader: true,
+        gameNumber: 2,
+      }),
+    });
+    const result = buildMLBHistoricalCanonicalPregameSnapshot(input);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const contextSection = result.value.sections.find(
+        (section) => section.sectionId === 'section-game-context',
+      );
+      expect(contextSection?.payload.doubleHeaderGameNumber).toBe(2);
+      expect(result.value.game.doubleheader?.gameNumber).toBe(2);
+    }
+  });
+
+  it('GAME_CONTEXT doubleHeaderGameNumber is absent when root game.doubleheader is null', () => {
+    const input = buildAdapterInput();
+    const result = buildMLBHistoricalCanonicalPregameSnapshot(input);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const contextSection = result.value.sections.find(
+        (section) => section.sectionId === 'section-game-context',
+      );
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          contextSection?.payload ?? {},
+          'doubleHeaderGameNumber',
+        ),
+      ).toBe(false);
+      expect(result.value.game.doubleheader).toBeNull();
+    }
+  });
+
   it('no final scores or winner are present in output', () => {
     const input = buildAdapterInput();
     const result = buildMLBHistoricalCanonicalPregameSnapshot(input);

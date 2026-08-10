@@ -496,6 +496,66 @@ describe('mlb-real-data-pregame-snapshot-bridge', () => {
     }
   });
 
+  it('GAME_CONTEXT doubleHeaderGameNumber matches root game.doubleheader.gameNumber for doubleheader games', () => {
+    const input1 = buildBridgeInput({
+      scheduleGame: buildScheduleGame({
+        doubleHeader: 'Y',
+        gameNumber: 2,
+        seriesGameNumber: 7,
+      }),
+    });
+    const result1 = buildMLBRealDataPregameSnapshot(input1);
+    expect(result1.ok).toBe(true);
+    if (result1.ok) {
+      const contextSection = result1.value.sections.find(
+        (section) => section.sectionId === 'section-game-context',
+      );
+      expect(contextSection?.payload.doubleHeaderGameNumber).toBe(2);
+      expect(result1.value.game.doubleheader?.gameNumber).toBe(2);
+    }
+
+    const input2 = buildBridgeInput({
+      scheduleGame: buildScheduleGame({
+        doubleHeader: 'S',
+        gameNumber: 1,
+        seriesGameNumber: 8,
+      }),
+    });
+    const result2 = buildMLBRealDataPregameSnapshot(input2);
+    expect(result2.ok).toBe(true);
+    if (result2.ok) {
+      const contextSection = result2.value.sections.find(
+        (section) => section.sectionId === 'section-game-context',
+      );
+      expect(contextSection?.payload.doubleHeaderGameNumber).toBe(1);
+      expect(result2.value.game.doubleheader?.gameNumber).toBe(1);
+    }
+  });
+
+  it('GAME_CONTEXT doubleHeaderGameNumber is absent when root game.doubleheader is null', () => {
+    const input = buildBridgeInput({
+      scheduleGame: buildScheduleGame({
+        doubleHeader: 'N',
+        gameNumber: 1,
+        seriesGameNumber: 7,
+      }),
+    });
+    const result = buildMLBRealDataPregameSnapshot(input);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const contextSection = result.value.sections.find(
+        (section) => section.sectionId === 'section-game-context',
+      );
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          contextSection?.payload ?? {},
+          'doubleHeaderGameNumber',
+        ),
+      ).toBe(false);
+      expect(result.value.game.doubleheader).toBeNull();
+    }
+  });
+
   it('derives doubleheaderId from officialDate and team identifiers', () => {
     const baseProvenance = buildDataProvenance();
     const baseInput = buildBridgeInput({

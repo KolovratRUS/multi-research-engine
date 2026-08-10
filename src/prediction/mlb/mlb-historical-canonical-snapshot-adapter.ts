@@ -469,6 +469,7 @@ export function buildMLBHistoricalCanonicalPregameSnapshot(
       scheduledInnings: scheduleGame.scheduledInnings,
       seriesDescription: null,
       doubleHeader: scheduleGame.doubleheader,
+      ...(doubleheader ? { doubleHeaderGameNumber: doubleheader.gameNumber } : {}),
     } as Record<string, unknown>,
   });
 
