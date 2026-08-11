@@ -105,7 +105,7 @@ function parseScheduleResponse(
         awayTeamName: game.teams.away.team.name,
         venueId: game.venue?.id ?? null,
         venueName: game.venue?.name ?? null,
-        doubleheader: game.doubleHeader === 'Y',
+        doubleheader: game.doubleHeader === 'Y' || game.doubleHeader === 'S',
         gameNumber: game.gameNumber ?? 1,
         scheduledInnings: game.scheduledInnings ?? null,
         homeProbablePitcherId,

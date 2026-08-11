@@ -573,4 +573,152 @@ describe('createScheduleLoader', () => {
     expect(second[0].rawGameType).toBe('A');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  it('normalizes doubleHeader Y with gameNumber 2 to true and preserves gameNumber', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-06-15',
+          games: [
+            {
+              gamePk: 301,
+              officialDate: '2024-06-15',
+              gameDate: '2024-06-15T19:05:00Z',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'Y',
+              gameNumber: 2,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+    const games = await loader.loadForDateRange('2024-06-15', '2024-06-15');
+
+    expect(games).toHaveLength(1);
+    expect(games[0].doubleheader).toBe(true);
+    expect(games[0].gameNumber).toBe(2);
+  });
+
+  it('normalizes doubleHeader S with gameNumber 1 to true and preserves gameNumber', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-06-15',
+          games: [
+            {
+              gamePk: 302,
+              officialDate: '2024-06-15',
+              gameDate: '2024-06-15T19:05:00Z',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'S',
+              gameNumber: 1,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+    const games = await loader.loadForDateRange('2024-06-15', '2024-06-15');
+
+    expect(games).toHaveLength(1);
+    expect(games[0].doubleheader).toBe(true);
+    expect(games[0].gameNumber).toBe(1);
+  });
+
+  it('normalizes doubleHeader S with gameNumber 2 to true and preserves gameNumber', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-06-15',
+          games: [
+            {
+              gamePk: 303,
+              officialDate: '2024-06-15',
+              gameDate: '2024-06-15T19:05:00Z',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'S',
+              gameNumber: 2,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+    const games = await loader.loadForDateRange('2024-06-15', '2024-06-15');
+
+    expect(games).toHaveLength(1);
+    expect(games[0].doubleheader).toBe(true);
+    expect(games[0].gameNumber).toBe(2);
+  });
+
+  it('normalizes doubleHeader N with gameNumber 1 to false and preserves gameNumber', async () => {
+    const payload = {
+      dates: [
+        {
+          date: '2024-06-15',
+          games: [
+            {
+              gamePk: 304,
+              officialDate: '2024-06-15',
+              gameDate: '2024-06-15T19:05:00Z',
+              status: { abstractGameState: 'Preview', detailedState: 'Pre-Game' },
+              teams: {
+                home: { team: { id: 1, name: 'Home Team' }, probablePitcher: { id: 10, name: 'A', lastName: 'A' } },
+                away: { team: { id: 2, name: 'Away Team' }, probablePitcher: { id: 20, name: 'B', lastName: 'B' } },
+              },
+              venue: { id: 5, name: 'Park' },
+              doubleHeader: 'N',
+              gameNumber: 1,
+              scheduledInnings: 9,
+              rescheduledFromGamePk: null,
+            },
+          ],
+        },
+      ],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(makeResponse(200, payload));
+    const client = createMLBHistoricalHttpClient({ fetchImpl });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-schedule-'));
+    const cache = createMLBHistoricalCache({ root, version: 'v1' });
+    const loader = createScheduleLoader({ client, cache });
+    const games = await loader.loadForDateRange('2024-06-15', '2024-06-15');
+
+    expect(games).toHaveLength(1);
+    expect(games[0].doubleheader).toBe(false);
+    expect(games[0].gameNumber).toBe(1);
+  });
 });
