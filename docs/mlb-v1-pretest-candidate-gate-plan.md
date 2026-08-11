@@ -209,38 +209,38 @@ The gate evaluates in this exact order:
 
 5. verify row counts:
    - validationRowCount in fit result equals evaluationPlan.splitCounts.validation
-   - If mismatch: REJECT_BEFORE_TEST, reason ROW_COUNT_MISMATCH
+   - reference.validationRowCount equals evaluationPlan.splitCounts.validation
+   - reference.trainRowCount equals evaluationPlan.splitCounts.train
+   - If any mismatch: REJECT_BEFORE_TEST, reason ROW_COUNT_MISMATCH
 
-6. verify all model-visible required numeric values are finite:
-   - intercept, all coefficients, finalTrainingObjective
-   - If any non-finite: REJECT_BEFORE_TEST, reason NONFINITE_MODEL_VALUE
-
-7. verify all validation metrics used by the gate are finite:
-   - logLoss, brierScore, rocAuc
-   - If any non-finite: REJECT_BEFORE_TEST, reason NONFINITE_VALIDATION_METRIC
-
-8. verify convergence:
+6. verify convergence:
    - model.converged === true
    - If false: REJECT_BEFORE_TEST, reason NOT_CONVERGED
 
-9. validate pre-TEST reference facts are finite:
-   - P50 logLoss, P50 Brier, TRAIN-prior logLoss, TRAIN-prior Brier
+7. confirm valid reference facts / reference invariants:
+   - P50 logLoss, P50 Brier, TRAIN-prior logLoss, TRAIN-prior Brier are finite
    - trainHomeWinPrior finite and in [0, 1]
    - p_train = 0 is valid
    - p_train = 1 is valid
    - If any invalid: REJECT_BEFORE_TEST, reason INVALID_REFERENCE_FACTS
 
-10. compare validation logLoss:
-    - candidate logLoss < min(P50 logLoss, TRAIN-prior logLoss)
-    - If false: REJECT_BEFORE_TEST, reason VALIDATION_LOG_LOSS_NOT_BETTER_THAN_REFERENCES
+8. compare validation logLoss:
+   - candidate logLoss < min(P50 logLoss, TRAIN-prior logLoss)
+   - If false: REJECT_BEFORE_TEST, reason VALIDATION_LOG_LOSS_NOT_BETTER_THAN_REFERENCES
 
-11. compare validation Brier:
-    - candidate Brier < min(P50 Brier, TRAIN-prior Brier)
-    - If false: REJECT_BEFORE_TEST, reason VALIDATION_BRIER_NOT_BETTER_THAN_REFERENCES
+9. compare validation Brier:
+   - candidate Brier < min(P50 Brier, TRAIN-prior Brier)
+   - If false: REJECT_BEFORE_TEST, reason VALIDATION_BRIER_NOT_BETTER_THAN_REFERENCES
 
-12. classify ELIGIBLE_FOR_TEST
+10. classify ELIGIBLE_FOR_TEST
 
 Invalid outer contracts fail closed before unsafe deep field access.
+Identity mismatch stops performance comparison because candidate and reference
+artifacts are not proven to describe the same model/evaluation identity.
+Row-count mismatch stops performance comparison because the compared validation
+populations are not proven compatible.
+Once outer contracts, identity, and row counts are valid, convergence and both
+performance failures are all safely determinable and are accumulated together.
 The output includes all safely determinable rejection reasons.
 
 ## 12. Exact reason codes
@@ -251,8 +251,6 @@ Structural:
 - INVALID_REFERENCE_FACTS
 - IDENTITY_MISMATCH
 - ROW_COUNT_MISMATCH
-- NONFINITE_MODEL_VALUE
-- NONFINITE_VALIDATION_METRIC
 - NOT_CONVERGED
 
 Performance:
@@ -272,8 +270,8 @@ Failure (pre-TEST):
 | TRAIN row count = 0 | Reference facts contract fails validation -> REJECT_BEFORE_TEST |
 | VALIDATION row count = 0 | Reference facts contract fails validation -> REJECT_BEFORE_TEST |
 | invalid target values in TRAIN/VALIDATION | Reference facts builder rejects -> REJECT_BEFORE_TEST |
-| non-finite model intercept/coefficients/objective | REJECT_BEFORE_TEST, NONFINITE_MODEL_VALUE |
-| non-finite candidate validation metric | REJECT_BEFORE_TEST, NONFINITE_VALIDATION_METRIC |
+| non-finite model intercept/coefficients/objective | fit contract invalid -> REJECT_BEFORE_TEST, INVALID_FIT_RESULT |
+| non-finite candidate validation metric | fit contract invalid -> REJECT_BEFORE_TEST, INVALID_FIT_RESULT |
 | non-finite reference baseline metric or probability | REJECT_BEFORE_TEST, INVALID_REFERENCE_FACTS |
 | TRAIN class prior = 0 | Log-loss is finite (clipped). Gate proceeds. If candidate fails performance rule, rejects with performance reason. |
 | TRAIN class prior = 1 | Same as prior = 0. |
@@ -335,13 +333,12 @@ Required future implementation properties:
 ## 16. Future test matrix
 
 Tests to cover in future implementation:
-
 - valid converged candidate beating both references on logLoss + Brier -> eligible
 - non-converged candidate -> reject
 - invalid fit contract -> reject/fail validation
 - identity mismatch -> reject
 - validation row-count mismatch -> reject
-- non-finite validation metric -> reject
+- non-finite fit model or validation metric -> fit contract invalid -> INVALID_FIT_RESULT
 - logLoss beats references but Brier does not -> reject
 - Brier beats references but logLoss does not -> reject
 - exact tie on logLoss -> reject
@@ -389,3 +386,26 @@ must not influence the chosen numeric thresholds.
 FROZEN_PRETEST_GATE_POLICY_V1
 
 This policy is baseline-relative and frozen before any V2 configuration or fit.
+
+## 20. Amendment provenance
+
+ORIGINAL_POLICY_ID = FROZEN_PRETEST_GATE_POLICY_V1
+AMENDMENT_KIND = REACHABILITY_TRUTHFULNESS_CORRECTION
+SUBSTANTIVE_PERFORMANCE_POLICY_CHANGED = NO
+TEST_POLICY_CHANGED = NO
+CONVERGENCE_POLICY_CHANGED = NO
+REFERENCE_BASELINE_POLICY_CHANGED = NO
+ODDS_BLIND_POLICY_CHANGED = NO
+
+Reason: authoritative validators made two specialized nonfinite reasons and some
+identity mismatch variants structurally unreachable.
+
+Identity reachability (current authoritative contracts):
+- planId / matrixId / configId mismatch between valid artifacts = REACHABLE_COUPLED
+- manifestId / datasetId / different featureIds mismatch between valid artifacts = REACHABLE_ISOLATED
+- algorithm mismatch between valid artifacts = STRUCTURALLY_UNREACHABLE
+  (both artifact contracts constrain algorithm to L2_LOGISTIC_REGRESSION_BINARY_V1)
+- pure same-IDs different-order featureIds mismatch between valid artifacts = STRUCTURALLY_UNREACHABLE
+  (evaluation-plan validator rejects noncanonical feature order before the gate)
+
+All listed reachable mismatch cases produce IDENTITY_MISMATCH.
