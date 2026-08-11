@@ -369,6 +369,194 @@ describe('createMLBHistoricalMaterializationSourceAdapter', () => {
       expect(result[0].status).toBe('FINAL');
     });
 
+    // 50. requested officialDate range enforced by source adapter
+    it('50. requested officialDate range enforced by source adapter', async () => {
+      const games = [
+        buildScheduleGame({ gamePk: 1, officialDate: '2021-03-15' }),
+        buildScheduleGame({ gamePk: 2, officialDate: '2021-04-01' }),
+        buildScheduleGame({ gamePk: 3, officialDate: '2021-04-15' }),
+        buildScheduleGame({ gamePk: 4, officialDate: '2021-05-01' }),
+      ];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      const result = await adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' });
+
+      expect(result.map((game) => game.gamePk).sort()).toEqual([2, 3]);
+    });
+
+    // 51. singleton non-FINAL schedule preserved unchanged after canonicalization
+    it('51. singleton non-FINAL schedule preserved unchanged after canonicalization', async () => {
+      const games = [buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'POSTPONED' })];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      const result = await adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].gamePk).toBe(1);
+      expect(result[0].status).toBe('POSTPONED');
+    });
+
+    // 52. duplicate postponed + unique FINAL selects FINAL representation
+    it('52. duplicate postponed + unique FINAL selects FINAL representation', async () => {
+      const postponed = buildScheduleGame({
+        gamePk: 1,
+        officialDate: '2021-04-02',
+        status: 'POSTPONED',
+        scheduledStart: new Date('2021-04-02T18:00:00.000Z'),
+        gameNumber: 1,
+        doubleheader: false,
+      });
+      const finalGame = buildScheduleGame({
+        gamePk: 1,
+        officialDate: '2021-04-02',
+        status: 'FINAL',
+        scheduledStart: new Date('2021-04-02T18:10:00.000Z'),
+        gameNumber: 2,
+        doubleheader: true,
+        rescheduledFromGamePk: 1,
+      });
+      const games = [postponed, finalGame];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      const result = await adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].gamePk).toBe(1);
+      expect(result[0].status).toBe('FINAL');
+      expect(result[0].scheduledStart).toBe(finalGame.scheduledStart);
+      expect(result[0].gameNumber).toBe(2);
+      expect(result[0].doubleheader).toBe(true);
+    });
+
+    // 53. duplicate with two FINAL representations fails closed
+    it('53. duplicate with two FINAL representations fails closed', async () => {
+      const finalA = buildScheduleGame({
+        gamePk: 1,
+        officialDate: '2021-04-01',
+        status: 'FINAL',
+        scheduledStart: new Date('2021-04-01T18:00:00.000Z'),
+      });
+      const finalB = buildScheduleGame({
+        gamePk: 1,
+        officialDate: '2021-04-01',
+        status: 'FINAL',
+        scheduledStart: new Date('2021-04-01T20:00:00.000Z'),
+      });
+      const games = [finalA, finalB];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      await expect(adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' })).rejects.toThrow(
+        'Duplicate gamePk 1 has multiple FINAL representations',
+      );
+    });
+
+    // 54. duplicate with zero FINAL representations fails closed
+    it('54. duplicate with zero FINAL representations fails closed', async () => {
+      const postponedA = buildScheduleGame({
+        gamePk: 1,
+        officialDate: '2021-04-01',
+        status: 'POSTPONED',
+        scheduledStart: new Date('2021-04-01T18:00:00.000Z'),
+      });
+      const postponedB = buildScheduleGame({
+        gamePk: 1,
+        officialDate: '2021-04-01',
+        status: 'POSTPONED',
+        scheduledStart: new Date('2021-04-01T20:00:00.000Z'),
+      });
+      const games = [postponedA, postponedB];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      await expect(adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' })).rejects.toThrow(
+        'Duplicate gamePk 1 has no qualifying FINAL representation',
+      );
+    });
+
+    // 55. duplicate with different homeTeamId fails closed
+    it('55. duplicate with different homeTeamId fails closed', async () => {
+      const gameA = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'FINAL', homeTeamId: 100 });
+      const gameB = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'FINAL', homeTeamId: 999 });
+      const games = [gameA, gameB];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      await expect(adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' })).rejects.toThrow(
+        'Duplicate gamePk 1 has conflicting canonical identity',
+      );
+    });
+
+    // 56. duplicate with different awayTeamId fails closed
+    it('56. duplicate with different awayTeamId fails closed', async () => {
+      const gameA = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'FINAL', awayTeamId: 200 });
+      const gameB = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'FINAL', awayTeamId: 999 });
+      const games = [gameA, gameB];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      await expect(adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' })).rejects.toThrow(
+        'Duplicate gamePk 1 has conflicting canonical identity',
+      );
+    });
+
+    // 57. duplicate with different officialDate fails closed
+    it('57. duplicate with different officialDate fails closed', async () => {
+      const gameA = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'FINAL' });
+      const gameB = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-02', status: 'FINAL' });
+      const games = [gameA, gameB];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      await expect(adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' })).rejects.toThrow(
+        'Duplicate gamePk 1 has conflicting canonical identity',
+      );
+    });
+
+    // 58. duplicate with different rawGameType fails closed
+    it('58. duplicate with different rawGameType fails closed', async () => {
+      const gameA = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'FINAL', rawGameType: 'R' });
+      const gameB = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'FINAL', rawGameType: 'S' });
+      const games = [gameA, gameB];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      await expect(adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' })).rejects.toThrow(
+        'Duplicate gamePk 1 has conflicting canonical identity',
+      );
+    });
+
+    // 59. duplicate with different venueId fails closed
+    it('59. duplicate with different venueId fails closed', async () => {
+      const gameA = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'FINAL', venueId: 1 });
+      const gameB = buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', status: 'FINAL', venueId: 999 });
+      const games = [gameA, gameB];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      await expect(adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' })).rejects.toThrow(
+        'Duplicate gamePk 1 has conflicting canonical identity',
+      );
+    });
+
+    // 60. canonical output ordered by scheduledStart then gamePk
+    it('60. canonical output ordered by scheduledStart then gamePk', async () => {
+      const games = [
+        buildScheduleGame({ gamePk: 2, officialDate: '2021-04-01', scheduledStart: new Date('2021-04-01T20:00:00.000Z') }),
+        buildScheduleGame({ gamePk: 1, officialDate: '2021-04-01', scheduledStart: new Date('2021-04-01T18:00:00.000Z') }),
+        buildScheduleGame({ gamePk: 3, officialDate: '2021-04-01', scheduledStart: new Date('2021-04-01T19:00:00.000Z') }),
+      ];
+      const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue(games) };
+      const adapter = createAdapter({ scheduleLoader });
+
+      const result = await adapter.loadScheduleGamesForDateRange({ start: '2021-04-01', end: '2021-04-30' });
+
+      expect(result.map((game) => game.gamePk)).toEqual([1, 3, 2]);
+    });
+
     // 42. schedule acquisition never consults final outcome
     it('42. schedule acquisition never consults final outcome', async () => {
       const scheduleLoader = { loadForDateRange: vi.fn().mockResolvedValue([buildScheduleGame()]) };

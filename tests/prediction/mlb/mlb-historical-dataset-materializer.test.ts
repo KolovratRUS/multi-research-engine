@@ -1904,6 +1904,201 @@ describe('materializeMLBHistoricalDataset', () => {
     expect(result.dataset.examples[0].split).toBe('TEST');
   });
 
+  it('assigns explicit multi-day split boundaries', async () => {
+    const explicitPolicy = {
+      strategy: 'CHRONOLOGICAL_OFFICIAL_DATE_V1' as const,
+      embargoDays: 0,
+      train: { startDate: '2026-04-01', endDate: '2026-04-20' },
+      validation: { startDate: '2026-04-21', endDate: '2026-04-24' },
+      test: { startDate: '2026-04-25', endDate: '2026-04-28' },
+    };
+
+    const source = createSourceAdapter({
+      scheduleGames: [
+        createScheduleGame({ officialDate: '2026-04-01', gamePk: 101 }),
+        createScheduleGame({ officialDate: '2026-04-20', gamePk: 102 }),
+        createScheduleGame({ officialDate: '2026-04-21', gamePk: 103 }),
+        createScheduleGame({ officialDate: '2026-04-24', gamePk: 104 }),
+        createScheduleGame({ officialDate: '2026-04-25', gamePk: 105 }),
+        createScheduleGame({ officialDate: '2026-04-28', gamePk: 106 }),
+        createScheduleGame({ officialDate: '2026-04-02', gamePk: 107 }),
+      ],
+      starterResults: {
+        '101-home': createStarterResult({ pitcherId: 123 }),
+        '101-away': createStarterResult({ pitcherId: 456 }),
+        '102-home': createStarterResult({ pitcherId: 123 }),
+        '102-away': createStarterResult({ pitcherId: 456 }),
+        '103-home': createStarterResult({ pitcherId: 123 }),
+        '103-away': createStarterResult({ pitcherId: 456 }),
+        '104-home': createStarterResult({ pitcherId: 123 }),
+        '104-away': createStarterResult({ pitcherId: 456 }),
+        '105-home': createStarterResult({ pitcherId: 123 }),
+        '105-away': createStarterResult({ pitcherId: 456 }),
+        '106-home': createStarterResult({ pitcherId: 123 }),
+        '106-away': createStarterResult({ pitcherId: 456 }),
+        '107-home': createStarterResult({ pitcherId: 123 }),
+        '107-away': createStarterResult({ pitcherId: 456 }),
+      },
+    });
+    const clock = createClock();
+
+    const result = await materializeMLBHistoricalDataset({
+      startDate: '2026-04-01',
+      endDate: '2026-04-28',
+      cutoffMinutesBeforeStart: 360,
+      sourceAdapter: source,
+      clock,
+      datasetId: 'ds-explicit',
+      splitPolicy: explicitPolicy,
+    });
+
+    const splits = Object.fromEntries(
+      result.dataset.examples.map((example) => [
+        example.snapshot.game.gameId,
+        example.split,
+      ]),
+    );
+
+    expect(splits['101']).toBe('TRAIN');
+    expect(splits['102']).toBe('TRAIN');
+    expect(splits['103']).toBe('VALIDATION');
+    expect(splits['104']).toBe('VALIDATION');
+    expect(splits['105']).toBe('TEST');
+    expect(splits['106']).toBe('TEST');
+    expect(splits['107']).toBe('TRAIN');
+  });
+
+  it('covers every date in explicit multi-day range', async () => {
+    const explicitPolicy = {
+      strategy: 'CHRONOLOGICAL_OFFICIAL_DATE_V1' as const,
+      embargoDays: 0,
+      train: { startDate: '2026-04-01', endDate: '2026-04-20' },
+      validation: { startDate: '2026-04-21', endDate: '2026-04-24' },
+      test: { startDate: '2026-04-25', endDate: '2026-04-28' },
+    };
+
+    const scheduleGames: CanonicalHistoricalScheduleGame[] = [];
+    const outcomes = new Map<number, MLBHistoricalOutcomeWithProvenance>();
+    const starterResults: Record<string, MLBHistoricalProspectiveStarterResult> = {};
+    for (let day = 1; day <= 28; day++) {
+      const date = `2026-04-${String(day).padStart(2, '0')}`;
+      const scheduledStart = createDate(`${date}T18:00:00.000Z`);
+      const gamePk = 1000 + day;
+      scheduleGames.push(
+        createScheduleGame({
+          officialDate: date,
+          gamePk,
+          scheduledStart,
+          cutoffTime: createDate(`${date}T12:00:00.000Z`),
+        }),
+      );
+      outcomes.set(gamePk, {
+        outcome: {
+          gamePk,
+          status: 'FINAL',
+          homeScore: 3,
+          awayScore: 2,
+          winner: 'HOME',
+          innings: 9,
+          completedAt: createDate(`${date}T22:00:00.000Z`),
+          completedAtSource: 'LAST_COMPLETED_PLAY_END',
+          warnings: [],
+        },
+        provenance: createProvenance('/api/v1.1/game/1/feed/live', createDate(`${date}T23:00:00.000Z`)),
+      });
+      starterResults[`${gamePk}-home`] = createStarterResult({
+        pitcherId: 123,
+        observedAt: createDate(`${date}T12:00:00.000Z`),
+        observation: {
+          schemaVersion: 'phase1g-a-v1',
+          sport: 'mlb',
+          gamePk,
+          observedAt: createDate(`${date}T12:00:00.000Z`),
+          scheduledStart,
+          homeProbablePitcherId: 123,
+          awayProbablePitcherId: 456,
+          homeTeamId: 100,
+          awayTeamId: 200,
+          sourceEndpoint: '/api/v1/schedule',
+          sourceRequestParameters: {},
+          sourceResponseHash: 'abc123',
+          observationContext: 'PROSPECTIVE_LIVE',
+          provenance: 'SCHEDULE_PROBABLE_OBSERVED_AT',
+          warnings: [],
+        },
+      });
+      starterResults[`${gamePk}-away`] = createStarterResult({
+        pitcherId: 456,
+        observedAt: createDate(`${date}T12:00:00.000Z`),
+        observation: {
+          schemaVersion: 'phase1g-a-v1',
+          sport: 'mlb',
+          gamePk,
+          observedAt: createDate(`${date}T12:00:00.000Z`),
+          scheduledStart,
+          homeProbablePitcherId: 123,
+          awayProbablePitcherId: 456,
+          homeTeamId: 100,
+          awayTeamId: 200,
+          sourceEndpoint: '/api/v1/schedule',
+          sourceRequestParameters: {},
+          sourceResponseHash: 'abc123',
+          observationContext: 'PROSPECTIVE_LIVE',
+          provenance: 'SCHEDULE_PROBABLE_OBSERVED_AT',
+          warnings: [],
+        },
+      });
+    }
+
+    const source: MLBHistoricalMaterializationSourceAdapter = {
+      async loadScheduleGamesForDateRange() {
+        return scheduleGames;
+      },
+      async loadTeamStatsAsOf({ teamId }) {
+        const aggregate = createTeamAggregate(Number(teamId));
+        return { aggregate, provenance: [createProvenance(`team-${teamId}`)] };
+      },
+      async resolveProspectiveStarter({ gamePk, side }) {
+        const key = `${gamePk}-${side}`;
+        const result = starterResults[key];
+        if (!result) throw new Error(`Starter ${key} missing`);
+        return result;
+      },
+      async loadPitcherStatsAsOf({ personId }) {
+        const aggregate = createPitcherAggregate(personId);
+        return { aggregate, provenance: [createProvenance(`pitcher-${personId}`)] };
+      },
+      async loadOfficialFinalOutcome({ gamePk }) {
+        const outcome = outcomes.get(gamePk);
+        if (!outcome) throw new Error(`Outcome ${gamePk} missing`);
+        return outcome;
+      },
+    };
+
+    const lateClock = createClock(createDate('2026-04-29T00:00:00.000Z'));
+
+    const result = await materializeMLBHistoricalDataset({
+      startDate: '2026-04-01',
+      endDate: '2026-04-28',
+      cutoffMinutesBeforeStart: 360,
+      sourceAdapter: source,
+      clock: lateClock,
+      datasetId: 'ds-full-range',
+      splitPolicy: explicitPolicy,
+    });
+
+    expect(result.dataset.examples).toHaveLength(28);
+
+    const splitCounts = { TRAIN: 0, VALIDATION: 0, TEST: 0 };
+    for (const example of result.dataset.examples) {
+      splitCounts[example.split]++;
+    }
+
+    expect(splitCounts.TRAIN).toBe(20);
+    expect(splitCounts.VALIDATION).toBe(4);
+    expect(splitCounts.TEST).toBe(4);
+  });
+
   it('fails closed on date outside policy', async () => {
     const source = createSourceAdapter({
       scheduleGames: [createScheduleGame({ officialDate: '2026-07-15' })],
@@ -2136,6 +2331,134 @@ describe('materializeMLBHistoricalDataset', () => {
     expect(parsed.endDate).toBe('2026-04-01');
     expect(parsed.cutoffMinutesBeforeStart).toBe(360);
     expect(parsed.output).toBe('/tmp/test.json');
+    expect(parsed.explicitMode).toBe(false);
+    expect(parsed.trainEndDate).toBe('2026-04-01');
+    expect(parsed.validationEndDate).toBe('2026-04-01');
+  });
+
+  it('parses explicit multi-day split flags', async () => {
+    const module = await import('../../../scripts/materialize-mlb-historical-dataset');
+    const parsed = module.parseMLBHistoricalMaterializationCliArgs([
+      'node',
+      'scripts/materialize-mlb-historical-dataset.ts',
+      '--start-date',
+      '2026-04-01',
+      '--end-date',
+      '2026-04-28',
+      '--train-end-date',
+      '2026-04-20',
+      '--validation-end-date',
+      '2026-04-24',
+      '--cutoff-minutes-before-start',
+      '360',
+      '--output',
+      '/tmp/test.json',
+    ]);
+
+    expect(parsed.startDate).toBe('2026-04-01');
+    expect(parsed.endDate).toBe('2026-04-28');
+    expect(parsed.trainEndDate).toBe('2026-04-20');
+    expect(parsed.validationEndDate).toBe('2026-04-24');
+    expect(parsed.explicitMode).toBe(true);
+  });
+
+  it('rejects partial explicit split flags', async () => {
+    const module = await import('../../../scripts/materialize-mlb-historical-dataset');
+
+    expect(() =>
+      module.parseMLBHistoricalMaterializationCliArgs([
+        'node',
+        'scripts/materialize-mlb-historical-dataset.ts',
+        '--start-date',
+        '2026-04-01',
+        '--end-date',
+        '2026-04-28',
+        '--train-end-date',
+        '2026-04-20',
+        '--cutoff-minutes-before-start',
+        '360',
+        '--output',
+        '/tmp/test.json',
+      ]),
+    ).toThrow('Both --train-end-date and --validation-end-date must be supplied together');
+
+    expect(() =>
+      module.parseMLBHistoricalMaterializationCliArgs([
+        'node',
+        'scripts/materialize-mlb-historical-dataset.ts',
+        '--start-date',
+        '2026-04-01',
+        '--end-date',
+        '2026-04-28',
+        '--validation-end-date',
+        '2026-04-24',
+        '--cutoff-minutes-before-start',
+        '360',
+        '--output',
+        '/tmp/test.json',
+      ]),
+    ).toThrow('Both --train-end-date and --validation-end-date must be supplied together');
+  });
+
+  it('rejects invalid explicit split ordering', async () => {
+    const module = await import('../../../scripts/materialize-mlb-historical-dataset');
+
+    expect(() =>
+      module.parseMLBHistoricalMaterializationCliArgs([
+        'node',
+        'scripts/materialize-mlb-historical-dataset.ts',
+        '--start-date',
+        '2026-04-01',
+        '--end-date',
+        '2026-04-28',
+        '--train-end-date',
+        '2026-03-31',
+        '--validation-end-date',
+        '2026-04-24',
+        '--cutoff-minutes-before-start',
+        '360',
+        '--output',
+        '/tmp/test.json',
+      ]),
+    ).toThrow('--train-end-date must be >= --start-date');
+
+    expect(() =>
+      module.parseMLBHistoricalMaterializationCliArgs([
+        'node',
+        'scripts/materialize-mlb-historical-dataset.ts',
+        '--start-date',
+        '2026-04-01',
+        '--end-date',
+        '2026-04-28',
+        '--train-end-date',
+        '2026-04-24',
+        '--validation-end-date',
+        '2026-04-24',
+        '--cutoff-minutes-before-start',
+        '360',
+        '--output',
+        '/tmp/test.json',
+      ]),
+    ).toThrow('--train-end-date must be < --validation-end-date');
+
+    expect(() =>
+      module.parseMLBHistoricalMaterializationCliArgs([
+        'node',
+        'scripts/materialize-mlb-historical-dataset.ts',
+        '--start-date',
+        '2026-04-01',
+        '--end-date',
+        '2026-04-28',
+        '--train-end-date',
+        '2026-04-24',
+        '--validation-end-date',
+        '2026-04-28',
+        '--cutoff-minutes-before-start',
+        '360',
+        '--output',
+        '/tmp/test.json',
+      ]),
+    ).toThrow('--validation-end-date must be < --end-date');
   });
 });
 

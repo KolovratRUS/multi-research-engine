@@ -131,7 +131,8 @@ export function createMLBHistoricalMaterializationSourceAdapter(
 
   return {
     async loadScheduleGamesForDateRange({ start, end }) {
-      return deps.scheduleLoader.loadForDateRange(start, end);
+      const games = await deps.scheduleLoader.loadForDateRange(start, end);
+      return canonicalizeHistoricalScheduleGames(games, start, end);
     },
 
     async loadTeamStatsAsOf({ teamId, cutoff, season }) {
@@ -270,6 +271,78 @@ export function createRealMLBHistoricalMaterializationSourceAdapter(
     pitcherAggregator: aggregatePitcherHistory,
     observationStore: options.observationStore,
   });
+}
+
+function canonicalizeHistoricalScheduleGames(
+  games: readonly CanonicalHistoricalScheduleGame[],
+  requestedStartDate: string,
+  requestedEndDate: string,
+): readonly CanonicalHistoricalScheduleGame[] {
+  const inRange = games.filter((game) => {
+    const officialDate = game.officialDate;
+    return officialDate >= requestedStartDate && officialDate <= requestedEndDate;
+  });
+
+  const grouped = new Map<number, CanonicalHistoricalScheduleGame[]>();
+  for (const game of inRange) {
+    const group = grouped.get(game.gamePk);
+    if (group) {
+      group.push(game);
+    } else {
+      grouped.set(game.gamePk, [game]);
+    }
+  }
+
+  const canonical: CanonicalHistoricalScheduleGame[] = [];
+
+  for (const group of grouped.values()) {
+    if (group.length === 1) {
+      canonical.push(group[0]);
+      continue;
+    }
+
+    const reference = group[0];
+    for (let i = 1; i < group.length; i++) {
+      const candidate = group[i];
+      if (
+        candidate.homeTeamId !== reference.homeTeamId ||
+        candidate.awayTeamId !== reference.awayTeamId ||
+        (candidate.rawGameType ?? null) !== (reference.rawGameType ?? null) ||
+        candidate.officialDate !== reference.officialDate ||
+        candidate.venueId !== reference.venueId
+      ) {
+        throw new Error(
+          `Duplicate gamePk ${reference.gamePk} has conflicting canonical identity: ` +
+            `homeTeamId=${reference.homeTeamId} vs ${candidate.homeTeamId}, ` +
+            `awayTeamId=${reference.awayTeamId} vs ${candidate.awayTeamId}, ` +
+            `rawGameType=${reference.rawGameType ?? 'null'} vs ${candidate.rawGameType ?? 'null'}, ` +
+            `officialDate=${reference.officialDate} vs ${candidate.officialDate}, ` +
+            `venueId=${reference.venueId} vs ${candidate.venueId}`,
+        );
+      }
+    }
+
+    const finals = group.filter((game) => game.status === 'FINAL');
+    if (finals.length === 1) {
+      canonical.push(finals[0]);
+    } else if (finals.length === 0) {
+      throw new Error(
+        `Duplicate gamePk ${reference.gamePk} has no qualifying FINAL representation`,
+      );
+    } else {
+      throw new Error(
+        `Duplicate gamePk ${reference.gamePk} has multiple FINAL representations`,
+      );
+    }
+  }
+
+  canonical.sort((a, b) => {
+    const startDiff = a.scheduledStart.getTime() - b.scheduledStart.getTime();
+    if (startDiff !== 0) return startDiff;
+    return a.gamePk - b.gamePk;
+  });
+
+  return canonical;
 }
 
 function validateCutoff(cutoff: Date, context: string): void {

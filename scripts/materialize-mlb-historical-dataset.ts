@@ -15,18 +15,23 @@ import {
 interface ParsedArgs {
   readonly startDate: string;
   readonly endDate: string;
+  readonly trainEndDate: string;
+  readonly validationEndDate: string;
   readonly cutoffMinutesBeforeStart: number;
   readonly output: string;
 }
 
 export function parseMLBHistoricalMaterializationCliArgs(
   argv: readonly string[],
-): ParsedArgs {
-  const seen = new Set<string>();
+): ParsedArgsWithMode {
   let startDate = '';
   let endDate = '';
+  let trainEndDate = '';
+  let validationEndDate = '';
   let cutoffMinutesBeforeStart: number | null = null;
   let output = '';
+
+  const seen = new Set<string>();
 
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
@@ -52,6 +57,12 @@ export function parseMLBHistoricalMaterializationCliArgs(
         break;
       case 'end-date':
         endDate = value;
+        break;
+      case 'train-end-date':
+        trainEndDate = value;
+        break;
+      case 'validation-end-date':
+        validationEndDate = value;
         break;
       case 'cutoff-minutes-before-start': {
         const parsed = Number(value);
@@ -88,12 +99,62 @@ export function parseMLBHistoricalMaterializationCliArgs(
     throw new Error('Invalid --output: path required');
   }
 
+  const trimmedStart = startDate.trim();
+  const trimmedEnd = endDate.trim();
+  const hasTrainEnd = trainEndDate.trim().length > 0;
+  const hasValidationEnd = validationEndDate.trim().length > 0;
+
+  if (hasTrainEnd || hasValidationEnd) {
+    if (!hasTrainEnd || !hasValidationEnd) {
+      throw new Error(
+        'Both --train-end-date and --validation-end-date must be supplied together',
+      );
+    }
+
+    if (!datePattern.test(trainEndDate) || trainEndDate !== trainEndDate.trim()) {
+      throw new Error('Invalid --train-end-date: YYYY-MM-DD required');
+    }
+    if (!datePattern.test(validationEndDate) || validationEndDate !== validationEndDate.trim()) {
+      throw new Error('Invalid --validation-end-date: YYYY-MM-DD required');
+    }
+
+    const trimmedTrainEnd = trainEndDate.trim();
+    const trimmedValidationEnd = validationEndDate.trim();
+
+    if (trimmedTrainEnd < trimmedStart) {
+      throw new Error('--train-end-date must be >= --start-date');
+    }
+    if (trimmedTrainEnd >= trimmedValidationEnd) {
+      throw new Error('--train-end-date must be < --validation-end-date');
+    }
+    if (trimmedValidationEnd >= trimmedEnd) {
+      throw new Error('--validation-end-date must be < --end-date');
+    }
+
+    return {
+      startDate: trimmedStart,
+      endDate: trimmedEnd,
+      trainEndDate: trimmedTrainEnd,
+      validationEndDate: trimmedValidationEnd,
+      cutoffMinutesBeforeStart,
+      output: output.trim(),
+      explicitMode: true,
+    };
+  }
+
   return {
-    startDate: startDate.trim(),
-    endDate: endDate.trim(),
+    startDate: trimmedStart,
+    endDate: trimmedEnd,
+    trainEndDate: trimmedStart,
+    validationEndDate: trimmedEnd,
     cutoffMinutesBeforeStart,
     output: output.trim(),
+    explicitMode: false,
   };
+}
+
+interface ParsedArgsWithMode extends ParsedArgs {
+  readonly explicitMode: boolean;
 }
 
 function addDays(iso: string, days: number): string {
@@ -127,8 +188,37 @@ async function writeOutputAtomically(
   await fs.rename(tempPath, resolved);
 }
 
+function buildSplitPolicy(args: ParsedArgsWithMode) {
+  if (args.explicitMode) {
+    return {
+      strategy: 'CHRONOLOGICAL_OFFICIAL_DATE_V1' as const,
+      embargoDays: 0,
+      train: { startDate: args.startDate, endDate: args.trainEndDate },
+      validation: {
+        startDate: addDays(args.trainEndDate, 1),
+        endDate: args.validationEndDate,
+      },
+      test: {
+        startDate: addDays(args.validationEndDate, 1),
+        endDate: args.endDate,
+      },
+    };
+  }
+
+  const validationStart = addDays(args.endDate, 1);
+  const testStart = addDays(args.endDate, 2);
+
+  return {
+    strategy: 'CHRONOLOGICAL_OFFICIAL_DATE_V1' as const,
+    embargoDays: 0,
+    train: { startDate: args.startDate, endDate: args.startDate },
+    validation: { startDate: validationStart, endDate: validationStart },
+    test: { startDate: testStart, endDate: testStart },
+  };
+}
+
 async function main(): Promise<void> {
-  const args = parseMLBHistoricalMaterializationCliArgs(process.argv);
+  const args = parseMLBHistoricalMaterializationCliArgs(process.argv) as ParsedArgsWithMode;
 
   const client = createMLBHistoricalHttpClient();
   const cacheRoot = path.join(os.tmpdir(), 'mlb-historical-cache');
@@ -145,9 +235,6 @@ async function main(): Promise<void> {
     args.cutoffMinutesBeforeStart,
   );
 
-  const validationStart = addDays(args.endDate, 1);
-  const testStart = addDays(args.endDate, 2);
-
   const input = {
     startDate: args.startDate,
     endDate: args.endDate,
@@ -155,13 +242,7 @@ async function main(): Promise<void> {
     sourceAdapter,
     clock: new RealClock(),
     datasetId,
-    splitPolicy: {
-      strategy: 'CHRONOLOGICAL_OFFICIAL_DATE_V1' as const,
-      embargoDays: 0,
-      train: { startDate: args.startDate, endDate: args.startDate },
-      validation: { startDate: validationStart, endDate: validationStart },
-      test: { startDate: testStart, endDate: testStart },
-    },
+    splitPolicy: buildSplitPolicy(args),
   };
 
   const result = await materializeMLBHistoricalDataset(input);
