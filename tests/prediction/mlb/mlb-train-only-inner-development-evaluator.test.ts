@@ -27,6 +27,9 @@ import {
   MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
   computeMLBInnerCandidateRecipeFingerprint,
   recordInnerCandidateRecipeExecution,
+  rankInnerEligibleCandidates,
+  MLBInnerRankableCandidateInput,
+  MLBInnerCandidateRank,
   MLBTrainOnlyInnerRowCollection,
   MLBTrainOnlyInnerValidationFolds,
   MLBFoldMaterialization,
@@ -705,14 +708,14 @@ describe('mlb-train-only-inner-development-evaluator', () => {
       expect(source).not.toMatch(/import.*trainer/);
     });
 
-    it('contains E3-D aggregation and eligibility logic but no ranking', () => {
+    it('contains E3-D evaluation plus E3-E registration/ranking infrastructure only', () => {
       const source = require('fs').readFileSync(
         require('path').resolve(__dirname, '../../../src/prediction/mlb/mlb-train-only-inner-development-evaluator.ts'),
         'utf8',
       );
       expect(source).toMatch(/evaluateMLBTrainOnlyInnerCandidate/);
       expect(source).toMatch(/INNER_ELIGIBLE/);
-      expect(source).not.toMatch(/rankInner/);
+      expect(source).toMatch(/rankInnerEligibleCandidates/);
       expect(source).toMatch(/RECIPE_BUDGET/);
       expect(source).not.toMatch(/outer.*VALIDATION.*evaluat/i);
       expect(source).not.toMatch(/TEST.*evaluat/i);
@@ -2928,5 +2931,1231 @@ describe('MLBInnerCandidateRecipe runtime safety', () => {
     const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
     expect(result.ok).toBe(false);
     expect(getterExecuted).toBe(false);
+  });
+});
+
+function buildRankableInput(
+  recipe: MLBInnerCandidateRecipe,
+  foldResults: MLBInnerFoldMetricResult[],
+): MLBInnerRankableCandidateInput {
+  return { recipe, foldResults };
+}
+
+function requireFingerprint(recipe: MLBInnerCandidateRecipe): string {
+  const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+  if (!result.ok) {
+    throw new Error('bad fingerprint');
+  }
+  return result.fingerprint;
+}
+
+function buildDistinctRecipe(
+  id: string,
+  complexityRank: number,
+  regularizationL2: number,
+): MLBInnerCandidateRecipe {
+  return {
+    candidateRecipeId: id,
+    preprocessingPolicyId: `prep-${id}`,
+    featurePolicyId: `feat-${id}`,
+    modelFamilyId: `model-${id}`,
+    regularizationConfig: { l2: regularizationL2 },
+    optimizerConfig: {},
+    otherModelAffectingChoices: {},
+    complexityRank,
+  };
+}
+
+describe('rankInnerEligibleCandidates', () => {
+  describe('registered identity firewall', () => {
+    it('registered recipe + matching fingerprint + matching complexity + matching folds proceeds to E3-D evaluation', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const recipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [buildRankableInput(recipe, foldResults)]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].candidateRecipeId).toBe('recipe-1');
+    });
+
+    it('unregistered candidateRecipeId fails closed', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-unknown', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-unknown', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-unknown', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-unknown', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const rankableRecipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-unknown',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budgetRecipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: [budgetRecipe.candidateRecipeId],
+        seenRecipeFingerprints: [requireFingerprint(budgetRecipe)],
+        seenComplexityRanks: [budgetRecipe.complexityRank as number],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [buildRankableInput(rankableRecipe, foldResults)]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'UNREGISTERED_RECIPE')).toBe(true);
+      }
+    });
+
+    it('registered candidateRecipeId + changed model-affecting recipe fails closed via fingerprint mismatch', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const rankableRecipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-CHANGED',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budgetRecipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: [budgetRecipe.candidateRecipeId],
+        seenRecipeFingerprints: [requireFingerprint(budgetRecipe)],
+        seenComplexityRanks: [budgetRecipe.complexityRank as number],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [buildRankableInput(rankableRecipe, foldResults)]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'RECIPE_FINGERPRINT_MISMATCH')).toBe(true);
+      }
+    });
+
+    it('registered candidate + changed complexityRank fails closed', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const rankableRecipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 2,
+      };
+      const budgetRecipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: [budgetRecipe.candidateRecipeId],
+        seenRecipeFingerprints: [requireFingerprint(budgetRecipe)],
+        seenComplexityRanks: [budgetRecipe.complexityRank as number],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [buildRankableInput(rankableRecipe, foldResults)]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'COMPLEXITY_RANK_MISMATCH')).toBe(true);
+      }
+    });
+
+    it('recipe A + foldResults B fails closed', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-2', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-2', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-2', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-2', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const rankableRecipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: [rankableRecipe.candidateRecipeId],
+        seenRecipeFingerprints: [requireFingerprint(rankableRecipe)],
+        seenComplexityRanks: [rankableRecipe.complexityRank as number],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [buildRankableInput(rankableRecipe, foldResults)]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'RECIPE_FOLD_ID_MISMATCH')).toBe(true);
+      }
+    });
+
+    it('invalid budget fails closed', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const recipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const invalidBudget = {
+        ...{
+          contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+          cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+          maxDistinctRecipes: 12,
+          seenRecipeIds: [recipe.candidateRecipeId],
+          seenRecipeFingerprints: [requireFingerprint(recipe)],
+          seenComplexityRanks: [recipe.complexityRank as number],
+          evaluationCount: 1,
+        },
+        contractVersion: 'wrong',
+      };
+      const result = rankInnerEligibleCandidates(
+        invalidBudget as unknown as MLBInnerDevelopmentRecipeBudget,
+        [buildRankableInput(recipe, foldResults)],
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_BUDGET')).toBe(true);
+      }
+    });
+
+    it('malformed four-fold results fail closed', () => {
+      const recipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: [recipe.candidateRecipeId],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [recipe.complexityRank as number],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(
+        budget,
+        [buildRankableInput(recipe, [buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1' })])],
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_FOLD_RESULTS')).toBe(true);
+      }
+    });
+  });
+
+  describe('eligibility firewall', () => {
+    it('INNER_ELIGIBLE appears in ranking', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const recipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [buildRankableInput(recipe, foldResults)]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].candidateRecipeId).toBe('recipe-1');
+    });
+
+    it('INNER_REJECTED is excluded from ranking', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+      ];
+      const recipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [buildRankableInput(recipe, foldResults)]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(0);
+    });
+
+    it('rejected does not cause overall failure when mixed with eligible', () => {
+      const eligibleFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const rejectedFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-2', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-2', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-2', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-2', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+      ];
+      const recipe1 = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const recipe2 = buildDistinctRecipe('recipe-2', 1, 0.02);
+      const mergedBudget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1', 'recipe-2'],
+        seenRecipeFingerprints: [requireFingerprint(recipe1), requireFingerprint(recipe2)],
+        seenComplexityRanks: [1, 1],
+        evaluationCount: 2,
+      };
+      const result = rankInnerEligibleCandidates(mergedBudget, [
+        buildRankableInput(recipe1, eligibleFolds),
+        buildRankableInput(recipe2, rejectedFolds),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(1);
+      expect(result.value[0].candidateRecipeId).toBe('recipe-1');
+    });
+
+    it('all-rejected collection returns success empty array', () => {
+      const foldResults1 = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+      ];
+      const foldResults2 = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-2', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-2', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-2', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-2', candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+      ];
+      const recipe1 = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const recipe2 = buildDistinctRecipe('recipe-2', 1, 0.02);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1', 'recipe-2'],
+        seenRecipeFingerprints: [requireFingerprint(recipe1), requireFingerprint(recipe2)],
+        seenComplexityRanks: [1, 1],
+        evaluationCount: 2,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        buildRankableInput(recipe1, foldResults1),
+        buildRankableInput(recipe2, foldResults2),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(0);
+    });
+  });
+
+  describe('primary ranking non-vacuity', () => {
+    it('lower aggregate log loss wins when Brier is more favorable for later candidate', () => {
+      const aFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const bFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.2, candidateBrierScore: 0.05 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.2, candidateBrierScore: 0.05 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.2, candidateBrierScore: 0.05 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.2, candidateBrierScore: 0.05 }),
+      ];
+      const recipeA = buildDistinctRecipe('recipe-a', 1, 0.01);
+      const recipeB = buildDistinctRecipe('recipe-b', 1, 0.02);
+      const mergedBudget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-a', 'recipe-b'],
+        seenRecipeFingerprints: [requireFingerprint(recipeA), requireFingerprint(recipeB)],
+        seenComplexityRanks: [1, 1],
+        evaluationCount: 2,
+      };
+      const result = rankInnerEligibleCandidates(mergedBudget, [
+        buildRankableInput(recipeB, bFolds),
+        buildRankableInput(recipeA, aFolds),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(2);
+      expect(result.value[0].candidateRecipeId).toBe('recipe-a');
+      expect(result.value[1].candidateRecipeId).toBe('recipe-b');
+    });
+  });
+
+  describe('secondary ranking non-vacuity', () => {
+    it('lower aggregate Brier wins when log loss is exactly tied', () => {
+      const aFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const bFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.2 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.2 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.2 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.2 }),
+      ];
+      const recipeA = buildDistinctRecipe('recipe-a', 1, 0.01);
+      const recipeB = buildDistinctRecipe('recipe-b', 1, 0.02);
+      const mergedBudget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-a', 'recipe-b'],
+        seenRecipeFingerprints: [requireFingerprint(recipeA), requireFingerprint(recipeB)],
+        seenComplexityRanks: [1, 1],
+        evaluationCount: 2,
+      };
+      const result = rankInnerEligibleCandidates(mergedBudget, [
+        buildRankableInput(recipeA, aFolds),
+        buildRankableInput(recipeB, bFolds),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(2);
+      expect(result.value[0].candidateRecipeId).toBe('recipe-a');
+      expect(result.value[0].aggregateBrierScore).toBeLessThan(result.value[1].aggregateBrierScore);
+    });
+  });
+
+  describe('tertiary ranking non-vacuity', () => {
+    it('lower predeclared registered complexityRank wins when log loss and Brier are exactly tied', () => {
+      const aFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const bFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const recipeA = buildDistinctRecipe('recipe-a', 2, 0.01);
+      const recipeB = buildDistinctRecipe('recipe-b', 1, 0.02);
+      const mergedBudget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-a', 'recipe-b'],
+        seenRecipeFingerprints: [requireFingerprint(recipeA), requireFingerprint(recipeB)],
+        seenComplexityRanks: [2, 1],
+        evaluationCount: 2,
+      };
+      const result = rankInnerEligibleCandidates(mergedBudget, [
+        buildRankableInput(recipeA, aFolds),
+        buildRankableInput(recipeB, bFolds),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(2);
+      expect(result.value[0].candidateRecipeId).toBe('recipe-b');
+      expect(result.value[0].complexityRank).toBe(1);
+      expect(result.value[1].candidateRecipeId).toBe('recipe-a');
+      expect(result.value[1].complexityRank).toBe(2);
+    });
+  });
+
+  describe('final ranking tie-break non-vacuity', () => {
+    it('lexicographically smallest candidateRecipeId ranks first when all other criteria are exactly tied', () => {
+      const aFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const bFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const recipeA = buildDistinctRecipe('recipe-b', 1, 0.01);
+      const recipeB = buildDistinctRecipe('recipe-a', 1, 0.02);
+      const mergedBudget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-b', 'recipe-a'],
+        seenRecipeFingerprints: [requireFingerprint(recipeA), requireFingerprint(recipeB)],
+        seenComplexityRanks: [1, 1],
+        evaluationCount: 2,
+      };
+      const result = rankInnerEligibleCandidates(mergedBudget, [
+        buildRankableInput(recipeA, aFolds),
+        buildRankableInput(recipeB, bFolds),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(2);
+      expect(result.value[0].candidateRecipeId).toBe('recipe-a');
+      expect(result.value[0].rank).toBe(1);
+      expect(result.value[1].candidateRecipeId).toBe('recipe-b');
+      expect(result.value[1].rank).toBe(2);
+    });
+  });
+
+  describe('AUC non-selective', () => {
+    it('different AUC does not change ranking order when log loss and Brier are tied', () => {
+      const aFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.6 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.6 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.6 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.6 }),
+      ];
+      const bFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.9 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.9 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.9 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.9 }),
+      ];
+      const recipeA = buildDistinctRecipe('recipe-a', 1, 0.01);
+      const recipeB = buildDistinctRecipe('recipe-b', 2, 0.02);
+      const mergedBudget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-a', 'recipe-b'],
+        seenRecipeFingerprints: [requireFingerprint(recipeA), requireFingerprint(recipeB)],
+        seenComplexityRanks: [1, 2],
+        evaluationCount: 2,
+      };
+      const result = rankInnerEligibleCandidates(mergedBudget, [
+        buildRankableInput(recipeA, aFolds),
+        buildRankableInput(recipeB, bFolds),
+      ]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(2);
+      expect(result.value[0].candidateRecipeId).toBe('recipe-a');
+      expect(result.value[0].complexityRank).toBe(1);
+      expect(result.value[1].candidateRecipeId).toBe('recipe-b');
+    });
+  });
+
+  describe('input order independence', () => {
+    it('identical candidate set in different permutations produces identical ordered output', () => {
+      const aFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-a', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const bFolds = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.2, candidateBrierScore: 0.05 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.2, candidateBrierScore: 0.05 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.2, candidateBrierScore: 0.05 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-b', candidateLogLoss: 0.2, candidateBrierScore: 0.05 }),
+      ];
+      const recipeA = buildDistinctRecipe('recipe-a', 1, 0.01);
+      const recipeB = buildDistinctRecipe('recipe-b', 1, 0.02);
+      const mergedBudget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-a', 'recipe-b'],
+        seenRecipeFingerprints: [requireFingerprint(recipeA), requireFingerprint(recipeB)],
+        seenComplexityRanks: [1, 1],
+        evaluationCount: 2,
+      };
+      const inputA = [buildRankableInput(recipeA, aFolds), buildRankableInput(recipeB, bFolds)];
+      const inputB = [buildRankableInput(recipeB, bFolds), buildRankableInput(recipeA, aFolds)];
+      const resultA = rankInnerEligibleCandidates(mergedBudget, inputA);
+      const resultB = rankInnerEligibleCandidates(mergedBudget, inputB);
+      expect(resultA.ok).toBe(true);
+      expect(resultB.ok).toBe(true);
+      if (!resultA.ok || !resultB.ok) return;
+      expect(resultA.value).toEqual(resultB.value);
+    });
+  });
+
+  describe('caller-fabrication regression', () => {
+    it('rankable input exposes only recipe and foldResults; ranking derives metrics and eligibility internally', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const aggregateResult = evaluateMLBTrainOnlyInnerCandidate(foldResults);
+      expect(aggregateResult.ok).toBe(true);
+      if (!aggregateResult.ok) return;
+
+      const recipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: [recipe.candidateRecipeId],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [recipe.complexityRank as number],
+        evaluationCount: 1,
+      };
+      const input: MLBInnerRankableCandidateInput = {
+        recipe,
+        foldResults,
+      };
+      const rankResult = rankInnerEligibleCandidates(budget, [input]);
+      expect(rankResult.ok).toBe(true);
+      if (!rankResult.ok) return;
+      expect(rankResult.value).toHaveLength(1);
+      expect(rankResult.value[0].aggregateLogLoss).toBeCloseTo(aggregateResult.value.aggregateCandidateLogLoss);
+      expect(rankResult.value[0].aggregateBrierScore).toBeCloseTo(aggregateResult.value.aggregateCandidateBrierScore);
+      expect(rankResult.value[0].complexityRank).toBe(recipe.complexityRank);
+    });
+  });
+
+  describe('budget read-only', () => {
+    it('ranking does not mutate budget state', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const recipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: [recipe.candidateRecipeId],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [recipe.complexityRank as number],
+        evaluationCount: 1,
+      };
+      const idsBefore = budget.seenRecipeIds;
+      const fpsBefore = budget.seenRecipeFingerprints;
+      const ranksBefore = budget.seenComplexityRanks;
+      const evalBefore = budget.evaluationCount;
+
+      const result = rankInnerEligibleCandidates(budget, [buildRankableInput(recipe, foldResults)]);
+      expect(result.ok).toBe(true);
+
+      expect(budget.seenRecipeIds).toBe(idsBefore);
+      expect(budget.seenRecipeFingerprints).toBe(fpsBefore);
+      expect(budget.seenComplexityRanks).toBe(ranksBefore);
+      expect(budget.evaluationCount).toBe(evalBefore);
+    });
+  });
+
+  describe('determinism and purity', () => {
+    it('produces identical results on repeated execution with no mutable global state', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const recipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: [recipe.candidateRecipeId],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [recipe.complexityRank as number],
+        evaluationCount: 1,
+      };
+      const input = buildRankableInput(recipe, foldResults);
+      const first = rankInnerEligibleCandidates(budget, [input]);
+      const second = rankInnerEligibleCandidates(budget, [input]);
+      expect(first.ok).toBe(true);
+      expect(second.ok).toBe(true);
+      if (!first.ok || !second.ok) return;
+      expect(first.value).toEqual(second.value);
+    });
+  });
+
+  describe('duplicate candidate entry', () => {
+    it('fails closed when the same candidateRecipeId appears twice', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const recipe: MLBInnerCandidateRecipe = {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      };
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: [recipe.candidateRecipeId],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [recipe.complexityRank as number],
+        evaluationCount: 1,
+      };
+      const input = buildRankableInput(recipe, foldResults);
+      const result = rankInnerEligibleCandidates(budget, [input, input]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'DUPLICATE_CANDIDATE_ENTRY')).toBe(true);
+      }
+    });
+  });
+
+  describe('runtime boundary', () => {
+    it('fails closed when candidates is not an array', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(
+        budget,
+        'not-an-array' as unknown as readonly MLBInnerRankableCandidateInput[],
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_RECIPE')).toBe(true);
+      }
+    });
+
+    it('fails closed when candidate array index is an accessor', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      let getterExecuted = false;
+      const candidates = [] as MLBInnerRankableCandidateInput[];
+      Object.defineProperty(candidates, '0', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          getterExecuted = true;
+          throw new Error('candidate index getter must not execute');
+        },
+      });
+      candidates.length = 1;
+      const result = rankInnerEligibleCandidates(budget, candidates);
+      expect(getterExecuted).toBe(false);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_RECIPE')).toBe(true);
+      }
+    });
+
+    it('fails closed when candidate.recipe is an accessor property', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      let getterExecuted = false;
+      const accessorCandidate = {
+        get recipe() {
+          getterExecuted = true;
+          return recipe;
+        },
+        get foldResults() {
+          return foldResults;
+        },
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        accessorCandidate as unknown as MLBInnerRankableCandidateInput,
+      ]);
+      expect(getterExecuted).toBe(false);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_RECIPE')).toBe(true);
+      }
+    });
+
+    it('fails closed when candidate.foldResults is an accessor property', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      let getterExecuted = false;
+      const accessorCandidate = {
+        recipe,
+        get foldResults() {
+          getterExecuted = true;
+          return foldResults;
+        },
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        accessorCandidate as unknown as MLBInnerRankableCandidateInput,
+      ]);
+      expect(getterExecuted).toBe(false);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_FOLD_RESULTS')).toBe(true);
+      }
+    });
+
+    it('fails closed when foldResults is null', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        { recipe, foldResults: null as unknown as MLBInnerFoldMetricResult[] },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_FOLD_RESULTS')).toBe(true);
+      }
+    });
+
+    it('fails closed when foldResults is an empty object', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        { recipe, foldResults: {} as unknown as MLBInnerFoldMetricResult[] },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_FOLD_RESULTS')).toBe(true);
+      }
+    });
+
+    it('fails closed when foldResults is a string', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        { recipe, foldResults: 'bad' as unknown as MLBInnerFoldMetricResult[] },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_FOLD_RESULTS')).toBe(true);
+      }
+    });
+
+    it('fails closed when foldResults is an empty array', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        { recipe, foldResults: [] },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_FOLD_RESULTS')).toBe(true);
+      }
+    });
+
+    it('fails closed when foldResults has only one fold', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        {
+          recipe,
+          foldResults: [
+            buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+          ],
+        },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_FOLD_RESULTS')).toBe(true);
+      }
+    });
+
+    it('fails closed when foldResults has duplicate folds', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        {
+          recipe,
+          foldResults: [
+            buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+            buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+            buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+            buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+          ],
+        },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_FOLD_RESULTS')).toBe(true);
+      }
+    });
+
+    it('fails closed when foldResults has mixed candidate IDs', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        {
+          recipe,
+          foldResults: [
+            buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+            buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+            buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-2', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+            buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-1', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+          ],
+        },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_FOLD_RESULTS')).toBe(true);
+      }
+    });
+
+    it('fails closed when candidate element is null', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        null as unknown as MLBInnerRankableCandidateInput,
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_RECIPE')).toBe(true);
+      }
+    });
+
+    it('fails closed when candidate element is a number', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        42 as unknown as MLBInnerRankableCandidateInput,
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_RECIPE')).toBe(true);
+      }
+    });
+
+    it('fails closed when candidate element is a string', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        'bad' as unknown as MLBInnerRankableCandidateInput,
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_RECIPE')).toBe(true);
+      }
+    });
+
+    it('fails closed when candidate element is an empty array', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        [] as unknown as MLBInnerRankableCandidateInput,
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'INVALID_RECIPE')).toBe(true);
+      }
+    });
+
+    it('fails closed when foldResults candidateRecipeId does not match recipe candidateRecipeId', () => {
+      const recipe = buildDistinctRecipe('recipe-1', 1, 0.01);
+      const budget: MLBInnerDevelopmentRecipeBudget = {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: ['recipe-1'],
+        seenRecipeFingerprints: [requireFingerprint(recipe)],
+        seenComplexityRanks: [1],
+        evaluationCount: 1,
+      };
+      const result = rankInnerEligibleCandidates(budget, [
+        {
+          recipe,
+          foldResults: [
+            buildCanonicalFoldResult('FOLD_1', { candidateRecipeId: 'recipe-2', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+            buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-2', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+            buildCanonicalFoldResult('FOLD_3', { candidateRecipeId: 'recipe-2', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+            buildCanonicalFoldResult('FOLD_4', { candidateRecipeId: 'recipe-2', candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+          ],
+        },
+      ]);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i) => i.code === 'RECIPE_FOLD_ID_MISMATCH')).toBe(true);
+      }
+    });
   });
 });

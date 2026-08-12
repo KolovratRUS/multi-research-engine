@@ -350,6 +350,38 @@ export type MLBInnerDevelopmentRecipeBudgetIssue = Readonly<{
   message: string;
 }>;
 
+export type MLBInnerRankableCandidateInput = Readonly<{
+  recipe: MLBInnerCandidateRecipe;
+  foldResults: readonly MLBInnerFoldMetricResult[];
+}>;
+
+export type MLBInnerCandidateRank = Readonly<{
+  rank: number;
+  candidateRecipeId: string;
+  recipeFingerprint: string;
+  aggregateLogLoss: number;
+  aggregateBrierScore: number;
+  complexityRank: number;
+}>;
+
+export type MLBInnerCandidateRankIssue = Readonly<{
+  code:
+    | 'INVALID_BUDGET'
+    | 'INVALID_RECIPE'
+    | 'UNREGISTERED_RECIPE'
+    | 'RECIPE_FINGERPRINT_MISMATCH'
+    | 'COMPLEXITY_RANK_MISMATCH'
+    | 'RECIPE_FOLD_ID_MISMATCH'
+    | 'INVALID_FOLD_RESULTS'
+    | 'DUPLICATE_CANDIDATE_ENTRY';
+  path: string;
+  message: string;
+}>;
+
+export type MLBInnerCandidateRankResult =
+  | Readonly<{ ok: true; value: readonly MLBInnerCandidateRank[] }>
+  | Readonly<{ ok: false; issues: readonly MLBInnerCandidateRankIssue[] }>;
+
 type EvaluatorIssue =
   | MLBTrainOnlyInnerRowCollectionIssue
   | MLBTrainOnlyInnerValidationFoldsIssue
@@ -357,7 +389,8 @@ type EvaluatorIssue =
   | MLBInnerAggregateResultIssue
   | MLBInnerCandidateGateResultIssue
   | MLBInnerCandidateRecipeFingerprintIssue
-  | MLBInnerDevelopmentRecipeBudgetIssue;
+  | MLBInnerDevelopmentRecipeBudgetIssue
+  | MLBInnerCandidateRankIssue;
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F]/;
 const PROHIBITED_ROW_FIELDS = new Set(['odds', 'sportsbook', 'moneyline']);
@@ -3119,4 +3152,298 @@ export function recordInnerCandidateRecipeExecution(
       evaluationCount: newEvaluationCount,
     },
   };
+}
+
+export function rankInnerEligibleCandidates(
+  budget: MLBInnerDevelopmentRecipeBudget,
+  candidates: readonly MLBInnerRankableCandidateInput[],
+): MLBInnerCandidateRankResult {
+  const budgetIssues: MLBInnerDevelopmentRecipeBudgetIssue[] = [];
+  if (!validateMLBInnerDevelopmentRecipeBudget(budget, '$.budget', budgetIssues)) {
+    return {
+      ok: false,
+      issues: [
+        {
+          code: 'INVALID_BUDGET',
+          path: '$.budget',
+          message: budgetIssues[0]?.message ?? 'Invalid budget',
+        } as MLBInnerCandidateRankIssue,
+      ],
+    };
+  }
+
+  if (!Array.isArray(candidates)) {
+    return {
+      ok: false,
+      issues: [
+        {
+          code: 'INVALID_RECIPE',
+          path: '$.candidates',
+          message: 'candidates must be an array',
+        } as MLBInnerCandidateRankIssue,
+      ],
+    };
+  }
+
+  const seenCandidateRecipeIds = new Set<string>();
+  const eligibleCandidates: Array<{
+    candidateRecipeId: string;
+    recipeFingerprint: string;
+    aggregateLogLoss: number;
+    aggregateBrierScore: number;
+    complexityRank: number;
+  }> = [];
+
+  for (let c = 0; c < candidates.length; c++) {
+    const candidatePath = `$.candidates[${c}]`;
+
+    const elementDescriptor = Object.getOwnPropertyDescriptor(candidates, c);
+    if (!elementDescriptor || !isDataDescriptor(elementDescriptor)) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'INVALID_RECIPE',
+            path: candidatePath,
+            message: 'candidate must be a data property',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    const candidate = elementDescriptor.value;
+
+    if (!isPlainObject(candidate)) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'INVALID_RECIPE',
+            path: candidatePath,
+            message: 'candidate must be a plain object',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    const recipeDescriptor = Object.getOwnPropertyDescriptor(candidate, 'recipe');
+    if (!recipeDescriptor || !isDataDescriptor(recipeDescriptor)) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'INVALID_RECIPE',
+            path: `${candidatePath}.recipe`,
+            message: 'recipe must be a data property',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+    const rawRecipe = recipeDescriptor.value;
+
+    const foldResultsDescriptor = Object.getOwnPropertyDescriptor(candidate, 'foldResults');
+    if (!foldResultsDescriptor || !isDataDescriptor(foldResultsDescriptor)) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'INVALID_FOLD_RESULTS',
+            path: `${candidatePath}.foldResults`,
+            message: 'foldResults must be a data property',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+    const rawFoldResults = foldResultsDescriptor.value;
+
+    if (!isPlainObject(rawRecipe)) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'INVALID_RECIPE',
+            path: `${candidatePath}.recipe`,
+            message: 'recipe must be a plain object',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    const recipe = rawRecipe as MLBInnerCandidateRecipe;
+    const recipeIssues: MLBInnerCandidateRecipeFingerprintIssue[] = [];
+    if (!validateMLBInnerCandidateRecipe(recipe, `${candidatePath}.recipe`, recipeIssues)) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'INVALID_RECIPE',
+            path: `${candidatePath}.recipe`,
+            message: recipeIssues[0]?.message ?? 'Invalid recipe',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    const fingerprintResult = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    if (!fingerprintResult.ok) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'RECIPE_FINGERPRINT_MISMATCH',
+            path: `${candidatePath}.recipe`,
+            message: fingerprintResult.issues[0]?.message ?? 'Fingerprint computation failed',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+    const recipeFingerprint = fingerprintResult.fingerprint;
+
+    const existingIdIndex = budget.seenRecipeIds.indexOf(recipe.candidateRecipeId);
+    if (existingIdIndex === -1) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'UNREGISTERED_RECIPE',
+            path: `${candidatePath}.recipe.candidateRecipeId`,
+            message: `candidateRecipeId ${recipe.candidateRecipeId} is not registered in the budget`,
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    const registeredFingerprint = budget.seenRecipeFingerprints[existingIdIndex];
+    if (registeredFingerprint !== recipeFingerprint) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'RECIPE_FINGERPRINT_MISMATCH',
+            path: `${candidatePath}.recipe`,
+            message: `Registered fingerprint differs from computed fingerprint for ${recipe.candidateRecipeId}`,
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    const registeredComplexityRank = budget.seenComplexityRanks[existingIdIndex];
+    if (registeredComplexityRank !== recipe.complexityRank) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'COMPLEXITY_RANK_MISMATCH',
+            path: `${candidatePath}.recipe.complexityRank`,
+            message: `Registered complexityRank ${registeredComplexityRank} differs from recipe complexityRank ${recipe.complexityRank}`,
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    if (!Array.isArray(rawFoldResults)) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'INVALID_FOLD_RESULTS',
+            path: `${candidatePath}.foldResults`,
+            message: 'foldResults must be an array',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    const aggregateResult = evaluateMLBTrainOnlyInnerCandidate(rawFoldResults);
+    if (!aggregateResult.ok) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'INVALID_FOLD_RESULTS',
+            path: `${candidatePath}.foldResults`,
+            message: aggregateResult.issues[0]?.message ?? 'Invalid fold results',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    if (aggregateResult.value.candidateRecipeId !== recipe.candidateRecipeId) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'RECIPE_FOLD_ID_MISMATCH',
+            path: `${candidatePath}.foldResults`,
+            message: `Fold results candidateRecipeId ${aggregateResult.value.candidateRecipeId} does not match recipe candidateRecipeId ${recipe.candidateRecipeId}`,
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    const gateResult = evaluateMLBTrainOnlyInnerCandidateGate(rawFoldResults);
+    if (!gateResult.ok) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'INVALID_FOLD_RESULTS',
+            path: `${candidatePath}.foldResults`,
+            message: gateResult.issues[0]?.message ?? 'Gate evaluation failed',
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+
+    if (seenCandidateRecipeIds.has(recipe.candidateRecipeId)) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'DUPLICATE_CANDIDATE_ENTRY',
+            path: `${candidatePath}.recipe.candidateRecipeId`,
+            message: `Duplicate candidateRecipeId ${recipe.candidateRecipeId} in ranking input`,
+          } as MLBInnerCandidateRankIssue,
+        ],
+      };
+    }
+    seenCandidateRecipeIds.add(recipe.candidateRecipeId);
+
+    if (gateResult.value.eligibility === 'INNER_ELIGIBLE') {
+      eligibleCandidates.push({
+        candidateRecipeId: recipe.candidateRecipeId,
+        recipeFingerprint: recipeFingerprint,
+        aggregateLogLoss: aggregateResult.value.aggregateCandidateLogLoss,
+        aggregateBrierScore: aggregateResult.value.aggregateCandidateBrierScore,
+        complexityRank: recipe.complexityRank,
+      });
+    }
+  }
+
+  eligibleCandidates.sort((a, b) => {
+    if (a.aggregateLogLoss !== b.aggregateLogLoss) {
+      return a.aggregateLogLoss < b.aggregateLogLoss ? -1 : 1;
+    }
+    if (a.aggregateBrierScore !== b.aggregateBrierScore) {
+      return a.aggregateBrierScore < b.aggregateBrierScore ? -1 : 1;
+    }
+    if (a.complexityRank !== b.complexityRank) {
+      return a.complexityRank < b.complexityRank ? -1 : 1;
+    }
+    if (a.candidateRecipeId !== b.candidateRecipeId) {
+      return a.candidateRecipeId < b.candidateRecipeId ? -1 : 1;
+    }
+    return 0;
+  });
+
+  const ranked: MLBInnerCandidateRank[] = eligibleCandidates.map((c, index) => ({
+    rank: index + 1,
+    candidateRecipeId: c.candidateRecipeId,
+    recipeFingerprint: c.recipeFingerprint,
+    aggregateLogLoss: c.aggregateLogLoss,
+    aggregateBrierScore: c.aggregateBrierScore,
+    complexityRank: c.complexityRank,
+  }));
+
+  return { ok: true, value: ranked };
 }
