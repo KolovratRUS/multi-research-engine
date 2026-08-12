@@ -550,8 +550,13 @@ Do not average AUC into selection rule.
 ## 13. INNER_ELIGIBLE gate
 
 Pure function: evaluateMLBTrainOnlyInnerCandidateGate(
-  aggregateResult: MLBInnerAggregateResult
+  foldResults: readonly MLBInnerFoldMetricResult[]
 )
+
+Internally aggregates canonical four fold metric results via
+`evaluateMLBTrainOnlyInnerCandidate(foldResults)`. Eligibility is derived from
+the internally generated aggregate; externally supplied aggregate candidate
+metrics are not authoritative.
 
 Output:
 

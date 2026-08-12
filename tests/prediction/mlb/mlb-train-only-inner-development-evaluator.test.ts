@@ -6,10 +6,16 @@ import {
   validateMLBTrainOnlyInnerRowCollection,
   buildMLBInnerDevelopmentReferenceFacts,
   evaluateMLBInnerFoldMetrics,
+  evaluateMLBTrainOnlyInnerCandidate,
+  evaluateMLBTrainOnlyInnerCandidateGate,
   MLBInnerDevelopmentReferenceFacts,
   MLBInnerCandidatePredictionRecord,
   MLBInnerFoldMetricResult,
   MLBInnerFoldMetricResultIssue,
+  MLBInnerAggregateResult,
+  MLBInnerAggregateResultIssue,
+  MLBInnerCandidateGateResult,
+  MLBInnerCandidateGateResultIssue,
   MLB_TRAIN_ONLY_INNER_ROW_COLLECTION_CONTRACT_VERSION,
   MLB_TRAIN_ONLY_INNER_VALIDATION_FOLDS_CONTRACT_VERSION,
   MLBTrainOnlyInnerRowCollection,
@@ -690,13 +696,13 @@ describe('mlb-train-only-inner-development-evaluator', () => {
       expect(source).not.toMatch(/import.*trainer/);
     });
 
-    it('contains no metric aggregation or eligibility logic', () => {
+    it('contains E3-D aggregation and eligibility logic but no ranking or budget', () => {
       const source = require('fs').readFileSync(
         require('path').resolve(__dirname, '../../../src/prediction/mlb/mlb-train-only-inner-development-evaluator.ts'),
         'utf8',
       );
-      expect(source).not.toMatch(/evaluateMLBTrainOnlyInnerCandidate/);
-      expect(source).not.toMatch(/INNER_ELIGIBLE/);
+      expect(source).toMatch(/evaluateMLBTrainOnlyInnerCandidate/);
+      expect(source).toMatch(/INNER_ELIGIBLE/);
       expect(source).not.toMatch(/rankInner/);
       expect(source).not.toMatch(/recipeBudget/);
       expect(source).not.toMatch(/RECIPE_BUDGET/);
@@ -1101,6 +1107,761 @@ describe('mlb-train-only-inner-development-evaluator', () => {
       expect(result.value.rowCount).toBe(2);
       expect(result.value.targetHomeWinCount).toBe(1);
       expect(result.value.targetAwayWinCount).toBe(1);
+    });
+  });
+});
+
+const CANONICAL_FOLD_METRIC_RESULT_TEMPLATES: Record<string, { rowCount: number; homeWinCount: number; awayWinCount: number; prior: number }> = {
+  FOLD_1: { rowCount: 51, homeWinCount: 29, awayWinCount: 22, prior: 49 / 91 },
+  FOLD_2: { rowCount: 55, homeWinCount: 34, awayWinCount: 21, prior: 78 / 142 },
+  FOLD_3: { rowCount: 55, homeWinCount: 25, awayWinCount: 30, prior: 112 / 197 },
+  FOLD_4: { rowCount: 49, homeWinCount: 23, awayWinCount: 26, prior: 137 / 252 },
+};
+
+function buildCanonicalFoldResult(
+  foldId: string,
+  overrides: Partial<MLBInnerFoldMetricResult> = {},
+): MLBInnerFoldMetricResult {
+  const canonical = CANONICAL_FOLD_METRIC_RESULT_TEMPLATES[foldId];
+  if (!canonical) {
+    throw new Error(`Unknown fold ${foldId}`);
+  }
+  const expectedP50LogLoss = -Math.log(0.5);
+  const prior = canonical.prior;
+  const p50Brier = 0.25;
+  const p50Auc = 0.5;
+  const priorLogLoss = -(canonical.homeWinCount * Math.log(prior) + canonical.awayWinCount * Math.log(1 - prior)) / canonical.rowCount;
+  const priorBrier = ((prior - 1) ** 2 * canonical.homeWinCount + (prior - 0) ** 2 * canonical.awayWinCount) / canonical.rowCount;
+  const priorAuc = 0.5; // deterministic constant-predictor baseline
+
+  return {
+    contractVersion: 'mlb-inner-fold-metric-result-v1',
+    foldId,
+    candidateRecipeId: 'recipe-1',
+    rowCount: canonical.rowCount,
+    targetHomeWinCount: canonical.homeWinCount,
+    targetAwayWinCount: canonical.awayWinCount,
+    candidateLogLoss: overrides.candidateLogLoss ?? 0.6,
+    candidateBrierScore: overrides.candidateBrierScore ?? 0.2,
+    candidateRocAuc: overrides.candidateRocAuc ?? 0.7,
+    p50LogLoss: overrides.p50LogLoss ?? expectedP50LogLoss,
+    p50BrierScore: overrides.p50BrierScore ?? p50Brier,
+    p50RocAuc: overrides.p50RocAuc ?? p50Auc,
+    foldTrainPriorLogLoss: overrides.foldTrainPriorLogLoss ?? priorLogLoss,
+    foldTrainPriorBrierScore: overrides.foldTrainPriorBrierScore ?? priorBrier,
+    foldTrainPriorRocAuc: overrides.foldTrainPriorRocAuc ?? priorAuc,
+    foldTrainPriorProbability: overrides.foldTrainPriorProbability ?? prior,
+    ...overrides,
+  };
+}
+
+describe('E3-D aggregate inner eligibility', () => {
+  describe('happy path aggregation', () => {
+    it('aggregates exactly four canonical fold metric results with row-weighted totals of 210', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+
+      const aggregateResult = evaluateMLBTrainOnlyInnerCandidate(foldResults);
+      expect(aggregateResult.ok).toBe(true);
+      if (!aggregateResult.ok) return;
+
+      expect(aggregateResult.value.aggregateValidationRowCount).toBe(210);
+      expect(aggregateResult.value.foldCount).toBe(4);
+      expect(aggregateResult.value.candidateRecipeId).toBe('recipe-1');
+    });
+
+    it('is order independent: shuffled inputs produce identical aggregate', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      const shuffled = [foldResults[2], foldResults[0], foldResults[3], foldResults[1]];
+
+      const original = evaluateMLBTrainOnlyInnerCandidate(foldResults);
+      const shuffledResult = evaluateMLBTrainOnlyInnerCandidate(shuffled);
+      expect(original.ok).toBe(true);
+      expect(shuffledResult.ok).toBe(true);
+      if (!original.ok || !shuffledResult.ok) return;
+
+      expect(shuffledResult.value.aggregateCandidateLogLoss).toBeCloseTo(original.value.aggregateCandidateLogLoss);
+      expect(shuffledResult.value.aggregateCandidateBrierScore).toBeCloseTo(original.value.aggregateCandidateBrierScore);
+      expect(shuffledResult.value.aggregateP50LogLoss).toBeCloseTo(original.value.aggregateP50LogLoss);
+      expect(shuffledResult.value.aggregateP50BrierScore).toBeCloseTo(original.value.aggregateP50BrierScore);
+    });
+  });
+
+  describe('row-weighted vs unweighted non-vacuity', () => {
+    it('weights by canonical validation row counts, not unweighted fold mean', () => {
+      const fold1 = buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 0.01, candidateBrierScore: 0.01 });
+      const fold2 = buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 0.10, candidateBrierScore: 0.10 });
+      const fold3 = buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 0.20, candidateBrierScore: 0.20 });
+      const fold4 = buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 0.99, candidateBrierScore: 0.99 });
+      const foldResults = [fold1, fold2, fold3, fold4];
+
+      const aggregateResult = evaluateMLBTrainOnlyInnerCandidate(foldResults);
+      expect(aggregateResult.ok).toBe(true);
+      if (!aggregateResult.ok) return;
+
+      const unweightedLogLoss = (0.01 + 0.10 + 0.20 + 0.99) / 4;
+      const unweightedBrier = (0.01 + 0.10 + 0.20 + 0.99) / 4;
+      expect(aggregateResult.value.aggregateCandidateLogLoss).not.toBeCloseTo(unweightedLogLoss);
+      expect(aggregateResult.value.aggregateCandidateBrierScore).not.toBeCloseTo(unweightedBrier);
+
+      const expectedLogLoss = (0.01 * 51 + 0.10 * 55 + 0.20 * 55 + 0.99 * 49) / 210;
+      const expectedBrier = (0.01 * 51 + 0.10 * 55 + 0.20 * 55 + 0.99 * 49) / 210;
+      expect(aggregateResult.value.aggregateCandidateLogLoss).toBeCloseTo(expectedLogLoss);
+      expect(aggregateResult.value.aggregateCandidateBrierScore).toBeCloseTo(expectedBrier);
+    });
+  });
+
+  describe('strict eligibility gate', () => {
+    it('marks INNER_ELIGIBLE when candidate strictly beats both references in log loss and Brier', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 0.1, candidateBrierScore: 0.1 }),
+      ];
+
+      const aggregateResult = evaluateMLBTrainOnlyInnerCandidate(foldResults);
+      expect(aggregateResult.ok).toBe(true);
+      if (!aggregateResult.ok) return;
+
+      const gateResult = evaluateMLBTrainOnlyInnerCandidateGate(foldResults);
+      expect(gateResult.ok).toBe(true);
+      if (!gateResult.ok) return;
+
+      expect(gateResult.value.eligibility).toBe('INNER_ELIGIBLE');
+      expect(gateResult.value.reasons).toHaveLength(0);
+    });
+
+    it('does not change eligibility when only AUC differs with identical log loss and Brier', () => {
+      const foldResultsLow = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.6 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.6 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.6 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.6 }),
+      ];
+      const foldResultsHigh = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.9 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.9 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.9 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 0.1, candidateBrierScore: 0.1, candidateRocAuc: 0.9 }),
+      ];
+
+      const lowAggregate = evaluateMLBTrainOnlyInnerCandidate(foldResultsLow);
+      const highAggregate = evaluateMLBTrainOnlyInnerCandidate(foldResultsHigh);
+      expect(lowAggregate.ok).toBe(true);
+      expect(highAggregate.ok).toBe(true);
+      if (!lowAggregate.ok || !highAggregate.ok) return;
+
+      const lowGate = evaluateMLBTrainOnlyInnerCandidateGate(foldResultsLow);
+      const highGate = evaluateMLBTrainOnlyInnerCandidateGate(foldResultsHigh);
+      expect(lowGate.ok).toBe(true);
+      expect(highGate.ok).toBe(true);
+      if (!lowGate.ok || !highGate.ok) return;
+
+      expect(lowGate.value.eligibility).toBe(highGate.value.eligibility);
+      expect(lowGate.value.reasons).toEqual(highGate.value.reasons);
+    });
+  });
+
+  describe('rejection cases', () => {
+    function assertRejection(
+      foldResults: MLBInnerFoldMetricResult[],
+      expectedReason: string,
+    ): void {
+      const gateResult = evaluateMLBTrainOnlyInnerCandidateGate(foldResults);
+      expect(gateResult.ok).toBe(true);
+      if (!gateResult.ok) return;
+
+      expect(gateResult.value.eligibility).toBe('INNER_REJECTED');
+      expect(gateResult.value.reasons).toContain(expectedReason);
+    }
+
+    it('case A: log loss fails P50 while all other comparisons pass', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 1.0, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 1.0, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 1.0, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 1.0, candidateBrierScore: 0.1 }),
+      ];
+      assertRejection(foldResults, 'AGGREGATE_LOG_LOSS_NOT_BETTER_THAN_P50');
+    });
+
+    it('case B: log loss fails fold-TRAIN-prior while all other comparisons pass', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 1.0, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 1.0, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 1.0, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 1.0, candidateBrierScore: 0.1 }),
+      ];
+      assertRejection(foldResults, 'AGGREGATE_LOG_LOSS_NOT_BETTER_THAN_TRAIN_PRIOR');
+    });
+
+    it('case C: Brier fails P50 while all other comparisons pass', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 0.1, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 0.1, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 0.1, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 0.1, candidateBrierScore: 0.5 }),
+      ];
+      assertRejection(foldResults, 'AGGREGATE_BRIER_NOT_BETTER_THAN_P50');
+    });
+
+    it('case D: Brier fails fold-TRAIN-prior while all other comparisons pass', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 0.1, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 0.1, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 0.1, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 0.1, candidateBrierScore: 0.5 }),
+      ];
+      assertRejection(foldResults, 'AGGREGATE_BRIER_NOT_BETTER_THAN_TRAIN_PRIOR');
+    });
+
+    it('case E: candidate ties P50 aggregate log loss exactly', () => {
+      const expectedP50LogLoss = -Math.log(0.5);
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: expectedP50LogLoss, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: expectedP50LogLoss, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: expectedP50LogLoss, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: expectedP50LogLoss, candidateBrierScore: 0.1 }),
+      ];
+      assertRejection(foldResults, 'AGGREGATE_LOG_LOSS_NOT_BETTER_THAN_P50');
+    });
+
+    it('case F: candidate ties fold-prior aggregate log loss exactly', () => {
+      const priorLogLosses = [
+        buildCanonicalFoldResult('FOLD_1').foldTrainPriorLogLoss,
+        buildCanonicalFoldResult('FOLD_2').foldTrainPriorLogLoss,
+        buildCanonicalFoldResult('FOLD_3').foldTrainPriorLogLoss,
+        buildCanonicalFoldResult('FOLD_4').foldTrainPriorLogLoss,
+      ];
+      const weightedPrior = (priorLogLosses[0] * 51 + priorLogLosses[1] * 55 + priorLogLosses[2] * 55 + priorLogLosses[3] * 49) / 210;
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: weightedPrior, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: weightedPrior, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: weightedPrior, candidateBrierScore: 0.1 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: weightedPrior, candidateBrierScore: 0.1 }),
+      ];
+      assertRejection(foldResults, 'AGGREGATE_LOG_LOSS_NOT_BETTER_THAN_TRAIN_PRIOR');
+    });
+
+    it('case G: candidate ties P50 aggregate Brier exactly', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 0.1, candidateBrierScore: 0.25 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 0.1, candidateBrierScore: 0.25 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 0.1, candidateBrierScore: 0.25 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 0.1, candidateBrierScore: 0.25 }),
+      ];
+      assertRejection(foldResults, 'AGGREGATE_BRIER_NOT_BETTER_THAN_P50');
+    });
+
+    it('case H: candidate ties fold-prior aggregate Brier exactly', () => {
+      const priorBriers = [
+        buildCanonicalFoldResult('FOLD_1').foldTrainPriorBrierScore,
+        buildCanonicalFoldResult('FOLD_2').foldTrainPriorBrierScore,
+        buildCanonicalFoldResult('FOLD_3').foldTrainPriorBrierScore,
+        buildCanonicalFoldResult('FOLD_4').foldTrainPriorBrierScore,
+      ];
+      const weightedPrior = (priorBriers[0] * 51 + priorBriers[1] * 55 + priorBriers[2] * 55 + priorBriers[3] * 49) / 210;
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 0.1, candidateBrierScore: weightedPrior }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 0.1, candidateBrierScore: weightedPrior }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 0.1, candidateBrierScore: weightedPrior }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 0.1, candidateBrierScore: weightedPrior }),
+      ];
+      assertRejection(foldResults, 'AGGREGATE_BRIER_NOT_BETTER_THAN_TRAIN_PRIOR');
+    });
+  });
+
+  describe('fold-set fail-closed', () => {
+    function assertAggregateRejection(
+      foldResults: MLBInnerFoldMetricResult[],
+      expectedCode: string,
+    ): void {
+      const result = evaluateMLBTrainOnlyInnerCandidate(foldResults);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i: MLBInnerAggregateResultIssue) => i.code === expectedCode)).toBe(true);
+      }
+    }
+
+    it('rejects fewer than four results', () => {
+      const foldResults = [buildCanonicalFoldResult('FOLD_1'), buildCanonicalFoldResult('FOLD_2'), buildCanonicalFoldResult('FOLD_3')];
+      assertAggregateRejection(foldResults, 'INVALID_FOLD_SET');
+    });
+
+    it('rejects more than four results', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+        buildCanonicalFoldResult('FOLD_1'),
+      ];
+      assertAggregateRejection(foldResults, 'INVALID_FOLD_SET');
+    });
+
+    it('rejects missing fold', () => {
+      const foldResults = [buildCanonicalFoldResult('FOLD_1'), buildCanonicalFoldResult('FOLD_2'), buildCanonicalFoldResult('FOLD_3')];
+      assertAggregateRejection(foldResults, 'INVALID_FOLD_SET');
+    });
+
+    it('rejects duplicate fold', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_1'), foldId: 'FOLD_1' } as MLBInnerFoldMetricResult,
+      ];
+      assertAggregateRejection(foldResults, 'DUPLICATE_FOLD');
+    });
+
+    it('rejects foreign foldId', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_4'), foldId: 'FOREIGN' } as MLBInnerFoldMetricResult,
+      ];
+      assertAggregateRejection(foldResults, 'FOREIGN_FOLD');
+    });
+
+    it('rejects mixed candidateRecipeId', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-2' }),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertAggregateRejection(foldResults, 'IDENTITY_MISMATCH');
+    });
+
+    it('rejects empty candidateRecipeId', () => {
+      const foldResults = [
+        { ...buildCanonicalFoldResult('FOLD_1'), candidateRecipeId: '' } as MLBInnerFoldMetricResult,
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertAggregateRejection(foldResults, 'INVALID_STRING');
+    });
+
+    it('rejects wrong fold rowCount', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_4'), rowCount: 99 } as MLBInnerFoldMetricResult,
+      ];
+      assertAggregateRejection(foldResults, 'ROW_COUNT_MISMATCH');
+    });
+
+    it('rejects wrong HOME count', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_4'), targetHomeWinCount: 99 } as MLBInnerFoldMetricResult,
+      ];
+      assertAggregateRejection(foldResults, 'CLASS_COUNT_MISMATCH');
+    });
+
+    it('rejects wrong AWAY count', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_4'), targetAwayWinCount: 99 } as MLBInnerFoldMetricResult,
+      ];
+      assertAggregateRejection(foldResults, 'CLASS_COUNT_MISMATCH');
+    });
+
+    it('rejects HOME + AWAY != rowCount', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_4'), targetHomeWinCount: 30, targetAwayWinCount: 30 } as MLBInnerFoldMetricResult,
+      ];
+      assertAggregateRejection(foldResults, 'CLASS_COUNT_MISMATCH');
+    });
+
+    it('rejects wrong foldTrainPriorProbability', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_4'), foldTrainPriorProbability: 0.999 } as MLBInnerFoldMetricResult,
+      ];
+      assertAggregateRejection(foldResults, 'TRAIN_PRIOR_MISMATCH');
+    });
+
+    it('rejects wrong contractVersion at runtime', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_4'), contractVersion: 'wrong-version' } as unknown as MLBInnerFoldMetricResult,
+      ];
+      assertAggregateRejection(foldResults, 'INVALID_FOLD_SET');
+    });
+
+    it('rejects non-finite candidate metric', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: Number.NaN }),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertAggregateRejection(foldResults, 'NONFINITE_METRIC');
+    });
+
+    it('rejects negative log loss', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: -0.1 }),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertAggregateRejection(foldResults, 'NONFINITE_METRIC');
+    });
+
+    it('rejects Brier < 0', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateBrierScore: -0.1 }),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertAggregateRejection(foldResults, 'NONFINITE_METRIC');
+    });
+
+    it('rejects Brier > 1', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateBrierScore: 1.1 }),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertAggregateRejection(foldResults, 'NONFINITE_METRIC');
+    });
+
+    it('rejects AUC < 0', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRocAuc: -0.1 }),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertAggregateRejection(foldResults, 'NONFINITE_METRIC');
+    });
+
+    it('rejects AUC > 1', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateRocAuc: 1.1 }),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertAggregateRejection(foldResults, 'NONFINITE_METRIC');
+    });
+
+    it('ignores forged P50 metric: aggregate and gate remain canonical', () => {
+      const canonicalFoldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      const baselineAggregate = evaluateMLBTrainOnlyInnerCandidate(canonicalFoldResults);
+      expect(baselineAggregate.ok).toBe(true);
+      if (!baselineAggregate.ok) return;
+      const baselineGate = evaluateMLBTrainOnlyInnerCandidateGate(canonicalFoldResults);
+      expect(baselineGate.ok).toBe(true);
+      if (!baselineGate.ok) return;
+
+      const forgedFoldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4', { p50BrierScore: 0.5, p50LogLoss: 1.0, p50RocAuc: 0.9 } as Partial<MLBInnerFoldMetricResult>),
+      ];
+
+      const forgedAggregate = evaluateMLBTrainOnlyInnerCandidate(forgedFoldResults);
+      expect(forgedAggregate.ok).toBe(true);
+      if (!forgedAggregate.ok) return;
+      expect(forgedAggregate.value.aggregateP50LogLoss).toBeCloseTo(baselineAggregate.value.aggregateP50LogLoss);
+      expect(forgedAggregate.value.aggregateP50BrierScore).toBeCloseTo(baselineAggregate.value.aggregateP50BrierScore);
+      expect(forgedAggregate.value.aggregateP50RocAuc).toBeCloseTo(baselineAggregate.value.aggregateP50RocAuc);
+
+      const forgedGate = evaluateMLBTrainOnlyInnerCandidateGate(forgedFoldResults);
+      expect(forgedGate.ok).toBe(true);
+      if (!forgedGate.ok) return;
+      expect(forgedGate.value.eligibility).toBe(baselineGate.value.eligibility);
+      expect(forgedGate.value.reasons).toEqual(baselineGate.value.reasons);
+    });
+
+    it('ignores forged fold-prior metric: aggregate and gate remain canonical', () => {
+      const canonicalFoldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      const baselineAggregate = evaluateMLBTrainOnlyInnerCandidate(canonicalFoldResults);
+      expect(baselineAggregate.ok).toBe(true);
+      if (!baselineAggregate.ok) return;
+      const baselineGate = evaluateMLBTrainOnlyInnerCandidateGate(canonicalFoldResults);
+      expect(baselineGate.ok).toBe(true);
+      if (!baselineGate.ok) return;
+
+      const forgedFoldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        {
+          ...buildCanonicalFoldResult('FOLD_4'),
+          foldTrainPriorLogLoss: 1.0,
+          foldTrainPriorBrierScore: 0.5,
+          foldTrainPriorRocAuc: 0.9,
+        } as MLBInnerFoldMetricResult,
+      ];
+      const forgedAggregate = evaluateMLBTrainOnlyInnerCandidate(forgedFoldResults);
+      expect(forgedAggregate.ok).toBe(true);
+      if (!forgedAggregate.ok) return;
+      expect(forgedAggregate.value.aggregateFoldTrainPriorLogLoss).toBeCloseTo(baselineAggregate.value.aggregateFoldTrainPriorLogLoss);
+      expect(forgedAggregate.value.aggregateFoldTrainPriorBrierScore).toBeCloseTo(baselineAggregate.value.aggregateFoldTrainPriorBrierScore);
+      expect(forgedAggregate.value.aggregateFoldTrainPriorRocAuc).toBeCloseTo(baselineAggregate.value.aggregateFoldTrainPriorRocAuc);
+
+      const forgedGate = evaluateMLBTrainOnlyInnerCandidateGate(forgedFoldResults);
+      expect(forgedGate.ok).toBe(true);
+      if (!forgedGate.ok) return;
+      expect(forgedGate.value.eligibility).toBe(baselineGate.value.eligibility);
+      expect(forgedGate.value.reasons).toEqual(baselineGate.value.reasons);
+    });
+  });
+
+  describe('gate strictness', () => {
+    it('returns explicit booleans for each comparison', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1', { candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_2', { candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_3', { candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+        buildCanonicalFoldResult('FOLD_4', { candidateLogLoss: 1.0, candidateBrierScore: 0.5 }),
+      ];
+
+      const aggregateResult = evaluateMLBTrainOnlyInnerCandidate(foldResults);
+      expect(aggregateResult.ok).toBe(true);
+      if (!aggregateResult.ok) return;
+
+      const gateResult = evaluateMLBTrainOnlyInnerCandidateGate(foldResults);
+      expect(gateResult.ok).toBe(true);
+      if (!gateResult.ok) return;
+
+      expect(gateResult.value.reasons).toContain('AGGREGATE_LOG_LOSS_NOT_BETTER_THAN_P50');
+      expect(gateResult.value.reasons).toContain('AGGREGATE_LOG_LOSS_NOT_BETTER_THAN_TRAIN_PRIOR');
+      expect(gateResult.value.reasons).toContain('AGGREGATE_BRIER_NOT_BETTER_THAN_P50');
+      expect(gateResult.value.reasons).toContain('AGGREGATE_BRIER_NOT_BETTER_THAN_TRAIN_PRIOR');
+    });
+  });
+
+  describe('gate reference integrity', () => {
+    it('ignores forged P50 reference fields in fold results', () => {
+      const baseline = evaluateMLBTrainOnlyInnerCandidate([
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ]);
+      expect(baseline.ok).toBe(true);
+      if (!baseline.ok) return;
+
+      const forgedFoldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4', { p50BrierScore: 0.5, p50LogLoss: 1.0, p50RocAuc: 0.9 } as Partial<MLBInnerFoldMetricResult>),
+      ];
+
+      const forgedAggregate = evaluateMLBTrainOnlyInnerCandidate(forgedFoldResults);
+      expect(forgedAggregate.ok).toBe(true);
+      if (!forgedAggregate.ok) return;
+      expect(forgedAggregate.value.aggregateP50LogLoss).toBeCloseTo(baseline.value.aggregateP50LogLoss);
+      expect(forgedAggregate.value.aggregateP50BrierScore).toBeCloseTo(baseline.value.aggregateP50BrierScore);
+      expect(forgedAggregate.value.aggregateP50RocAuc).toBeCloseTo(baseline.value.aggregateP50RocAuc);
+
+      const baselineGate = evaluateMLBTrainOnlyInnerCandidateGate([
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ]);
+      expect(baselineGate.ok).toBe(true);
+      if (!baselineGate.ok) return;
+
+      const forgedGate = evaluateMLBTrainOnlyInnerCandidateGate(forgedFoldResults);
+      expect(forgedGate.ok).toBe(true);
+      if (!forgedGate.ok) return;
+      expect(forgedGate.value.eligibility).toBe(baselineGate.value.eligibility);
+      expect(forgedGate.value.reasons).toEqual(baselineGate.value.reasons);
+    });
+
+    it('ignores forged train-prior reference fields in fold results', () => {
+      const baseline = evaluateMLBTrainOnlyInnerCandidate([
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ]);
+      expect(baseline.ok).toBe(true);
+      if (!baseline.ok) return;
+
+      const forgedFoldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        {
+          ...buildCanonicalFoldResult('FOLD_4'),
+          foldTrainPriorLogLoss: 1.0,
+          foldTrainPriorBrierScore: 0.5,
+          foldTrainPriorRocAuc: 0.9,
+        } as MLBInnerFoldMetricResult,
+      ];
+
+      const forgedAggregate = evaluateMLBTrainOnlyInnerCandidate(forgedFoldResults);
+      expect(forgedAggregate.ok).toBe(true);
+      if (!forgedAggregate.ok) return;
+      expect(forgedAggregate.value.aggregateFoldTrainPriorLogLoss).toBeCloseTo(baseline.value.aggregateFoldTrainPriorLogLoss);
+      expect(forgedAggregate.value.aggregateFoldTrainPriorBrierScore).toBeCloseTo(baseline.value.aggregateFoldTrainPriorBrierScore);
+      expect(forgedAggregate.value.aggregateFoldTrainPriorRocAuc).toBeCloseTo(baseline.value.aggregateFoldTrainPriorRocAuc);
+
+      const baselineGate = evaluateMLBTrainOnlyInnerCandidateGate([
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ]);
+      expect(baselineGate.ok).toBe(true);
+      if (!baselineGate.ok) return;
+
+      const forgedGate = evaluateMLBTrainOnlyInnerCandidateGate(forgedFoldResults);
+      expect(forgedGate.ok).toBe(true);
+      if (!forgedGate.ok) return;
+      expect(forgedGate.value.eligibility).toBe(baselineGate.value.eligibility);
+      expect(forgedGate.value.reasons).toEqual(baselineGate.value.reasons);
+    });
+  });
+
+  describe('gate fail-closed', () => {
+    function assertGateFailure(foldResults: MLBInnerFoldMetricResult[], expectedCode: string): void {
+      const result = evaluateMLBTrainOnlyInnerCandidateGate(foldResults);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i: MLBInnerCandidateGateResultIssue) => i.code === expectedCode)).toBe(true);
+      }
+    }
+
+    it('fails closed for missing fold', () => {
+      const foldResults = [buildCanonicalFoldResult('FOLD_1'), buildCanonicalFoldResult('FOLD_2'), buildCanonicalFoldResult('FOLD_3')];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
+    });
+
+    it('fails closed for duplicate fold', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_1'), foldId: 'FOLD_1' } as MLBInnerFoldMetricResult,
+      ];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
+    });
+
+    it('fails closed for foreign foldId', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        { ...buildCanonicalFoldResult('FOLD_4'), foldId: 'FOREIGN' } as MLBInnerFoldMetricResult,
+      ];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
+    });
+
+    it('fails closed for mixed candidateRecipeId', () => {
+      const foldResults = [
+        buildCanonicalFoldResult('FOLD_1'),
+        buildCanonicalFoldResult('FOLD_2', { candidateRecipeId: 'recipe-2' }),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
+    });
+
+    it('fails closed for empty candidateRecipeId', () => {
+      const foldResults = [
+        { ...buildCanonicalFoldResult('FOLD_1'), candidateRecipeId: '' } as MLBInnerFoldMetricResult,
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
+    });
+
+    it('fails closed for wrong canonical rowCount', () => {
+      const foldResults = [
+        { ...buildCanonicalFoldResult('FOLD_1'), rowCount: 999 } as MLBInnerFoldMetricResult,
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
+    });
+
+    it('fails closed for wrong canonical HOME count', () => {
+      const foldResults = [
+        { ...buildCanonicalFoldResult('FOLD_1'), targetHomeWinCount: 999 } as MLBInnerFoldMetricResult,
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
+    });
+
+    it('fails closed for wrong canonical AWAY count', () => {
+      const foldResults = [
+        { ...buildCanonicalFoldResult('FOLD_1'), targetAwayWinCount: 999 } as MLBInnerFoldMetricResult,
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
+    });
+
+    it('fails closed for wrong canonical TRAIN-prior probability', () => {
+      const foldResults = [
+        { ...buildCanonicalFoldResult('FOLD_1'), foldTrainPriorProbability: 0.9 } as MLBInnerFoldMetricResult,
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
+    });
+
+    it('fails closed for nonfinite candidate metric', () => {
+      const foldResults = [
+        { ...buildCanonicalFoldResult('FOLD_1'), candidateLogLoss: NaN } as MLBInnerFoldMetricResult,
+        buildCanonicalFoldResult('FOLD_2'),
+        buildCanonicalFoldResult('FOLD_3'),
+        buildCanonicalFoldResult('FOLD_4'),
+      ];
+      assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
     });
   });
 });

@@ -211,7 +211,81 @@ export type MLBInnerFoldMetricResultIssue = Readonly<{
   message: string;
 }>;
 
-type EvaluatorIssue = MLBTrainOnlyInnerRowCollectionIssue | MLBTrainOnlyInnerValidationFoldsIssue | MLBInnerFoldMetricResultIssue;
+export type MLBInnerAggregateResult = Readonly<{
+  contractVersion: 'mlb-inner-aggregate-result-v1';
+  candidateRecipeId: string;
+  foldCount: number;
+  aggregateValidationRowCount: number;
+  aggregateCandidateLogLoss: number;
+  aggregateCandidateBrierScore: number;
+  aggregateCandidateRocAuc: number;
+  aggregateP50LogLoss: number;
+  aggregateP50BrierScore: number;
+  aggregateP50RocAuc: number;
+  aggregateFoldTrainPriorLogLoss: number;
+  aggregateFoldTrainPriorBrierScore: number;
+  aggregateFoldTrainPriorRocAuc: number;
+  worstFoldCandidateLogLoss: number;
+  worstFoldCandidateBrierScore: number;
+  foldsBeatingP50OnLogLoss: number;
+  foldsBeatingP50OnBrier: number;
+  foldsBeatingFoldTrainPriorOnLogLoss: number;
+  foldsBeatingFoldTrainPriorOnBrier: number;
+}>;
+
+export type MLBInnerAggregateResultIssue = Readonly<{
+  code:
+    | 'MISSING_FIELD'
+    | 'UNKNOWN_FIELD'
+    | 'NOT_PLAIN_OBJECT'
+    | 'INVALID_JSON_VALUE'
+    | 'INVALID_STRING'
+    | 'INVALID_LITERAL'
+    | 'INVALID_NUMBER'
+    | 'NONFINITE_METRIC'
+    | 'INVALID_FOLD_SET'
+    | 'MISSING_FOLD'
+    | 'DUPLICATE_FOLD'
+    | 'FOREIGN_FOLD'
+    | 'ROW_COUNT_MISMATCH'
+    | 'CLASS_COUNT_MISMATCH'
+    | 'TRAIN_PRIOR_MISMATCH'
+    | 'IDENTITY_MISMATCH'
+    | 'P50_REFERENCE_MISMATCH'
+    | 'PROHIBITED_CONCEPT';
+  path: string;
+  message: string;
+}>;
+
+export type MLBInnerCandidateGateResult = Readonly<{
+  eligibility: 'INNER_ELIGIBLE' | 'INNER_REJECTED';
+  reasons: readonly string[];
+}>;
+
+export type MLBInnerCandidateGateResultIssue = Readonly<{
+  code:
+    | 'MISSING_FIELD'
+    | 'UNKNOWN_FIELD'
+    | 'NOT_PLAIN_OBJECT'
+    | 'INVALID_JSON_VALUE'
+    | 'INVALID_STRING'
+    | 'INVALID_LITERAL'
+    | 'INVALID_NUMBER'
+    | 'NONFINITE_METRIC'
+    | 'P50_REFERENCE_MISMATCH'
+    | 'TRAIN_PRIOR_MISMATCH'
+    | 'PROHIBITED_CONCEPT'
+    | 'INVALID_FOLD_RESULT';
+  path: string;
+  message: string;
+}>;
+
+type EvaluatorIssue =
+  | MLBTrainOnlyInnerRowCollectionIssue
+  | MLBTrainOnlyInnerValidationFoldsIssue
+  | MLBInnerFoldMetricResultIssue
+  | MLBInnerAggregateResultIssue
+  | MLBInnerCandidateGateResultIssue;
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F]/;
 const PROHIBITED_ROW_FIELDS = new Set(['odds', 'sportsbook', 'moneyline']);
@@ -1951,4 +2025,455 @@ export function evaluateMLBInnerFoldMetrics(
   };
 
   return { ok: true, value: result };
+}
+
+const CANONICAL_FOLD_IDS = ['FOLD_1', 'FOLD_2', 'FOLD_3', 'FOLD_4'] as const;
+
+type CanonicalFoldEntry = {
+  foldId: string;
+  validationRowCount: number;
+  validationHomeWinCount: number;
+  validationAwayWinCount: number;
+  trainPrior: number;
+};
+
+function buildCanonicalFoldLookup(): ReadonlyMap<string, CanonicalFoldEntry> {
+  const plan = MLB_CANONICAL_TRAIN_ONLY_INNER_FOLD_PLAN;
+  const map = new Map<string, CanonicalFoldEntry>();
+  for (const def of plan.folds) {
+    map.set(def.foldId, {
+      foldId: def.foldId,
+      validationRowCount: def.expectedValidationRowCount,
+      validationHomeWinCount: def.expectedValidationHomeWinCount,
+      validationAwayWinCount: def.expectedValidationAwayWinCount,
+      trainPrior: def.expectedTrainHomeWinCount / def.expectedTrainRowCount,
+    });
+  }
+  return map;
+}
+
+const CANONICAL_FOLD_LOOKUP = buildCanonicalFoldLookup();
+
+function validateAggregateFoldResult(
+  fold: MLBInnerFoldMetricResult,
+  canonical: CanonicalFoldEntry,
+  candidateRecipeId: string,
+  issues: MLBInnerAggregateResultIssue[],
+): void {
+  if (fold.candidateRecipeId !== candidateRecipeId) {
+    pushIssue(
+      issues,
+      'IDENTITY_MISMATCH',
+      `$.${fold.foldId}.candidateRecipeId`,
+      `Fold ${fold.foldId} candidateRecipeId ${fold.candidateRecipeId} does not match ${candidateRecipeId}`,
+    );
+  }
+
+  if (fold.contractVersion !== 'mlb-inner-fold-metric-result-v1') {
+    pushIssue(
+      issues,
+      'INVALID_FOLD_SET',
+      `$.${fold.foldId}.contractVersion`,
+      `Fold ${fold.foldId} contractVersion ${fold.contractVersion} is invalid`,
+    );
+  }
+
+  if (typeof fold.rowCount !== 'number' || !Number.isFinite(fold.rowCount) || fold.rowCount <= 0) {
+    pushIssue(issues, 'ROW_COUNT_MISMATCH', `$.${fold.foldId}.rowCount`, `Fold ${fold.foldId} rowCount must be a positive integer`);
+  } else if (fold.rowCount !== canonical.validationRowCount) {
+    pushIssue(
+      issues,
+      'ROW_COUNT_MISMATCH',
+      `$.${fold.foldId}.rowCount`,
+      `Fold ${fold.foldId} rowCount ${fold.rowCount} does not match canonical ${canonical.validationRowCount}`,
+    );
+  }
+
+  if (fold.targetHomeWinCount + fold.targetAwayWinCount !== fold.rowCount) {
+    pushIssue(
+      issues,
+      'CLASS_COUNT_MISMATCH',
+      `$.${fold.foldId}.targetHomeWinCount`,
+      `Fold ${fold.foldId} targetHomeWinCount + targetAwayWinCount !== rowCount`,
+    );
+  }
+
+  if (fold.targetHomeWinCount !== canonical.validationHomeWinCount) {
+    pushIssue(
+      issues,
+      'CLASS_COUNT_MISMATCH',
+      `$.${fold.foldId}.targetHomeWinCount`,
+      `Fold ${fold.foldId} targetHomeWinCount ${fold.targetHomeWinCount} does not match canonical ${canonical.validationHomeWinCount}`,
+    );
+  }
+
+  if (fold.targetAwayWinCount !== canonical.validationAwayWinCount) {
+    pushIssue(
+      issues,
+      'CLASS_COUNT_MISMATCH',
+      `$.${fold.foldId}.targetAwayWinCount`,
+      `Fold ${fold.foldId} targetAwayWinCount ${fold.targetAwayWinCount} does not match canonical ${canonical.validationAwayWinCount}`,
+    );
+  }
+
+  if (fold.foldTrainPriorProbability !== canonical.trainPrior) {
+    pushIssue(
+      issues,
+      'TRAIN_PRIOR_MISMATCH',
+      `$.${fold.foldId}.foldTrainPriorProbability`,
+      `Fold ${fold.foldId} foldTrainPriorProbability ${fold.foldTrainPriorProbability} does not match canonical ${canonical.trainPrior}`,
+    );
+  }
+
+  const metrics: Array<{ value: number; path: string; name: string; min?: number; max?: number }> = [
+    { value: fold.candidateLogLoss, path: `$.${fold.foldId}.candidateLogLoss`, name: 'candidateLogLoss', min: 0 },
+    { value: fold.candidateBrierScore, path: `$.${fold.foldId}.candidateBrierScore`, name: 'candidateBrierScore', min: 0, max: 1 },
+    { value: fold.candidateRocAuc, path: `$.${fold.foldId}.candidateRocAuc`, name: 'candidateRocAuc', min: 0, max: 1 },
+    { value: fold.p50LogLoss, path: `$.${fold.foldId}.p50LogLoss`, name: 'p50LogLoss', min: 0 },
+    { value: fold.p50BrierScore, path: `$.${fold.foldId}.p50BrierScore`, name: 'p50BrierScore', min: 0, max: 1 },
+    { value: fold.p50RocAuc, path: `$.${fold.foldId}.p50RocAuc`, name: 'p50RocAuc', min: 0, max: 1 },
+    { value: fold.foldTrainPriorLogLoss, path: `$.${fold.foldId}.foldTrainPriorLogLoss`, name: 'foldTrainPriorLogLoss', min: 0 },
+    { value: fold.foldTrainPriorBrierScore, path: `$.${fold.foldId}.foldTrainPriorBrierScore`, name: 'foldTrainPriorBrierScore', min: 0, max: 1 },
+    { value: fold.foldTrainPriorRocAuc, path: `$.${fold.foldId}.foldTrainPriorRocAuc`, name: 'foldTrainPriorRocAuc', min: 0, max: 1 },
+  ];
+
+  for (const metric of metrics) {
+    if (!Number.isFinite(metric.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', metric.path, `Fold ${fold.foldId} ${metric.name} must be finite`);
+    } else if (metric.min !== undefined && metric.value < metric.min) {
+      pushIssue(issues, 'NONFINITE_METRIC', metric.path, `Fold ${fold.foldId} ${metric.name} must be >= ${metric.min}`);
+    } else if (metric.max !== undefined && metric.value > metric.max) {
+      pushIssue(issues, 'NONFINITE_METRIC', metric.path, `Fold ${fold.foldId} ${metric.name} must be <= ${metric.max}`);
+    }
+  }
+
+  // P50 reference metrics are derived canonically in the aggregate evaluator;
+  // domain validation above is sufficient here so legal-but-wrong caller-supplied
+  // reference values do not cause fold-set rejection.
+}
+
+function computeCanonicalFoldReferenceMetrics(canonical: CanonicalFoldEntry): {
+  p50LogLoss: number;
+  p50BrierScore: number;
+  p50RocAuc: number;
+  foldTrainPriorLogLoss: number;
+  foldTrainPriorBrierScore: number;
+  foldTrainPriorRocAuc: number;
+} {
+  const p = canonical.trainPrior;
+  const home = canonical.validationHomeWinCount;
+  const away = canonical.validationAwayWinCount;
+  const rowCount = canonical.validationRowCount;
+  return {
+    p50LogLoss: -Math.log(0.5),
+    p50BrierScore: 0.25,
+    p50RocAuc: 0.5,
+    foldTrainPriorLogLoss: -(home * Math.log(p) + away * Math.log(1 - p)) / rowCount,
+    foldTrainPriorBrierScore: (((p - 1) ** 2) * home + ((p - 0) ** 2) * away) / rowCount,
+    foldTrainPriorRocAuc: 0.5,
+  };
+}
+
+function computeCanonicalAggregateTrainPriorMetrics(): {
+  aggregateFoldTrainPriorLogLoss: number;
+  aggregateFoldTrainPriorBrierScore: number;
+  aggregateFoldTrainPriorRocAuc: number;
+} {
+  let weightedLogLossSum = 0;
+  let weightedBrierSum = 0;
+  let totalWeight = 0;
+  for (const canonical of CANONICAL_FOLD_IDS) {
+    const entry = CANONICAL_FOLD_LOOKUP.get(canonical) as CanonicalFoldEntry;
+    const metrics = computeCanonicalFoldReferenceMetrics(entry);
+    weightedLogLossSum += metrics.foldTrainPriorLogLoss * entry.validationRowCount;
+    weightedBrierSum += metrics.foldTrainPriorBrierScore * entry.validationRowCount;
+    totalWeight += entry.validationRowCount;
+  }
+  return {
+    aggregateFoldTrainPriorLogLoss: weightedLogLossSum / totalWeight,
+    aggregateFoldTrainPriorBrierScore: weightedBrierSum / totalWeight,
+    aggregateFoldTrainPriorRocAuc: 0.5,
+  };
+}
+
+const CANONICAL_AGGREGATE_TRAIN_PRIOR_METRICS = computeCanonicalAggregateTrainPriorMetrics();
+
+function classifyInnerCandidateGate(
+  aggregateResult: MLBInnerAggregateResult,
+): Readonly<{ ok: true; value: MLBInnerCandidateGateResult } | { ok: false; issues: readonly MLBInnerCandidateGateResultIssue[] }> {
+  const issues: MLBInnerCandidateGateResultIssue[] = [];
+
+  if (!isPlainObject(aggregateResult)) {
+    pushIssue(issues, 'NOT_PLAIN_OBJECT', '$.aggregateResult', 'aggregateResult must be a plain object');
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerCandidateGateResultIssue[] };
+  }
+
+  if (aggregateResult.contractVersion !== 'mlb-inner-aggregate-result-v1') {
+    pushIssue(issues, 'INVALID_LITERAL', '$.contractVersion', 'contractVersion must be mlb-inner-aggregate-result-v1');
+  }
+
+  const requiredFields: Array<{ key: string; value: unknown }> = [
+    { key: 'candidateRecipeId', value: aggregateResult.candidateRecipeId },
+    { key: 'aggregateCandidateLogLoss', value: aggregateResult.aggregateCandidateLogLoss },
+    { key: 'aggregateCandidateBrierScore', value: aggregateResult.aggregateCandidateBrierScore },
+    { key: 'aggregateP50LogLoss', value: aggregateResult.aggregateP50LogLoss },
+    { key: 'aggregateP50BrierScore', value: aggregateResult.aggregateP50BrierScore },
+    { key: 'aggregateFoldTrainPriorLogLoss', value: aggregateResult.aggregateFoldTrainPriorLogLoss },
+    { key: 'aggregateFoldTrainPriorBrierScore', value: aggregateResult.aggregateFoldTrainPriorBrierScore },
+  ];
+
+  for (const field of requiredFields) {
+    if (typeof field.value !== 'string' && typeof field.value !== 'number') {
+      pushIssue(issues, 'MISSING_FIELD', `$.${field.key}`, `${field.key} is required`);
+    }
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerCandidateGateResultIssue[] };
+  }
+
+  if (aggregateResult.aggregateP50LogLoss !== -Math.log(0.5)) {
+    pushIssue(
+      issues,
+      'P50_REFERENCE_MISMATCH',
+      '$.aggregateP50LogLoss',
+      `aggregateP50LogLoss ${aggregateResult.aggregateP50LogLoss} does not match canonical P50 ${-Math.log(0.5)}`,
+    );
+  }
+  if (aggregateResult.aggregateP50BrierScore !== 0.25) {
+    pushIssue(issues, 'P50_REFERENCE_MISMATCH', '$.aggregateP50BrierScore', 'aggregateP50BrierScore must be 0.25');
+  }
+  if (aggregateResult.aggregateP50RocAuc !== 0.5) {
+    pushIssue(issues, 'P50_REFERENCE_MISMATCH', '$.aggregateP50RocAuc', 'aggregateP50RocAuc must be 0.5');
+  }
+  if (aggregateResult.aggregateFoldTrainPriorRocAuc !== 0.5) {
+    pushIssue(issues, 'TRAIN_PRIOR_MISMATCH', '$.aggregateFoldTrainPriorRocAuc', 'aggregateFoldTrainPriorRocAuc must be 0.5');
+  }
+  if (aggregateResult.aggregateFoldTrainPriorLogLoss !== CANONICAL_AGGREGATE_TRAIN_PRIOR_METRICS.aggregateFoldTrainPriorLogLoss) {
+    pushIssue(
+      issues,
+      'TRAIN_PRIOR_MISMATCH',
+      '$.aggregateFoldTrainPriorLogLoss',
+      `aggregateFoldTrainPriorLogLoss ${aggregateResult.aggregateFoldTrainPriorLogLoss} does not match canonical aggregate train-prior log loss ${CANONICAL_AGGREGATE_TRAIN_PRIOR_METRICS.aggregateFoldTrainPriorLogLoss}`,
+    );
+  }
+  if (aggregateResult.aggregateFoldTrainPriorBrierScore !== CANONICAL_AGGREGATE_TRAIN_PRIOR_METRICS.aggregateFoldTrainPriorBrierScore) {
+    pushIssue(
+      issues,
+      'TRAIN_PRIOR_MISMATCH',
+      '$.aggregateFoldTrainPriorBrierScore',
+      `aggregateFoldTrainPriorBrierScore ${aggregateResult.aggregateFoldTrainPriorBrierScore} does not match canonical aggregate train-prior Brier ${CANONICAL_AGGREGATE_TRAIN_PRIOR_METRICS.aggregateFoldTrainPriorBrierScore}`,
+    );
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerCandidateGateResultIssue[] };
+  }
+
+  const reasons: string[] = [];
+
+  if (!(aggregateResult.aggregateCandidateLogLoss < aggregateResult.aggregateP50LogLoss)) {
+    reasons.push('AGGREGATE_LOG_LOSS_NOT_BETTER_THAN_P50');
+  }
+  if (!(aggregateResult.aggregateCandidateLogLoss < aggregateResult.aggregateFoldTrainPriorLogLoss)) {
+    reasons.push('AGGREGATE_LOG_LOSS_NOT_BETTER_THAN_TRAIN_PRIOR');
+  }
+  if (!(aggregateResult.aggregateCandidateBrierScore < aggregateResult.aggregateP50BrierScore)) {
+    reasons.push('AGGREGATE_BRIER_NOT_BETTER_THAN_P50');
+  }
+  if (!(aggregateResult.aggregateCandidateBrierScore < aggregateResult.aggregateFoldTrainPriorBrierScore)) {
+    reasons.push('AGGREGATE_BRIER_NOT_BETTER_THAN_TRAIN_PRIOR');
+  }
+
+  const eligible = reasons.length === 0;
+  const eligibility: 'INNER_ELIGIBLE' | 'INNER_REJECTED' = eligible ? 'INNER_ELIGIBLE' : 'INNER_REJECTED';
+
+  return {
+    ok: true,
+    value: {
+      eligibility,
+      reasons,
+    },
+  };
+}
+
+export function evaluateMLBTrainOnlyInnerCandidate(
+  foldResults: readonly MLBInnerFoldMetricResult[],
+): Readonly<{ ok: true; value: MLBInnerAggregateResult } | { ok: false; issues: readonly MLBInnerAggregateResultIssue[] }> {
+  const issues: MLBInnerAggregateResultIssue[] = [];
+
+  if (!Array.isArray(foldResults)) {
+    pushIssue(issues, 'INVALID_ARRAY', '$.foldResults', 'foldResults must be an array');
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerAggregateResultIssue[] };
+  }
+
+  if (foldResults.length !== 4) {
+    pushIssue(issues, 'INVALID_FOLD_SET', '$.foldResults.length', `Expected exactly 4 fold results, got ${foldResults.length}`);
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerAggregateResultIssue[] };
+  }
+
+  const seenFoldIds = new Set<string>();
+  let candidateRecipeId: string | null = null;
+
+  for (const fold of foldResults) {
+    if (!isPlainObject(fold)) {
+      pushIssue(issues, 'NOT_PLAIN_OBJECT', `$.${typeof fold === 'object' && fold !== null && typeof (fold as Record<string, unknown>).foldId === 'string' ? (fold as Record<string, unknown>).foldId : '?'}`, 'fold result must be a plain object');
+      continue;
+    }
+    const rawFoldId = (fold as Record<string, unknown>).foldId;
+    if (typeof rawFoldId !== 'string') {
+      pushIssue(issues, 'INVALID_STRING', '$.foldId', 'foldId is required');
+      continue;
+    }
+    if (!isStrictNonEmptyTrimmedString(rawFoldId)) {
+      pushIssue(issues, 'INVALID_STRING', '$.foldId', 'foldId must be a non-empty trimmed string');
+      continue;
+    }
+    if (!CANONICAL_FOLD_LOOKUP.has(rawFoldId)) {
+      pushIssue(issues, 'FOREIGN_FOLD', `$.${rawFoldId}`, `Foreign foldId ${rawFoldId}`);
+      continue;
+    }
+    if (seenFoldIds.has(rawFoldId)) {
+      pushIssue(issues, 'DUPLICATE_FOLD', `$.${rawFoldId}`, `Duplicate foldId ${rawFoldId}`);
+      continue;
+    }
+    seenFoldIds.add(rawFoldId);
+
+    const rawCandidateRecipeId = (fold as Record<string, unknown>).candidateRecipeId;
+    if (typeof rawCandidateRecipeId !== 'string' || rawCandidateRecipeId.trim() === '') {
+      pushIssue(issues, 'INVALID_STRING', `$.${rawFoldId}.candidateRecipeId`, `Fold ${rawFoldId} candidateRecipeId must be a non-empty string`);
+    } else if (candidateRecipeId === null) {
+      candidateRecipeId = rawCandidateRecipeId;
+    } else if (candidateRecipeId !== rawCandidateRecipeId) {
+      pushIssue(issues, 'IDENTITY_MISMATCH', '$.candidateRecipeId', `Mixed candidateRecipeId: ${candidateRecipeId} vs ${rawCandidateRecipeId}`);
+    }
+  }
+
+  if (candidateRecipeId === null) {
+    pushIssue(issues, 'IDENTITY_MISMATCH', '$.candidateRecipeId', 'candidateRecipeId is required across all folds');
+  }
+
+  for (const expectedId of CANONICAL_FOLD_IDS) {
+    if (!seenFoldIds.has(expectedId)) {
+      pushIssue(issues, 'MISSING_FOLD', `$.${expectedId}`, `Missing canonical fold ${expectedId}`);
+    }
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerAggregateResultIssue[] };
+  }
+
+  const canonicalFolds = CANONICAL_FOLD_IDS.map((id) => CANONICAL_FOLD_LOOKUP.get(id) as CanonicalFoldEntry);
+  const foldById = new Map<string, MLBInnerFoldMetricResult>();
+  for (const fold of foldResults) {
+    foldById.set(fold.foldId, fold);
+  }
+
+  for (const canonical of canonicalFolds) {
+    const fold = foldById.get(canonical.foldId) as MLBInnerFoldMetricResult;
+    validateAggregateFoldResult(fold, canonical, candidateRecipeId as string, issues);
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerAggregateResultIssue[] };
+  }
+
+  let weightedCandidateLogLossSum = 0;
+  let weightedCandidateBrierSum = 0;
+  let weightedCandidateRocAucSum = 0;
+  let weightedP50LogLossSum = 0;
+  let weightedP50BrierSum = 0;
+  let weightedP50RocAucSum = 0;
+  let weightedFoldTrainPriorLogLossSum = 0;
+  let weightedFoldTrainPriorBrierSum = 0;
+  let weightedFoldTrainPriorRocAucSum = 0;
+  let totalWeight = 0;
+  let worstFoldCandidateLogLoss = -Infinity;
+  let worstFoldCandidateBrierScore = -Infinity;
+  let foldsBeatingP50OnLogLoss = 0;
+  let foldsBeatingP50OnBrier = 0;
+  let foldsBeatingFoldTrainPriorOnLogLoss = 0;
+  let foldsBeatingFoldTrainPriorOnBrier = 0;
+
+  for (const canonical of canonicalFolds) {
+    const fold = foldById.get(canonical.foldId) as MLBInnerFoldMetricResult;
+    const weight = canonical.validationRowCount;
+    const canonicalRefs = computeCanonicalFoldReferenceMetrics(canonical);
+    totalWeight += weight;
+
+    weightedCandidateLogLossSum += fold.candidateLogLoss * weight;
+    weightedCandidateBrierSum += fold.candidateBrierScore * weight;
+    weightedCandidateRocAucSum += fold.candidateRocAuc * weight;
+    weightedP50LogLossSum += canonicalRefs.p50LogLoss * weight;
+    weightedP50BrierSum += canonicalRefs.p50BrierScore * weight;
+    weightedP50RocAucSum += canonicalRefs.p50RocAuc * weight;
+    weightedFoldTrainPriorLogLossSum += canonicalRefs.foldTrainPriorLogLoss * weight;
+    weightedFoldTrainPriorBrierSum += canonicalRefs.foldTrainPriorBrierScore * weight;
+    weightedFoldTrainPriorRocAucSum += canonicalRefs.foldTrainPriorRocAuc * weight;
+
+    if (fold.candidateLogLoss > worstFoldCandidateLogLoss) worstFoldCandidateLogLoss = fold.candidateLogLoss;
+    if (fold.candidateBrierScore > worstFoldCandidateBrierScore) worstFoldCandidateBrierScore = fold.candidateBrierScore;
+    if (fold.candidateLogLoss < canonicalRefs.p50LogLoss) foldsBeatingP50OnLogLoss++;
+    if (fold.candidateBrierScore < canonicalRefs.p50BrierScore) foldsBeatingP50OnBrier++;
+    if (fold.candidateLogLoss < canonicalRefs.foldTrainPriorLogLoss) foldsBeatingFoldTrainPriorOnLogLoss++;
+    if (fold.candidateBrierScore < canonicalRefs.foldTrainPriorBrierScore) foldsBeatingFoldTrainPriorOnBrier++;
+  }
+
+  const aggregateCandidateLogLoss = weightedCandidateLogLossSum / totalWeight;
+  const aggregateCandidateBrierScore = weightedCandidateBrierSum / totalWeight;
+  const aggregateCandidateRocAuc = weightedCandidateRocAucSum / totalWeight;
+  const aggregateP50LogLoss = weightedP50LogLossSum / totalWeight;
+  const aggregateP50BrierScore = weightedP50BrierSum / totalWeight;
+  const aggregateP50RocAuc = weightedP50RocAucSum / totalWeight;
+  const aggregateFoldTrainPriorLogLoss = weightedFoldTrainPriorLogLossSum / totalWeight;
+  const aggregateFoldTrainPriorBrierScore = weightedFoldTrainPriorBrierSum / totalWeight;
+  const aggregateFoldTrainPriorRocAuc = weightedFoldTrainPriorRocAucSum / totalWeight;
+
+  const aggregateValidationRowCount = canonicalFolds.reduce((sum, f) => sum + f.validationRowCount, 0);
+
+  const result: MLBInnerAggregateResult = {
+    contractVersion: 'mlb-inner-aggregate-result-v1',
+    candidateRecipeId: candidateRecipeId as string,
+    foldCount: 4,
+    aggregateValidationRowCount,
+    aggregateCandidateLogLoss,
+    aggregateCandidateBrierScore,
+    aggregateCandidateRocAuc,
+    aggregateP50LogLoss,
+    aggregateP50BrierScore,
+    aggregateP50RocAuc,
+    aggregateFoldTrainPriorLogLoss,
+    aggregateFoldTrainPriorBrierScore,
+    aggregateFoldTrainPriorRocAuc,
+    worstFoldCandidateLogLoss,
+    worstFoldCandidateBrierScore,
+    foldsBeatingP50OnLogLoss,
+    foldsBeatingP50OnBrier,
+    foldsBeatingFoldTrainPriorOnLogLoss,
+    foldsBeatingFoldTrainPriorOnBrier,
+  };
+
+  return { ok: true, value: result };
+}
+
+export function evaluateMLBTrainOnlyInnerCandidateGate(
+  foldResults: readonly MLBInnerFoldMetricResult[],
+): Readonly<{ ok: true; value: MLBInnerCandidateGateResult } | { ok: false; issues: readonly MLBInnerCandidateGateResultIssue[] }> {
+  const aggregateResult = evaluateMLBTrainOnlyInnerCandidate(foldResults);
+
+  if (!aggregateResult.ok) {
+    const firstIssue = aggregateResult.issues[0];
+    return {
+      ok: false,
+      issues: [
+        {
+          code: 'INVALID_FOLD_RESULT',
+          path: firstIssue?.path ?? '$.foldResults',
+          message: firstIssue?.message ?? 'Invalid fold results',
+        } as MLBInnerCandidateGateResultIssue,
+      ],
+    };
+  }
+
+  return classifyInnerCandidateGate(aggregateResult.value);
 }
