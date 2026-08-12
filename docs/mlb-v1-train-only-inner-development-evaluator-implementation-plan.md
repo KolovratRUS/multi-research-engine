@@ -328,10 +328,24 @@ The implementation plan defines a candidate-runner interface.
 Conceptual function:
 
 interface MLBInnerCandidateRecipe {
-  recipeId: string;
+  candidateRecipeId: string;
+
+  preprocessingPolicyId: string;
+  featurePolicyId: string;
+  modelFamilyId: string;
+
+  regularizationConfig: unknown;
+  optimizerConfig: unknown;
+  otherModelAffectingChoices: unknown;
+
   complexityRank: number;
-  // model-affecting identity fields only; no runtime metadata
 }
+
+// candidateRecipeId is immutable audit/ranking identity.
+// complexityRank is predeclared selection metadata.
+// The six model-affecting fields above are the only fields that participate
+// in recipe identity/fingerprint. candidateRecipeId, complexityRank, and all
+// runtime/execution metadata are excluded from fingerprint computation.
 
 interface MLBInnerValidationPredictionInput {
   exampleId: string;
@@ -450,6 +464,117 @@ Fold-train-prior:
 - rocAuc = computed via pairwise tie-correct semantics against innerValidation targets
 
 The outer mlb-pretest-validation-reference-contract.ts is NOT altered.
+
+## 10a. Recipe identity/fingerprint contract
+
+Fingerprint contract version:
+
+MLB_INNER_CANDIDATE_RECIPE_FINGERPRINT_CONTRACT_VERSION =
+  'mlb-inner-candidate-recipe-fingerprint-v1'
+
+Conceptual fingerprint payload:
+
+{
+  fingerprintContractVersion: 'mlb-inner-candidate-recipe-fingerprint-v1',
+  preprocessingPolicyId,
+  featurePolicyId,
+  modelFamilyId,
+  regularizationConfig,
+  optimizerConfig,
+  otherModelAffectingChoices
+}
+
+Model-affecting fields (fingerprint payload):
+
+- preprocessingPolicyId
+- featurePolicyId
+- modelFamilyId
+- regularizationConfig
+- optimizerConfig
+- otherModelAffectingChoices
+
+Excluded from fingerprint:
+
+- candidateRecipeId
+- complexityRank
+- developmentCycleId
+- timestamps
+- process ID
+- hostname
+- runner identity
+- environment identity
+- execution count
+- any other execution/audit-only metadata
+
+Canonicalization rules:
+
+1. accepted values are JSON-safe only:
+   - null
+   - boolean
+   - string
+   - finite number
+   - array
+   - plain object
+
+2. reject:
+   - undefined
+   - NaN
+   - Infinity
+   - -Infinity
+   - bigint
+   - symbol
+   - function
+   - non-plain objects
+   - accessors/getters/setters
+   - cyclic structures
+
+3. object keys are recursively sorted lexicographically before serialization.
+
+4. array order is preserved.
+
+5. object insertion order is irrelevant.
+
+6. finite numbers use JSON numeric serialization.
+
+7. negative zero normalizes to JSON number 0.
+
+8. strings are serialized by JSON escaping rules.
+
+9. canonical serialized bytes are UTF-8.
+
+Fingerprint algorithm:
+
+SHA-256 over the UTF-8 bytes of the canonical serialized fingerprint payload.
+
+Output:
+
+lowercase 64-character hexadecimal SHA-256.
+
+Future function name:
+
+computeMLBInnerCandidateRecipeFingerprint(
+  recipe: MLBInnerCandidateRecipe
+)
+
+candidateRecipeId and complexityRank must not participate in fingerprint
+computation.
+
+Anti-evasion rules:
+
+same recipe renamed to a new candidateRecipeId is still the same fingerprint ->
+  rejected as IDENTITY_ALIAS_CONFLICT; no new budget slot, no new ranked candidate
+
+silent parameter change under same candidateRecipeId produces different fingerprint ->
+  rejected as IDENTITY_MUTATION_CONFLICT; no new budget slot, no new ranked candidate
+
+A genuinely changed recipe must receive a NEW candidateRecipeId and will then have a
+NEW fingerprint and consume a new distinct slot.
+
+Recipe identity within one development cycle:
+
+one candidateRecipeId maps to exactly one fingerprint
+
+one fingerprint maps to exactly one canonical candidateRecipeId
 
 ## 11. Fold metric evaluator
 
@@ -590,15 +715,32 @@ AUC cannot rescue rejection.
 
 ## 14. Eligible-candidate ranking
 
+Safe rankable candidate input:
+
+interface MLBInnerRankableCandidateInput {
+  recipe: MLBInnerCandidateRecipe;
+  foldResults: readonly MLBInnerFoldMetricResult[];
+}
+
 Pure function: rankInnerEligibleCandidates(
-  candidates: readonly MLBInnerAggregateResult[]
+  budget: MLBInnerDevelopmentRecipeBudget,
+  candidates: readonly MLBInnerRankableCandidateInput[]
 )
+
+The ranking function must NOT accept:
+- MLBInnerAggregateResult supplied by caller
+- caller-supplied eligibility
+- caller-supplied aggregate log loss
+- caller-supplied aggregate Brier
+- caller-supplied aggregate AUC
+- caller-supplied complexity value separate from the registered recipe
 
 Output:
 
 export type MLBInnerCandidateRank = Readonly<{
   rank: number;
   candidateRecipeId: string;
+  recipeFingerprint: string;
   aggregateLogLoss: number;
   aggregateBrierScore: number;
   complexityRank: number;
@@ -610,6 +752,37 @@ Frozen ranking order:
 3. then exact tie: lower predeclared implementation/model complexity
 4. then exact tie: lexicographically smallest immutable candidate ID
 
+AUC remains descriptive only and does not affect ranking.
+
+Input array order never affects ranking.
+
+For each candidate:
+1. validate recipe;
+2. compute canonical fingerprint;
+3. prove exact recipe identity + complexityRank is registered in budget;
+4. prove foldResults candidateRecipeId matches recipe candidateRecipeId;
+5. call evaluateMLBTrainOnlyInnerCandidate(foldResults) for canonical aggregate metrics;
+6. call evaluateMLBTrainOnlyInnerCandidateGate(foldResults) for strict eligibility;
+7. invalid inputs fail closed;
+8. valid INNER_REJECTED candidates are excluded from the eligible ranking pool;
+9. valid INNER_ELIGIBLE candidates enter ranking.
+
+Caller-supplied aggregate metrics are NOT authoritative.
+Caller-supplied eligibility is NOT authoritative.
+
+Rejected candidates:
+- are valid development results;
+- remain consumed in the 12-recipe budget;
+- are excluded from the eligible ranking output;
+- cannot win;
+- do not cause the whole candidate collection to be invalid merely because they were
+  rejected by the model-performance gate.
+
+Invalid contract candidates fail the ranking call closed.
+
+If zero eligible candidates exist: return a valid empty ranked collection.
+Do NOT fabricate a winner.
+
 Complexity metadata requirement:
 The later candidate-experiment plan must provide an immutable complexity rank for every recipe before execution.
 If complexity metadata is absent where needed for a tie: fail closed or report unresolved tie.
@@ -618,40 +791,172 @@ Do not use AUC for ranking.
 
 ## 15. 12-recipe budget accounting
 
+Development cycle identity:
+
+MLB_INNER_DEVELOPMENT_CYCLE_ID =
+  'mlb-v1-train-only-inner-development-cycle-v1'
+
+This cycle is bound to the current frozen TRAIN-only development methodology,
+including the current outer TRAIN window, the current four-fold chronology,
+the current feature-policy/manifest generation, the current strict E3-D
+eligibility methodology, and the current 12-recipe development cap.
+
+The cycle may be reset ONLY by an explicit future committed methodology change that:
+1. declares the old cycle closed;
+2. explains why a new development cycle is justified;
+3. defines a NEW cycleId.
+
+Creating a fresh empty budget with the SAME cycleId after development has started
+is methodologically prohibited.
+
 Type:
 
 export type MLBInnerDevelopmentRecipeBudget = Readonly<{
   contractVersion: 'mlb-inner-development-recipe-budget-v1';
-  cycleId: string;
+  cycleId: typeof MLB_INNER_DEVELOPMENT_CYCLE_ID;
   maxDistinctRecipes: 12;
   seenRecipeIds: readonly string[];
   seenRecipeFingerprints: readonly string[];
+  seenComplexityRanks: readonly number[];
   evaluationCount: number;
 }>;
+
+The three seen... arrays are parallel arrays. At index i:
+  seenRecipeIds[i]
+  seenRecipeFingerprints[i]
+  seenComplexityRanks[i]
+describe one registered distinct recipe.
+
+Required invariants:
+- all three arrays same length
+- all recipe IDs unique
+- all fingerprints unique
+- each complexity rank is a positive integer
+- array length <= 12
+- distinct recipes consumed = seenRecipeFingerprints.length
+- remaining = 12 - seenRecipeFingerprints.length
+- evaluationCount >= distinct recipes consumed
 
 Function: recordInnerCandidateRecipeExecution(
   budget: MLBInnerDevelopmentRecipeBudget,
   candidateRecipe: MLBInnerCandidateRecipe
 )
 
+Pre-registration sequence:
+
+validated recipe descriptor
+→ compute canonical fingerprint
+→ validate identity against current budget
+→ check slot availability
+→ register recipe
+→ distinct slot is now permanently consumed for this cycle
+→ only then may fold execution begin
+
 Recipe identity requirements:
-- candidateRecipeId is immutable
-- recipe fingerprint covers all model-affecting fields:
-  - preprocessing policy identity
-  - feature policy identity
-  - model family identity
-  - regularization configuration identity
-  - optimizer configuration identity
-  - any other model-affecting choice
+
+candidateRecipeId is immutable.
+
+complexityRank is predeclared before any fold evaluation for that recipe and
+must remain identical for every exact re-execution of that registered recipe.
+Changing complexityRank after registration fails closed as COMPLEXITY_RANK_MISMATCH
+and consumes no new distinct slot.
+
+Recipe fingerprint covers exactly the model-affecting fields:
+  - preprocessingPolicyId
+  - featurePolicyId
+  - modelFamilyId
+  - regularizationConfig
+  - optimizerConfig
+  - otherModelAffectingChoices
+
+It EXCLUDES:
+  - candidateRecipeId
+  - complexityRank
+  - developmentCycleId
+  - timestamps
+  - process ID
+  - hostname
+  - runner identity
+  - environment identity
+  - execution count
+  - any other execution/audit-only metadata
 
 Anti-evasion rules:
-- same recipe renamed to a new candidateRecipeId is still the same fingerprint -> counted
-- silent parameter change under same candidateRecipeId produces different fingerprint -> counted as new recipe
-- recipe 13 after seeing 12 distinct identities: rejected
 
-One recipe executed across four folds consumes exactly one recipe slot.
+same recipe renamed to a new candidateRecipeId is still the same fingerprint ->
+  rejected as IDENTITY_ALIAS_CONFLICT; no new budget slot, no new ranked candidate
+
+silent parameter change under same candidateRecipeId produces different fingerprint ->
+  rejected as IDENTITY_MUTATION_CONFLICT; no new budget slot, no new ranked candidate
+
+recipe 13 after seeing 12 distinct identities: rejected before registration;
+  no state mutation, no evaluationCount increment
+
+One distinct recipe executed across four folds consumes exactly one recipe slot.
 
 Runtime metadata (timestamp, process ID, hostname) does NOT participate in fingerprint.
+
+Slot-consumption timing:
+
+A new distinct recipe consumes its ONE slot when it is successfully REGISTERED for
+execution, immediately BEFORE any inner-fold prediction/evaluation for that recipe
+is allowed to begin.
+
+Consequences:
+
+MALFORMED recipe rejected before registration = 0 slots consumed
+
+identity alias/mutation conflict = 0 slots consumed
+
+attempted 13th distinct recipe = rejected before registration; 0 additional slots consumed
+
+successfully registered new recipe = 1 slot consumed immediately
+
+if execution later crashes or remains incomplete = slot REMAINS consumed
+
+if completed recipe is INNER_REJECTED = slot REMAINS consumed
+
+if completed recipe is INNER_ELIGIBLE = slot REMAINS consumed
+
+Exact deterministic re-execution semantics:
+
+An exact deterministic re-execution is:
+  same cycleId
+  same candidateRecipeId
+  same canonical fingerprint
+  same complexityRank
+
+It is allowed for debugging/reproducibility.
+
+It does NOT consume another distinct-recipe slot.
+
+evaluationCount DOES increment by 1 for each accepted execution registration,
+including exact re-executions.
+
+Summary:
+
+first registration:
+  distinct count +1
+  evaluationCount +1
+
+exact re-execution:
+  distinct count unchanged
+  evaluationCount +1
+
+identity alias conflict:
+  no state change
+
+identity mutation conflict:
+  no state change
+
+complexity mismatch:
+  no state change
+
+13th distinct recipe:
+  no state change
+
+malformed recipe:
+  no state change
 
 ## 16. Failure behavior
 

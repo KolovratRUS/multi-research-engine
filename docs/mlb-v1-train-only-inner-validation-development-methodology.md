@@ -428,6 +428,73 @@ If all 12 recipes fail: STOP.
 Do not adaptively add recipe 13 based on observed inner results.
 A new committed methodology/amendment or new data is required.
 
+Development cycle identity:
+
+MLB_INNER_DEVELOPMENT_CYCLE_ID =
+  'mlb-v1-train-only-inner-development-cycle-v1'
+
+This cycle is bound to the current frozen TRAIN-only development methodology,
+including the current outer TRAIN window, the current four-fold chronology,
+the current feature-policy/manifest generation, the current strict eligibility
+methodology, and the current 12-recipe development cap.
+
+The cycle may be reset ONLY by an explicit future committed methodology change that:
+1. declares the old cycle closed;
+2. explains why a new development cycle is justified;
+3. defines a NEW cycleId.
+
+Creating a fresh empty budget with the SAME cycleId after development has started
+is methodologically prohibited.
+
+Recipe identity and fingerprint:
+
+A recipe is uniquely identified within a development cycle by its canonical
+recipe fingerprint. The fingerprint is computed from the model-affecting fields
+only, using the canonical serialization and hash algorithm defined in the
+implementation plan. candidateRecipeId is the immutable human/audit/ranking ID.
+
+Within one development cycle:
+  one candidateRecipeId MUST map to exactly one fingerprint
+  one fingerprint MUST map to exactly one canonical candidateRecipeId
+
+same fingerprint + different candidateRecipeId = IDENTITY_ALIAS_CONFLICT
+same candidateRecipeId + different fingerprint = IDENTITY_MUTATION_CONFLICT
+
+Both conflicts fail closed. They do NOT create another rankable candidate and do
+NOT consume another distinct-recipe slot.
+
+A genuinely changed recipe must receive a NEW candidateRecipeId and will then have a
+NEW fingerprint and consume a new distinct slot.
+
+Slot-consumption timing:
+
+A new distinct recipe consumes its ONE slot when it is successfully REGISTERED for
+execution, immediately BEFORE any inner-fold prediction/evaluation for that recipe
+is allowed to begin.
+
+Consequences:
+
+MALFORMED recipe rejected before registration = 0 slots consumed
+
+identity alias/mutation conflict = 0 slots consumed
+
+attempted 13th distinct recipe = rejected before registration; 0 additional slots consumed
+
+successfully registered new recipe = 1 slot consumed immediately
+
+if execution later crashes or remains incomplete = slot REMAINS consumed
+
+if completed recipe is INNER_REJECTED = slot REMAINS consumed
+
+if completed recipe is INNER_ELIGIBLE = slot REMAINS consumed
+
+Exact deterministic re-execution:
+
+Repeated deterministic execution of the exact same recipe for debugging does not
+create a new recipe, and does NOT consume another distinct-recipe slot.
+evaluationCount DOES increment by 1 for each accepted execution registration,
+including exact re-executions.
+
 ## 16. Current-corpus vs new-data experiment-family boundary
 
 The postmortem identified several investigation classes.
