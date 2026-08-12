@@ -114,7 +114,104 @@ export type MLBTrainOnlyInnerValidationFoldsIssue = Readonly<{
   message: string;
 }>;
 
-type EvaluatorIssue = MLBTrainOnlyInnerRowCollectionIssue | MLBTrainOnlyInnerValidationFoldsIssue;
+export type MLBInnerCandidatePredictionRecord = Readonly<{
+  candidateRecipeId: string;
+  foldId: string;
+  exampleId: string;
+  homeWinProbability: number;
+}>;
+
+export type MLBInnerDevelopmentReferenceFacts = Readonly<{
+  contractVersion: 'mlb-inner-development-reference-facts-v1';
+  sport: 'MLB';
+  target: 'OFFICIAL_FINAL_GAME_WINNER';
+  foldId: string;
+  matrixId: string;
+  manifestId: string;
+  datasetId: string;
+  innerTrainRowCount: number;
+  innerValidationRowCount: number;
+  innerTrainHomeWinCount: number;
+  innerTrainAwayWinCount: number;
+  innerTrainHomeWinPrior: number;
+  p50: Readonly<{
+    probability: number;
+    logLoss: number;
+    brierScore: number;
+    rocAuc: number;
+  }>;
+  foldTrainPrior: Readonly<{
+    probability: number;
+    logLoss: number;
+    brierScore: number;
+    rocAuc: number;
+  }>;
+}>;
+
+type MLBInnerDevelopmentReferenceProvenance = Readonly<{
+  matrixId: string;
+  manifestId: string;
+  datasetId: string;
+}>;
+
+export type MLBInnerFoldMetricResult = Readonly<{
+  contractVersion: 'mlb-inner-fold-metric-result-v1';
+  foldId: string;
+  candidateRecipeId: string;
+  rowCount: number;
+  targetHomeWinCount: number;
+  targetAwayWinCount: number;
+  candidateLogLoss: number;
+  candidateBrierScore: number;
+  candidateRocAuc: number;
+  p50LogLoss: number;
+  p50BrierScore: number;
+  p50RocAuc: number;
+  foldTrainPriorLogLoss: number;
+  foldTrainPriorBrierScore: number;
+  foldTrainPriorRocAuc: number;
+  foldTrainPriorProbability: number;
+}>;
+
+export type MLBInnerFoldMetricResultIssue = Readonly<{
+  code:
+    | 'MISSING_FIELD'
+    | 'UNKNOWN_FIELD'
+    | 'NOT_PLAIN_OBJECT'
+    | 'INVALID_JSON_VALUE'
+    | 'INVALID_STRING'
+    | 'INVALID_LITERAL'
+    | 'INVALID_INTEGER'
+    | 'INVALID_NUMBER'
+    | 'INVALID_ARRAY'
+    | 'PREDICTION_COUNT_MISMATCH'
+    | 'EXAMPLE_ID_MISMATCH'
+    | 'DUPLICATE_EXAMPLE_ID'
+    | 'FOREIGN_EXAMPLE_ID'
+    | 'MISSING_EXAMPLE_ID'
+    | 'NONFINITE_PROBABILITY'
+    | 'OUT_OF_RANGE_PROBABILITY'
+    | 'TARGET_ENCODING_MISMATCH'
+    | 'NONFINITE_METRIC'
+    | 'ODDS_CONTAMINATION'
+    | 'PROHIBITED_CONCEPT'
+    | 'EMPTY_INNER_TRAIN'
+    | 'EMPTY_INNER_VALIDATION'
+    | 'INVALID_TARGET_VALUE'
+    | 'NON_TRAIN_SPLIT'
+    | 'ROW_COUNT_MISMATCH'
+    | 'TRAIN_COUNT_MISMATCH'
+    | 'PRIOR_MISMATCH'
+    | 'P50_PROBABILITY_MISMATCH'
+    | 'PROVENANCE_MISMATCH'
+    | 'MIXED_CANDIDATE_RECIPE_ID'
+    | 'MIXED_FOLD_ID'
+    | 'CLASS_DEGENERATE';
+  path: string;
+  message: string;
+}>;
+
+type EvaluatorIssue = MLBTrainOnlyInnerRowCollectionIssue | MLBTrainOnlyInnerValidationFoldsIssue | MLBInnerFoldMetricResultIssue;
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F]/;
 const PROHIBITED_ROW_FIELDS = new Set(['odds', 'sportsbook', 'moneyline']);
@@ -1378,4 +1475,480 @@ export function buildMLBTrainOnlyInnerValidationFolds(
   }
 
   return foldsValidation.value;
+}
+
+const LOG_LOSS_CLIP_MIN = 1e-15;
+const LOG_LOSS_CLIP_MAX = 1 - 1e-15;
+
+function clipProbability(p: number): number {
+  if (!Number.isFinite(p)) {
+    return p;
+  }
+  if (p < LOG_LOSS_CLIP_MIN) return LOG_LOSS_CLIP_MIN;
+  if (p > LOG_LOSS_CLIP_MAX) return LOG_LOSS_CLIP_MAX;
+  return p;
+}
+
+function computeLogLoss(probability: number, target: number): number {
+  const p = clipProbability(probability);
+  return -(target * Math.log(p) + (1 - target) * Math.log(1 - p));
+}
+
+function computeBrierScore(probability: number, target: number): number {
+  return (probability - target) ** 2;
+}
+
+function computeBinaryRocAuc(
+  probabilities: readonly number[],
+  targets: readonly number[],
+): number {
+  const n = probabilities.length;
+  if (n === 0) return 0;
+
+  let positiveCount = 0;
+  let negativeCount = 0;
+  let rocSum = 0;
+
+  for (let i = 0; i < n; i++) {
+    if (targets[i] === 1) positiveCount++;
+    else if (targets[i] === 0) negativeCount++;
+  }
+
+  if (positiveCount === 0 || negativeCount === 0) return 0;
+
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (targets[i] === 1 && targets[j] === 0) {
+        if (probabilities[i] > probabilities[j]) rocSum += 1;
+        else if (probabilities[i] === probabilities[j]) rocSum += 0.5;
+      } else if (targets[i] === 0 && targets[j] === 1) {
+        if (probabilities[i] < probabilities[j]) rocSum += 1;
+        else if (probabilities[i] === probabilities[j]) rocSum += 0.5;
+      }
+    }
+  }
+
+  return rocSum / (positiveCount * negativeCount);
+}
+
+export function buildMLBInnerDevelopmentReferenceFacts(
+  fold: MLBFoldMaterialization,
+  context: MLBInnerDevelopmentReferenceProvenance,
+): Readonly<{ ok: true; value: MLBInnerDevelopmentReferenceFacts } | { ok: false; issues: readonly MLBInnerFoldMetricResultIssue[] }> {
+  const issues: MLBInnerFoldMetricResultIssue[] = [];
+
+  if (!isPlainObject(fold)) {
+    pushIssue(issues, 'NOT_PLAIN_OBJECT', '$.fold', 'fold must be a plain object');
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  if (!Array.isArray(fold.innerTrainRows)) {
+    pushIssue(issues, 'INVALID_ARRAY', '$.fold.innerTrainRows', 'innerTrainRows must be an array');
+  }
+  if (!Array.isArray(fold.innerValidationRows)) {
+    pushIssue(issues, 'INVALID_ARRAY', '$.fold.innerValidationRows', 'innerValidationRows must be an array');
+  }
+  if (typeof fold.foldId !== 'string' || fold.foldId.trim() === '') {
+    pushIssue(issues, 'INVALID_STRING', '$.fold.foldId', 'foldId is required');
+  }
+  if (typeof fold.trainRowCount !== 'number' || !Number.isFinite(fold.trainRowCount) || fold.trainRowCount < 0) {
+    pushIssue(issues, 'INVALID_NUMBER', '$.fold.trainRowCount', 'trainRowCount must be a finite non-negative number');
+  }
+  if (typeof fold.validationRowCount !== 'number' || !Number.isFinite(fold.validationRowCount) || fold.validationRowCount < 0) {
+    pushIssue(issues, 'INVALID_NUMBER', '$.fold.validationRowCount', 'validationRowCount must be a finite non-negative number');
+  }
+  if (typeof fold.trainHomeWinCount !== 'number' || !Number.isFinite(fold.trainHomeWinCount) || fold.trainHomeWinCount < 0) {
+    pushIssue(issues, 'INVALID_NUMBER', '$.fold.trainHomeWinCount', 'trainHomeWinCount must be a finite non-negative number');
+  }
+  if (typeof fold.trainAwayWinCount !== 'number' || !Number.isFinite(fold.trainAwayWinCount) || fold.trainAwayWinCount < 0) {
+    pushIssue(issues, 'INVALID_NUMBER', '$.fold.trainAwayWinCount', 'trainAwayWinCount must be a finite non-negative number');
+  }
+  if (typeof fold.validationHomeWinCount !== 'number' || !Number.isFinite(fold.validationHomeWinCount) || fold.validationHomeWinCount < 0) {
+    pushIssue(issues, 'INVALID_NUMBER', '$.fold.validationHomeWinCount', 'validationHomeWinCount must be a finite non-negative number');
+  }
+  if (typeof fold.validationAwayWinCount !== 'number' || !Number.isFinite(fold.validationAwayWinCount) || fold.validationAwayWinCount < 0) {
+    pushIssue(issues, 'INVALID_NUMBER', '$.fold.validationAwayWinCount', 'validationAwayWinCount must be a finite non-negative number');
+  }
+  if (typeof context.matrixId !== 'string' || context.matrixId.trim() === '') {
+    pushIssue(issues, 'INVALID_STRING', '$.context.matrixId', 'matrixId is required');
+  }
+  if (typeof context.manifestId !== 'string' || context.manifestId.trim() === '') {
+    pushIssue(issues, 'INVALID_STRING', '$.context.manifestId', 'manifestId is required');
+  }
+  if (typeof context.datasetId !== 'string' || context.datasetId.trim() === '') {
+    pushIssue(issues, 'INVALID_STRING', '$.context.datasetId', 'datasetId is required');
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  const innerTrainRows = fold.innerTrainRows;
+  const innerValidationRows = fold.innerValidationRows;
+
+  if (innerTrainRows.length === 0) {
+    pushIssue(issues, 'EMPTY_INNER_TRAIN', '$.fold.innerTrainRows', 'innerTrainRows must not be empty');
+  }
+  if (innerValidationRows.length === 0) {
+    pushIssue(issues, 'EMPTY_INNER_VALIDATION', '$.fold.innerValidationRows', 'innerValidationRows must not be empty');
+  }
+  if (innerTrainRows.length !== fold.trainRowCount) {
+    pushIssue(issues, 'ROW_COUNT_MISMATCH', '$.fold.trainRowCount', `Expected ${innerTrainRows.length}, got ${fold.trainRowCount}`);
+  }
+  if (innerValidationRows.length !== fold.validationRowCount) {
+    pushIssue(issues, 'ROW_COUNT_MISMATCH', '$.fold.validationRowCount', `Expected ${innerValidationRows.length}, got ${fold.validationRowCount}`);
+  }
+
+  const trainExampleIds = new Set<string>();
+  const validationExampleIds = new Set<string>();
+  let trainHomeWins = 0;
+  let trainAwayWins = 0;
+  let validationHomeWins = 0;
+  let validationAwayWins = 0;
+
+  for (const row of innerTrainRows) {
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+      pushIssue(issues, 'NOT_PLAIN_OBJECT', `$.fold.innerTrainRows[?]`, 'Row must be a plain object');
+      continue;
+    }
+    if (typeof row.exampleId !== 'string' || row.exampleId.trim() === '') {
+      pushIssue(issues, 'INVALID_STRING', `$.fold.innerTrainRows[${row.exampleId}].exampleId`, 'exampleId is required');
+    } else if (trainExampleIds.has(row.exampleId)) {
+      pushIssue(issues, 'DUPLICATE_EXAMPLE_ID', `$.fold.innerTrainRows[${row.exampleId}]`, `Duplicate exampleId: ${row.exampleId}`);
+    } else {
+      trainExampleIds.add(row.exampleId);
+    }
+    if (row.split !== 'TRAIN') {
+      pushIssue(issues, 'NON_TRAIN_SPLIT', `$.fold.innerTrainRows[${row.exampleId}].split`, `Split must be TRAIN, got ${row.split}`);
+    }
+    if (row.targetValue !== 0 && row.targetValue !== 1) {
+      pushIssue(issues, 'INVALID_TARGET_VALUE', `$.fold.innerTrainRows[${row.exampleId}].targetValue`, `targetValue must be 0 or 1, got ${row.targetValue}`);
+    } else if (row.targetValue === 1) {
+      trainHomeWins++;
+    } else {
+      trainAwayWins++;
+    }
+  }
+
+  for (const row of innerValidationRows) {
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+      pushIssue(issues, 'NOT_PLAIN_OBJECT', `$.fold.innerValidationRows[?]`, 'Row must be a plain object');
+      continue;
+    }
+    if (typeof row.exampleId !== 'string' || row.exampleId.trim() === '') {
+      pushIssue(issues, 'INVALID_STRING', `$.fold.innerValidationRows[${row.exampleId}].exampleId`, 'exampleId is required');
+    } else if (validationExampleIds.has(row.exampleId)) {
+      pushIssue(issues, 'DUPLICATE_EXAMPLE_ID', `$.fold.innerValidationRows[${row.exampleId}]`, `Duplicate exampleId: ${row.exampleId}`);
+    } else {
+      validationExampleIds.add(row.exampleId);
+    }
+    if (row.split !== 'TRAIN') {
+      pushIssue(issues, 'NON_TRAIN_SPLIT', `$.fold.innerValidationRows[${row.exampleId}].split`, `Split must be TRAIN, got ${row.split}`);
+    }
+    if (row.targetValue !== 0 && row.targetValue !== 1) {
+      pushIssue(issues, 'INVALID_TARGET_VALUE', `$.fold.innerValidationRows[${row.exampleId}].targetValue`, `targetValue must be 0 or 1, got ${row.targetValue}`);
+    } else if (row.targetValue === 1) {
+      validationHomeWins++;
+    } else {
+      validationAwayWins++;
+    }
+  }
+
+  for (const id of trainExampleIds) {
+    if (validationExampleIds.has(id)) {
+      pushIssue(issues, 'EXAMPLE_ID_MISMATCH', `$.fold[${id}]`, `exampleId ${id} appears in both innerTrainRows and innerValidationRows`);
+    }
+  }
+
+  if (trainHomeWins !== fold.trainHomeWinCount) {
+    pushIssue(issues, 'TRAIN_COUNT_MISMATCH', '$.fold.trainHomeWinCount', `Expected ${trainHomeWins}, got ${fold.trainHomeWinCount}`);
+  }
+  if (trainAwayWins !== fold.trainAwayWinCount) {
+    pushIssue(issues, 'TRAIN_COUNT_MISMATCH', '$.fold.trainAwayWinCount', `Expected ${trainAwayWins}, got ${fold.trainAwayWinCount}`);
+  }
+  if (validationHomeWins !== fold.validationHomeWinCount) {
+    pushIssue(issues, 'TRAIN_COUNT_MISMATCH', '$.fold.validationHomeWinCount', `Expected ${validationHomeWins}, got ${fold.validationHomeWinCount}`);
+  }
+  if (validationAwayWins !== fold.validationAwayWinCount) {
+    pushIssue(issues, 'TRAIN_COUNT_MISMATCH', '$.fold.validationAwayWinCount', `Expected ${validationAwayWins}, got ${fold.validationAwayWinCount}`);
+  }
+
+  if (validationHomeWins === 0 || validationAwayWins === 0) {
+    pushIssue(issues, 'CLASS_DEGENERATE', '$.fold.innerValidationRows', 'Both classes must be present in innerValidationRows');
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  const trainPrior = trainHomeWins / innerTrainRows.length;
+  const validationN = innerValidationRows.length;
+
+  const p50LogLoss =
+    Array.from({ length: validationN }, () => 0.5).reduce((sum, _, i) => sum + computeLogLoss(0.5, innerValidationRows[i].targetValue), 0) / validationN;
+  const p50Brier =
+    Array.from({ length: validationN }, () => 0.5).reduce((sum, _, i) => sum + computeBrierScore(0.5, innerValidationRows[i].targetValue), 0) / validationN;
+  const p50RocAuc = computeBinaryRocAuc(
+    Array.from({ length: validationN }, () => 0.5),
+    innerValidationRows.map((r) => r.targetValue),
+  );
+
+  const priorLogLoss =
+    Array.from({ length: validationN }, () => trainPrior).reduce((sum, _, i) => sum + computeLogLoss(trainPrior, innerValidationRows[i].targetValue), 0) / validationN;
+  const priorBrier =
+    Array.from({ length: validationN }, () => trainPrior).reduce((sum, _, i) => sum + computeBrierScore(trainPrior, innerValidationRows[i].targetValue), 0) / validationN;
+  const priorRocAuc = computeBinaryRocAuc(
+    Array.from({ length: validationN }, () => trainPrior),
+    innerValidationRows.map((r) => r.targetValue),
+  );
+
+  return {
+    ok: true,
+    value: {
+      contractVersion: 'mlb-inner-development-reference-facts-v1',
+      sport: 'MLB',
+      target: 'OFFICIAL_FINAL_GAME_WINNER',
+      foldId: fold.foldId,
+      matrixId: context.matrixId,
+      manifestId: context.manifestId,
+      datasetId: context.datasetId,
+      innerTrainRowCount: innerTrainRows.length,
+      innerValidationRowCount: innerValidationRows.length,
+      innerTrainHomeWinCount: trainHomeWins,
+      innerTrainAwayWinCount: trainAwayWins,
+      innerTrainHomeWinPrior: trainPrior,
+      p50: {
+        probability: 0.5,
+        logLoss: p50LogLoss,
+        brierScore: p50Brier,
+        rocAuc: p50RocAuc,
+      },
+      foldTrainPrior: {
+        probability: trainPrior,
+        logLoss: priorLogLoss,
+        brierScore: priorBrier,
+        rocAuc: priorRocAuc,
+      },
+    },
+  };
+}
+
+export function evaluateMLBInnerFoldMetrics(
+  fold: MLBFoldMaterialization,
+  predictions: readonly MLBInnerCandidatePredictionRecord[],
+  reference: MLBInnerDevelopmentReferenceFacts,
+  context: MLBInnerDevelopmentReferenceProvenance,
+): Readonly<{ ok: true; value: MLBInnerFoldMetricResult } | { ok: false; issues: readonly MLBInnerFoldMetricResultIssue[] }> {
+  const issues: MLBInnerFoldMetricResultIssue[] = [];
+
+  if (!isPlainObject(fold)) {
+    pushIssue(issues, 'NOT_PLAIN_OBJECT', '$.fold', 'fold must be a plain object');
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  if (!isPlainObject(reference)) {
+    pushIssue(issues, 'NOT_PLAIN_OBJECT', '$.reference', 'reference must be a plain object');
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  if (!isPlainObject(context)) {
+    pushIssue(issues, 'NOT_PLAIN_OBJECT', '$.context', 'context must be a plain object');
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  // Provenance integrity
+  if (reference.matrixId !== context.matrixId) {
+    pushIssue(issues, 'PROVENANCE_MISMATCH', '$.reference.matrixId', `Reference matrixId ${reference.matrixId} does not match context matrixId ${context.matrixId}`);
+  }
+  if (reference.manifestId !== context.manifestId) {
+    pushIssue(issues, 'PROVENANCE_MISMATCH', '$.reference.manifestId', `Reference manifestId ${reference.manifestId} does not match context manifestId ${context.manifestId}`);
+  }
+  if (reference.datasetId !== context.datasetId) {
+    pushIssue(issues, 'PROVENANCE_MISMATCH', '$.reference.datasetId', `Reference datasetId ${reference.datasetId} does not match context datasetId ${context.datasetId}`);
+  }
+
+  // Reference-fold binding integrity
+  if (reference.foldId !== fold.foldId) {
+    pushIssue(issues, 'EXAMPLE_ID_MISMATCH', '$.reference.foldId', `Reference foldId ${reference.foldId} does not match fold foldId ${fold.foldId}`);
+  }
+  if (reference.innerValidationRowCount !== fold.validationRowCount) {
+    pushIssue(issues, 'ROW_COUNT_MISMATCH', '$.reference.innerValidationRowCount', `Reference innerValidationRowCount ${reference.innerValidationRowCount} does not match fold validationRowCount ${fold.validationRowCount}`);
+  }
+  if (reference.innerTrainRowCount !== fold.trainRowCount) {
+    pushIssue(issues, 'ROW_COUNT_MISMATCH', '$.reference.innerTrainRowCount', `Reference innerTrainRowCount ${reference.innerTrainRowCount} does not match fold trainRowCount ${fold.trainRowCount}`);
+  }
+  if (reference.innerTrainHomeWinCount !== fold.trainHomeWinCount) {
+    pushIssue(issues, 'TRAIN_COUNT_MISMATCH', '$.reference.innerTrainHomeWinCount', `Reference innerTrainHomeWinCount ${reference.innerTrainHomeWinCount} does not match fold trainHomeWinCount ${fold.trainHomeWinCount}`);
+  }
+  if (reference.innerTrainAwayWinCount !== fold.trainAwayWinCount) {
+    pushIssue(issues, 'TRAIN_COUNT_MISMATCH', '$.reference.innerTrainAwayWinCount', `Reference innerTrainAwayWinCount ${reference.innerTrainAwayWinCount} does not match fold trainAwayWinCount ${fold.trainAwayWinCount}`);
+  }
+  const expectedPrior = fold.trainHomeWinCount / fold.trainRowCount;
+  if (reference.innerTrainHomeWinPrior !== expectedPrior) {
+    pushIssue(issues, 'PRIOR_MISMATCH', '$.reference.innerTrainHomeWinPrior', `Reference prior ${reference.innerTrainHomeWinPrior} does not match fold prior ${expectedPrior}`);
+  }
+  if (reference.p50.probability !== 0.5) {
+    pushIssue(issues, 'P50_PROBABILITY_MISMATCH', '$.reference.p50.probability', `Reference p50 probability ${reference.p50.probability} must be 0.5`);
+  }
+  if (reference.foldTrainPrior.probability !== expectedPrior) {
+    pushIssue(issues, 'PRIOR_MISMATCH', '$.reference.foldTrainPrior.probability', `Reference foldTrainPrior probability ${reference.foldTrainPrior.probability} does not match fold prior ${expectedPrior}`);
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  if (fold.validationRowCount === 0) {
+    pushIssue(issues, 'EMPTY_INNER_VALIDATION', '$.fold.innerValidationRows', 'innerValidationRows must not be empty');
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  if (fold.validationHomeWinCount === 0 || fold.validationAwayWinCount === 0) {
+    pushIssue(issues, 'CLASS_DEGENERATE', '$.fold.innerValidationRows', 'Both classes must be present in innerValidationRows');
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  if (predictions.length !== fold.validationRowCount) {
+    pushIssue(issues, 'PREDICTION_COUNT_MISMATCH', '$', `Expected ${fold.validationRowCount} predictions, got ${predictions.length}`);
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  const seenExampleIds = new Set<string>();
+  const validationById = new Map<string, MLBOuterTrainRow>();
+  for (const row of fold.innerValidationRows) {
+    validationById.set(row.exampleId, row);
+  }
+
+  const aligned: Array<{ target: number; probability: number }> = [];
+  let firstCandidateRecipeId: string | null = null;
+  let mixedCandidateRecipeId = false;
+  let mixedFoldId = false;
+
+  for (const pred of predictions) {
+    if (!isStrictNonEmptyTrimmedString(pred.candidateRecipeId)) {
+      pushIssue(issues, 'INVALID_STRING', `$.predictions[${typeof pred.exampleId === 'string' ? pred.exampleId : '?'}].candidateRecipeId`, 'candidateRecipeId is required');
+    } else if (firstCandidateRecipeId === null) {
+      firstCandidateRecipeId = pred.candidateRecipeId;
+    } else if (pred.candidateRecipeId !== firstCandidateRecipeId) {
+      mixedCandidateRecipeId = true;
+    }
+
+    if (!isStrictNonEmptyTrimmedString(pred.exampleId)) {
+      pushIssue(issues, 'MISSING_EXAMPLE_ID', `$.predictions[${typeof pred.exampleId === 'string' ? pred.exampleId : '?'}].exampleId`, 'exampleId is required');
+      continue;
+    }
+    if (seenExampleIds.has(pred.exampleId)) {
+      pushIssue(issues, 'DUPLICATE_EXAMPLE_ID', `$.predictions[${pred.exampleId}]`, `Duplicate exampleId: ${pred.exampleId}`);
+      continue;
+    }
+    seenExampleIds.add(pred.exampleId);
+
+    const targetRow = validationById.get(pred.exampleId);
+    if (!targetRow) {
+      pushIssue(issues, 'FOREIGN_EXAMPLE_ID', `$.predictions[${pred.exampleId}].exampleId`, `exampleId ${pred.exampleId} not found in fold innerValidationRows`);
+      continue;
+    }
+
+    if (pred.foldId !== fold.foldId) {
+      pushIssue(issues, 'EXAMPLE_ID_MISMATCH', `$.predictions[${pred.exampleId}].foldId`, `Prediction foldId ${pred.foldId} does not match fold foldId ${fold.foldId}`);
+      mixedFoldId = true;
+    }
+
+    if (typeof pred.homeWinProbability !== 'number' || !Number.isFinite(pred.homeWinProbability)) {
+      pushIssue(issues, 'NONFINITE_PROBABILITY', `$.predictions[${pred.exampleId}].homeWinProbability`, 'homeWinProbability must be finite');
+      continue;
+    }
+    if (pred.homeWinProbability < 0 || pred.homeWinProbability > 1) {
+      pushIssue(issues, 'OUT_OF_RANGE_PROBABILITY', `$.predictions[${pred.exampleId}].homeWinProbability`, 'homeWinProbability must be in [0, 1]');
+      continue;
+    }
+
+    aligned.push({
+      target: targetRow.targetValue,
+      probability: pred.homeWinProbability,
+    });
+  }
+
+  if (mixedCandidateRecipeId) {
+    pushIssue(issues, 'MIXED_CANDIDATE_RECIPE_ID', '$.predictions', 'All predictions must agree on candidateRecipeId');
+  }
+  if (mixedFoldId) {
+    pushIssue(issues, 'MIXED_FOLD_ID', '$.predictions', 'All predictions must agree on the validated foldId');
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  const rowCount = aligned.length;
+  const targetHomeWinCount = aligned.filter((a) => a.target === 1).length;
+  const targetAwayWinCount = aligned.filter((a) => a.target === 0).length;
+
+  const probabilities = aligned.map((a) => a.probability);
+  const targets = aligned.map((a) => a.target);
+
+  let candidateLogLossSum = 0;
+  let candidateBrierSum = 0;
+  for (let i = 0; i < rowCount; i++) {
+    candidateLogLossSum += computeLogLoss(probabilities[i], targets[i]);
+    candidateBrierSum += computeBrierScore(probabilities[i], targets[i]);
+  }
+  const candidateLogLoss = rowCount > 0 ? candidateLogLossSum / rowCount : 0;
+  const candidateBrierScore = rowCount > 0 ? candidateBrierSum / rowCount : 0;
+  const candidateRocAuc = computeBinaryRocAuc(probabilities, targets);
+
+  if (!Number.isFinite(candidateLogLoss)) {
+    pushIssue(issues, 'NONFINITE_METRIC', '$.candidateLogLoss', 'Non-finite candidateLogLoss');
+  }
+  if (!Number.isFinite(candidateBrierScore)) {
+    pushIssue(issues, 'NONFINITE_METRIC', '$.candidateBrierScore', 'Non-finite candidateBrierScore');
+  }
+  if (!Number.isFinite(candidateRocAuc)) {
+    pushIssue(issues, 'NONFINITE_METRIC', '$.candidateRocAuc', 'Non-finite candidateRocAuc');
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+  }
+
+  // Recompute reference metrics from the validated fold so forged reference metrics cannot change the result.
+  const validationN = fold.innerValidationRows.length;
+  const p50LogLoss =
+    Array.from({ length: validationN }, () => 0.5).reduce((sum, _, i) => sum + computeLogLoss(0.5, fold.innerValidationRows[i].targetValue), 0) / validationN;
+  const p50BrierScore =
+    Array.from({ length: validationN }, () => 0.5).reduce((sum, _, i) => sum + computeBrierScore(0.5, fold.innerValidationRows[i].targetValue), 0) / validationN;
+  const p50RocAuc = computeBinaryRocAuc(
+    Array.from({ length: validationN }, () => 0.5),
+    fold.innerValidationRows.map((r) => r.targetValue),
+  );
+
+  const priorLogLoss =
+    Array.from({ length: validationN }, () => expectedPrior).reduce((sum, _, i) => sum + computeLogLoss(expectedPrior, fold.innerValidationRows[i].targetValue), 0) / validationN;
+  const priorBrierScore =
+    Array.from({ length: validationN }, () => expectedPrior).reduce((sum, _, i) => sum + computeBrierScore(expectedPrior, fold.innerValidationRows[i].targetValue), 0) / validationN;
+  const priorRocAuc = computeBinaryRocAuc(
+    Array.from({ length: validationN }, () => expectedPrior),
+    fold.innerValidationRows.map((r) => r.targetValue),
+  );
+
+  const result: MLBInnerFoldMetricResult = {
+    contractVersion: 'mlb-inner-fold-metric-result-v1',
+    foldId: fold.foldId,
+    candidateRecipeId: firstCandidateRecipeId ?? '',
+    rowCount,
+    targetHomeWinCount,
+    targetAwayWinCount,
+    candidateLogLoss,
+    candidateBrierScore,
+    candidateRocAuc,
+    p50LogLoss,
+    p50BrierScore,
+    p50RocAuc,
+    foldTrainPriorLogLoss: priorLogLoss,
+    foldTrainPriorBrierScore: priorBrierScore,
+    foldTrainPriorRocAuc: priorRocAuc,
+    foldTrainPriorProbability: expectedPrior,
+  };
+
+  return { ok: true, value: result };
 }

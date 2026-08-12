@@ -333,10 +333,16 @@ interface MLBInnerCandidateRecipe {
   // model-affecting identity fields only; no runtime metadata
 }
 
+interface MLBInnerValidationPredictionInput {
+  exampleId: string;
+  vector: MLBFeatureVector;
+  // predictor inputs only; no validation target/label/winner/result
+}
+
 interface MLBInnerCandidateRunnerInput {
   foldId: string;
   innerTrainRows: readonly MLBTrainingMatrixRow[];
-  innerValidationRows: readonly MLBTrainingMatrixRow[];
+  innerValidationInputs: readonly MLBInnerValidationPredictionInput[];
   candidateRecipe: MLBInnerCandidateRecipe;
 }
 
@@ -344,23 +350,45 @@ interface MLBInnerCandidatePredictionRecord {
   candidateRecipeId: string;
   foldId: string;
   exampleId: string;
-  target: 0 | 1;
   homeWinProbability: number;
 }
 
-The candidate runner receives ONLY innerTrainRows and innerValidationRows for one fold.
+Prediction records carry prediction/provenance identity plus probability only.
+The actual game label is NOT part of candidate/prediction output. Authoritative
+inner-validation labels exist only in the validated MLBFoldMaterialization.
+Metric evaluation joins predictions to validation rows by `exampleId` and reads
+targets from `fold.innerValidationRows[].targetValue`. This prevents the
+prediction-producing side from owning an answer-key field.
+
+The candidate runner receives:
+- inner TRAIN rows with TRAIN labels, because fitting requires them
+- a label-free projection of inner-validation prediction inputs
 
 It must NOT receive:
 - full matrix
 - outer VALIDATION rows
 - TEST rows
+- inner-validation target labels
 - outer VALIDATION targets
 - TEST targets
 - odds/market information
 
 Every learned statistic (normalization means, feature selection, imputation, etc.) derives from innerTrainRows only.
 
-The fold runner emits MLBInnerCandidatePredictionRecord[] for innerValidationRows.
+The label-free validation input projection is deterministic and target-free:
+
+  innerValidationInputs =
+    fold.innerValidationRows.map(row => ({
+      exampleId: row.exampleId,
+      vector: row.vector,
+    }))
+
+The projection copies only prediction-safe fields. It does not retain the
+original target-bearing row object, and `targetValue` is intentionally omitted.
+Ordering remains deterministic. `exampleId` remains available for later metric
+alignment.
+
+The fold runner emits MLBInnerCandidatePredictionRecord[] for innerValidationInputs.
 
 ## 10. Fold reference contract
 

@@ -4,6 +4,12 @@ import {
   validateMLBTrainOnlyInnerValidationFolds,
   buildMLBTrainOnlyInnerValidationFolds,
   validateMLBTrainOnlyInnerRowCollection,
+  buildMLBInnerDevelopmentReferenceFacts,
+  evaluateMLBInnerFoldMetrics,
+  MLBInnerDevelopmentReferenceFacts,
+  MLBInnerCandidatePredictionRecord,
+  MLBInnerFoldMetricResult,
+  MLBInnerFoldMetricResultIssue,
   MLB_TRAIN_ONLY_INNER_ROW_COLLECTION_CONTRACT_VERSION,
   MLB_TRAIN_ONLY_INNER_VALIDATION_FOLDS_CONTRACT_VERSION,
   MLBTrainOnlyInnerRowCollection,
@@ -20,7 +26,13 @@ import {
   MLB_TRAINING_MATRIX_CONTRACT_VERSION,
   type MLBTrainingMatrix,
 } from '@/prediction/mlb/mlb-training-matrix-contract';
-import { MLB_FEATURE_VECTOR_CONTRACT_VERSION } from '@/prediction/mlb/mlb-feature-vector-contract';
+import {
+  MLB_FEATURE_VECTOR_CONTRACT_VERSION,
+  type MLBFeatureVector,
+} from '@/prediction/mlb/mlb-feature-vector-contract';
+import {
+  type MLBTrainingMatrixRow,
+} from '@/prediction/mlb/mlb-training-matrix-contract';
 
 const FROZEN_DATA_CUTOFF = '2026-04-10T00:00:00Z';
 
@@ -28,7 +40,7 @@ function buildValidVector(
   exampleId: string,
   officialDate: string,
   overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
+): MLBFeatureVector {
   return {
     contractVersion: MLB_FEATURE_VECTOR_CONTRACT_VERSION,
     sport: 'MLB',
@@ -40,7 +52,7 @@ function buildValidVector(
     dataCutoffAt: FROZEN_DATA_CUTOFF,
     values: [{ featureId: 'f-1', value: 1, wasMissing: false }],
     ...overrides,
-  } as Record<string, unknown>;
+  } as MLBFeatureVector;
 }
 
 function buildValidRow(
@@ -48,7 +60,7 @@ function buildValidRow(
   split: 'TRAIN' | 'VALIDATION' | 'TEST',
   officialDate: string,
   targetValue: 0 | 1,
-): Record<string, unknown> {
+): MLBTrainingMatrixRow {
   return {
     exampleId,
     split,
@@ -57,16 +69,43 @@ function buildValidRow(
   };
 }
 
+function buildSyntheticFold(): MLBFoldMaterialization {
+  const trainRows: MLBOuterTrainRow[] = [
+    { exampleId: 's-t1', split: 'TRAIN', vector: buildValidVector('s-t1', '2026-04-01'), targetValue: 1 },
+    { exampleId: 's-t2', split: 'TRAIN', vector: buildValidVector('s-t2', '2026-04-02'), targetValue: 0 },
+    { exampleId: 's-t3', split: 'TRAIN', vector: buildValidVector('s-t3', '2026-04-03'), targetValue: 1 },
+  ];
+  const validationRows: MLBOuterTrainRow[] = [
+    { exampleId: 's-v1', split: 'TRAIN', vector: buildValidVector('s-v1', '2026-04-04'), targetValue: 1 },
+    { exampleId: 's-v2', split: 'TRAIN', vector: buildValidVector('s-v2', '2026-04-05'), targetValue: 0 },
+  ];
+
+  return {
+    foldId: 'FOLD_X',
+    innerTrainRows: trainRows,
+    innerValidationRows: validationRows,
+    trainRowCount: trainRows.length,
+    validationRowCount: validationRows.length,
+    trainHomeWinCount: trainRows.filter((r) => r.targetValue === 1).length,
+    trainAwayWinCount: trainRows.filter((r) => r.targetValue === 0).length,
+    validationHomeWinCount: validationRows.filter((r) => r.targetValue === 1).length,
+    validationAwayWinCount: validationRows.filter((r) => r.targetValue === 0).length,
+    innerTrainDateRange: { startDate: '2026-04-01', endDate: '2026-04-03' },
+    innerValidationDateRange: { startDate: '2026-04-04', endDate: '2026-04-05' },
+    dateRangeProof: 'synthetic',
+  };
+}
+
 function buildSyntheticMatrix(
-  trainRows: Array<{ exampleId: string; officialDate: string; targetValue: 0 | 1 }>,
-  validationRows: Array<{ exampleId: string; officialDate: string; targetValue: 0 | 1 }>,
-  testRows: Array<{ exampleId: string; officialDate: string; targetValue: 0 | 1 }>,
+  trainRows: readonly MLBTrainingMatrixRow[],
+  validationRows: readonly MLBTrainingMatrixRow[],
+  testRows: readonly MLBTrainingMatrixRow[],
   overrides: Record<string, unknown> = {},
 ): MLBTrainingMatrix {
   const rows = [
-    ...trainRows.map((r): Record<string, unknown> => buildValidRow(r.exampleId, 'TRAIN', r.officialDate, r.targetValue)),
-    ...validationRows.map((r): Record<string, unknown> => buildValidRow(r.exampleId, 'VALIDATION', r.officialDate, r.targetValue)),
-    ...testRows.map((r): Record<string, unknown> => buildValidRow(r.exampleId, 'TEST', r.officialDate, r.targetValue)),
+    ...trainRows.map((r): MLBTrainingMatrixRow => buildValidRow(r.exampleId, 'TRAIN', r.vector.officialDate, r.targetValue)),
+    ...validationRows.map((r): MLBTrainingMatrixRow => buildValidRow(r.exampleId, 'VALIDATION', r.vector.officialDate, r.targetValue)),
+    ...testRows.map((r): MLBTrainingMatrixRow => buildValidRow(r.exampleId, 'TEST', r.vector.officialDate, r.targetValue)),
   ];
 
   return {
@@ -95,8 +134,8 @@ function buildSyntheticMatrix(
   } as unknown as MLBTrainingMatrix;
 }
 
-function buildFrozenTrainRows(): Array<{ exampleId: string; officialDate: string; targetValue: 0 | 1 }> {
-  const rows: Array<{ exampleId: string; officialDate: string; targetValue: 0 | 1 }> = [];
+function buildFrozenTrainRows(): readonly MLBTrainingMatrixRow[] {
+  const rows: MLBTrainingMatrixRow[] = [];
   const dates = [
     '2026-04-01',
     '2026-04-02',
@@ -153,11 +192,11 @@ function buildFrozenTrainRows(): Array<{ exampleId: string; officialDate: string
   for (const date of dates) {
     const targets = dateTargets[date];
     for (let h = 0; h < targets.home; h++) {
-      rows.push({ exampleId: `train-${String(id).padStart(3, '0')}`, officialDate: date, targetValue: 1 });
+      rows.push({ exampleId: `train-${String(id).padStart(3, '0')}`, split: 'TRAIN', vector: buildValidVector(`train-${String(id).padStart(3, '0')}`, date), targetValue: 1 });
       id++;
     }
     for (let a = 0; a < targets.away; a++) {
-      rows.push({ exampleId: `train-${String(id).padStart(3, '0')}`, officialDate: date, targetValue: 0 });
+      rows.push({ exampleId: `train-${String(id).padStart(3, '0')}`, split: 'TRAIN', vector: buildValidVector(`train-${String(id).padStart(3, '0')}`, date), targetValue: 0 });
       id++;
     }
   }
@@ -237,8 +276,8 @@ describe('mlb-train-only-inner-development-evaluator', () => {
     });
 
     it('proves split filtering is non-vacuous: extra non-TRAIN rows do not alter extraction count', () => {
-      const extraValidation: Array<{ exampleId: string; officialDate: string; targetValue: 0 | 1 }> = [{ exampleId: 'val-001', officialDate: '2026-04-24', targetValue: 1 }];
-      const extraTest: Array<{ exampleId: string; officialDate: string; targetValue: 0 | 1 }> = [{ exampleId: 'test-001', officialDate: '2026-04-29', targetValue: 0 }];
+      const extraValidation: readonly MLBTrainingMatrixRow[] = [{ exampleId: 'val-001', split: 'TRAIN', vector: buildValidVector('val-001', '2026-04-24'), targetValue: 1 }];
+      const extraTest: readonly MLBTrainingMatrixRow[] = [{ exampleId: 'test-001', split: 'TRAIN', vector: buildValidVector('test-001', '2026-04-29'), targetValue: 0 }];
       const matrix = buildSyntheticMatrix(FROZEN_TRAIN_ROWS, extraValidation, extraTest);
       const extraction = extractMLBOuterTrainRowsForInnerDevelopment(matrix);
       expect(extraction.ok).toBe(true);
@@ -276,7 +315,7 @@ describe('mlb-train-only-inner-development-evaluator', () => {
     });
 
     it('rejects 300 extracted TRAIN rows', () => {
-      const trainRows = FROZEN_TRAIN_ROWS.slice(1);
+      const trainRows: readonly MLBTrainingMatrixRow[] = FROZEN_TRAIN_ROWS.slice(1);
       const matrix = buildSyntheticMatrix(trainRows, [], []);
       const extraction = extractMLBOuterTrainRowsForInnerDevelopment(matrix);
       expect(extraction.ok).toBe(false);
@@ -286,8 +325,8 @@ describe('mlb-train-only-inner-development-evaluator', () => {
     });
 
     it('rejects 302 extracted TRAIN rows', () => {
-      const extraRow = { exampleId: 'train-301', officialDate: '2026-04-23', targetValue: 0 } as { exampleId: string; officialDate: string; targetValue: 0 | 1 };
-      const trainRows = [...FROZEN_TRAIN_ROWS, extraRow];
+      const extraRow: MLBTrainingMatrixRow = { exampleId: 'train-301', split: 'TRAIN', vector: buildValidVector('train-301', '2026-04-23'), targetValue: 0 };
+      const trainRows: readonly MLBTrainingMatrixRow[] = [...FROZEN_TRAIN_ROWS, extraRow];
       const matrix = buildSyntheticMatrix(trainRows, [], []);
       const extraction = extractMLBOuterTrainRowsForInnerDevelopment(matrix);
       expect(extraction.ok).toBe(false);
@@ -310,7 +349,7 @@ describe('mlb-train-only-inner-development-evaluator', () => {
 
     it('rejects malformed officialDate', () => {
       const trainRows = FROZEN_TRAIN_ROWS.map((r, idx) =>
-        idx === 0 ? { ...r, officialDate: '2026-4-01' } : r,
+        idx === 0 ? { ...r, vector: { ...r.vector, officialDate: '2026-4-01' } } : r,
       );
       const matrix = buildSyntheticMatrix(trainRows, [], []);
       const extraction = extractMLBOuterTrainRowsForInnerDevelopment(matrix);
@@ -322,7 +361,7 @@ describe('mlb-train-only-inner-development-evaluator', () => {
 
     it('rejects TRAIN row outside frozen Apr 1-Apr 23 window', () => {
       const trainRows = FROZEN_TRAIN_ROWS.map((r, idx) =>
-        idx === 0 ? { ...r, officialDate: '2026-04-24' } : r,
+        idx === 0 ? { ...r, vector: { ...r.vector, officialDate: '2026-04-24' } } : r,
       );
       const matrix = buildSyntheticMatrix(trainRows, [], []);
       const extraction = extractMLBOuterTrainRowsForInnerDevelopment(matrix);
@@ -334,10 +373,10 @@ describe('mlb-train-only-inner-development-evaluator', () => {
 
     it('rejects invalid targetValue', () => {
       const trainRows = FROZEN_TRAIN_ROWS.map((r, idx) =>
-        idx === 0 ? { ...r, targetValue: 2 } as { exampleId: string; officialDate: string; targetValue: number } : r,
+        idx === 0 ? { ...r, targetValue: 2 } : r,
       );
       const matrix = buildSyntheticMatrix(
-        trainRows as Array<{ exampleId: string; officialDate: string; targetValue: 0 | 1 }>,
+        trainRows as readonly MLBTrainingMatrixRow[],
         [],
         [],
       );
@@ -651,17 +690,18 @@ describe('mlb-train-only-inner-development-evaluator', () => {
       expect(source).not.toMatch(/import.*trainer/);
     });
 
-    it('contains no metric calculation logic', () => {
+    it('contains no metric aggregation or eligibility logic', () => {
       const source = require('fs').readFileSync(
         require('path').resolve(__dirname, '../../../src/prediction/mlb/mlb-train-only-inner-development-evaluator.ts'),
         'utf8',
       );
-      expect(source).not.toMatch(/logLoss/);
-      expect(source).not.toMatch(/Brier/);
-      expect(source).not.toMatch(/rocAuc/);
-      expect(source).not.toMatch(/candidateRecipe/);
+      expect(source).not.toMatch(/evaluateMLBTrainOnlyInnerCandidate/);
       expect(source).not.toMatch(/INNER_ELIGIBLE/);
       expect(source).not.toMatch(/rankInner/);
+      expect(source).not.toMatch(/recipeBudget/);
+      expect(source).not.toMatch(/RECIPE_BUDGET/);
+      expect(source).not.toMatch(/outer.*VALIDATION.*evaluat/i);
+      expect(source).not.toMatch(/TEST.*evaluat/i);
     });
 
     it('contains no odds/market inputs', () => {
@@ -709,6 +749,358 @@ describe('mlb-train-only-inner-development-evaluator', () => {
       const folds = buildMLBTrainOnlyInnerValidationFolds(extraction.value, MLB_CANONICAL_TRAIN_ONLY_INNER_FOLD_PLAN);
       const validation = validateMLBTrainOnlyInnerValidationFolds(folds);
       expect(validation.ok).toBe(true);
+    });
+  });
+
+  describe('E3-C fold-local reference facts', () => {
+    it('derives P50 and train-prior references from materialized folds', () => {
+      const matrix = buildFrozenMatrix();
+      const extraction = extractMLBOuterTrainRowsForInnerDevelopment(matrix);
+      expect(extraction.ok).toBe(true);
+      if (!extraction.ok) return;
+
+      const folds = buildMLBTrainOnlyInnerValidationFolds(extraction.value, MLB_CANONICAL_TRAIN_ONLY_INNER_FOLD_PLAN);
+      for (const fold of folds.folds as MLBFoldMaterialization[]) {
+        const referenceResult = buildMLBInnerDevelopmentReferenceFacts(fold, { matrixId: folds.matrixId, manifestId: folds.manifestId, datasetId: folds.datasetId });
+        expect(referenceResult.ok).toBe(true);
+        if (!referenceResult.ok) return;
+        const reference = referenceResult.value;
+
+        expect(reference.foldId).toBe(fold.foldId);
+        expect(reference.innerTrainRowCount).toBe(fold.trainRowCount);
+        expect(reference.innerValidationRowCount).toBe(fold.validationRowCount);
+        expect(reference.innerTrainHomeWinCount + reference.innerTrainAwayWinCount).toBe(fold.trainRowCount);
+        expect(reference.p50.probability).toBe(0.5);
+        expect(reference.foldTrainPrior.probability).toBe(fold.trainHomeWinCount / fold.trainRowCount);
+      }
+    });
+
+    it('proves train prior uses only inner TRAIN labels', () => {
+      const fold = buildSyntheticFold();
+      const baseReferenceResult = buildMLBInnerDevelopmentReferenceFacts(
+        fold,
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(baseReferenceResult.ok).toBe(true);
+      if (!baseReferenceResult.ok) return;
+      const baseReference = baseReferenceResult.value;
+
+      const flippedValidation = fold.innerValidationRows.map((r, i) =>
+        i % 2 === 0 ? { ...r, targetValue: r.targetValue === 1 ? 0 : 1 } as MLBOuterTrainRow : r,
+      );
+      const flippedHomeWins = flippedValidation.filter((r) => r.targetValue === 1).length;
+      const flippedAwayWins = flippedValidation.filter((r) => r.targetValue === 0).length;
+      const ensureBalanced = flippedHomeWins === 0
+        ? flippedValidation.map((r, i) => i === 0 ? { ...r, targetValue: 1 } : r)
+        : flippedValidation;
+
+      const sameTrainReferenceResult = buildMLBInnerDevelopmentReferenceFacts(
+        { ...fold, innerValidationRows: ensureBalanced, validationHomeWinCount: ensureBalanced.filter((r) => r.targetValue === 1).length, validationAwayWinCount: ensureBalanced.filter((r) => r.targetValue === 0).length } as MLBFoldMaterialization,
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(sameTrainReferenceResult.ok).toBe(true);
+      if (!sameTrainReferenceResult.ok) return;
+      const sameTrainReference = sameTrainReferenceResult.value;
+
+      expect(sameTrainReference.p50.probability).toBe(baseReference.p50.probability);
+      expect(sameTrainReference.foldTrainPrior.probability).toBe(baseReference.foldTrainPrior.probability);
+    });
+  });
+
+  describe('E3-C fold-local metric evaluation', () => {
+    it('computes exact log loss, Brier, and AUC for a synthetic fold', () => {
+      const fold = buildSyntheticFold();
+      const referenceResult = buildMLBInnerDevelopmentReferenceFacts(
+        fold,
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(referenceResult.ok).toBe(true);
+      if (!referenceResult.ok) return;
+      const reference = referenceResult.value;
+
+      const predictions: MLBInnerCandidatePredictionRecord[] = fold.innerValidationRows.map((row, i) => ({
+        candidateRecipeId: 'recipe-1',
+        foldId: 'FOLD_X',
+        exampleId: row.exampleId,
+        homeWinProbability: i % 2 === 0 ? 0.8 : 0.3,
+      }));
+
+      const result = evaluateMLBInnerFoldMetrics(fold, predictions, reference, { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.rowCount).toBe(fold.validationRowCount);
+      expect(result.value.candidateRecipeId).toBe('recipe-1');
+      expect(result.value.foldTrainPriorProbability).toBeCloseTo(reference.foldTrainPrior.probability);
+    });
+
+    it('rejects predictions with non-finite probabilities', () => {
+      const fold = buildSyntheticFold();
+      const referenceResult = buildMLBInnerDevelopmentReferenceFacts(
+        fold,
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(referenceResult.ok).toBe(true);
+      if (!referenceResult.ok) return;
+      const reference = referenceResult.value;
+
+      const predictions: MLBInnerCandidatePredictionRecord[] = fold.innerValidationRows.map((row) => ({
+        candidateRecipeId: 'recipe-1',
+        foldId: 'FOLD_X',
+        exampleId: row.exampleId,
+        homeWinProbability: Number.NaN,
+      }));
+
+      const result = evaluateMLBInnerFoldMetrics(fold, predictions, reference, { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i: MLBInnerFoldMetricResultIssue) => i.code === 'NONFINITE_PROBABILITY')).toBe(true);
+      }
+    });
+
+    it('rejects predictions with out-of-range probabilities', () => {
+      const fold = buildSyntheticFold();
+      const referenceResult = buildMLBInnerDevelopmentReferenceFacts(
+        fold,
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(referenceResult.ok).toBe(true);
+      if (!referenceResult.ok) return;
+      const reference = referenceResult.value;
+
+      const predictions: MLBInnerCandidatePredictionRecord[] = fold.innerValidationRows.map((row) => ({
+        candidateRecipeId: 'recipe-1',
+        foldId: 'FOLD_X',
+        exampleId: row.exampleId,
+        homeWinProbability: -0.01,
+      }));
+
+      const result = evaluateMLBInnerFoldMetrics(fold, predictions, reference, { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i: MLBInnerFoldMetricResultIssue) => i.code === 'OUT_OF_RANGE_PROBABILITY')).toBe(true);
+      }
+    });
+
+    it('rejects duplicate exampleIds in predictions', () => {
+      const fold = buildSyntheticFold();
+      const referenceResult = buildMLBInnerDevelopmentReferenceFacts(
+        fold,
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(referenceResult.ok).toBe(true);
+      if (!referenceResult.ok) return;
+      const reference = referenceResult.value;
+
+      const exampleId = fold.innerValidationRows[0].exampleId;
+      const predictions: MLBInnerCandidatePredictionRecord[] = [
+        {
+          candidateRecipeId: 'recipe-1',
+          foldId: 'FOLD_X',
+          exampleId,
+          homeWinProbability: 0.5,
+        },
+        {
+          candidateRecipeId: 'recipe-1',
+          foldId: 'FOLD_X',
+          exampleId,
+          homeWinProbability: 0.6,
+        },
+      ];
+
+      const result = evaluateMLBInnerFoldMetrics(fold, predictions, reference, { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i: MLBInnerFoldMetricResultIssue) => i.code === 'DUPLICATE_EXAMPLE_ID')).toBe(true);
+      }
+    });
+
+    it('rejects foreign exampleIds in predictions', () => {
+      const fold = buildSyntheticFold();
+      const referenceResult = buildMLBInnerDevelopmentReferenceFacts(
+        fold,
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(referenceResult.ok).toBe(true);
+      if (!referenceResult.ok) return;
+      const reference = referenceResult.value;
+
+      const predictions: MLBInnerCandidatePredictionRecord[] = fold.innerValidationRows.map((row) => ({
+        candidateRecipeId: 'recipe-1',
+        foldId: 'FOLD_X',
+        exampleId: 'foreign-id',
+        homeWinProbability: 0.5,
+      }));
+
+      const result = evaluateMLBInnerFoldMetrics(fold, predictions, reference, { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i: MLBInnerFoldMetricResultIssue) => i.code === 'FOREIGN_EXAMPLE_ID')).toBe(true);
+      }
+    });
+
+    it('rejects prediction count mismatch', () => {
+      const fold = buildSyntheticFold();
+      const referenceResult = buildMLBInnerDevelopmentReferenceFacts(
+        fold,
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(referenceResult.ok).toBe(true);
+      if (!referenceResult.ok) return;
+      const reference = referenceResult.value;
+
+      const predictions: MLBInnerCandidatePredictionRecord[] = [
+        {
+          candidateRecipeId: 'recipe-1',
+          foldId: 'FOLD_X',
+          exampleId: fold.innerValidationRows[0].exampleId,
+          homeWinProbability: 0.5,
+        },
+      ];
+
+      const result = evaluateMLBInnerFoldMetrics(fold, predictions, reference, { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((i: MLBInnerFoldMetricResultIssue) => i.code === 'PREDICTION_COUNT_MISMATCH')).toBe(true);
+      }
+    });
+
+    it('produces manually verified log loss, Brier, and AUC for a tiny fixture', () => {
+      const trainRows: MLBOuterTrainRow[] = [
+        { exampleId: 't1', split: 'TRAIN', vector: buildValidVector('t1', '2026-04-01'), targetValue: 1 },
+        { exampleId: 't2', split: 'TRAIN', vector: buildValidVector('t2', '2026-04-02'), targetValue: 0 },
+      ];
+      const validationRows: MLBOuterTrainRow[] = [
+        { exampleId: 'v1', split: 'TRAIN', vector: buildValidVector('v1', '2026-04-03'), targetValue: 1 },
+        { exampleId: 'v2', split: 'TRAIN', vector: buildValidVector('v2', '2026-04-04'), targetValue: 0 },
+      ];
+
+      const reference = buildMLBInnerDevelopmentReferenceFacts(
+        { foldId: 'FOLD_TINY', innerTrainRows: trainRows, innerValidationRows: validationRows, trainRowCount: trainRows.length, validationRowCount: validationRows.length, trainHomeWinCount: trainRows.filter((r) => r.targetValue === 1).length, trainAwayWinCount: trainRows.filter((r) => r.targetValue === 0).length, validationHomeWinCount: validationRows.filter((r) => r.targetValue === 1).length, validationAwayWinCount: validationRows.filter((r) => r.targetValue === 0).length, innerTrainDateRange: { startDate: '2026-04-01', endDate: '2026-04-02' }, innerValidationDateRange: { startDate: '2026-04-03', endDate: '2026-04-04' }, dateRangeProof: 'synthetic' },
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(reference.ok).toBe(true);
+      if (!reference.ok) return;
+      const ref = reference.value;
+
+      expect(ref.innerTrainHomeWinCount).toBe(1);
+      expect(ref.innerTrainAwayWinCount).toBe(1);
+      expect(ref.innerTrainHomeWinPrior).toBe(0.5);
+
+      const predictions: MLBInnerCandidatePredictionRecord[] = [
+        { candidateRecipeId: 'recipe-1', foldId: 'FOLD_TINY', exampleId: 'v1', homeWinProbability: 0.8 },
+        { candidateRecipeId: 'recipe-1', foldId: 'FOLD_TINY', exampleId: 'v2', homeWinProbability: 0.3 },
+      ];
+
+      const result = evaluateMLBInnerFoldMetrics(
+        { foldId: 'FOLD_TINY', innerTrainRows: trainRows, innerValidationRows: validationRows, trainRowCount: trainRows.length, validationRowCount: validationRows.length, trainHomeWinCount: trainRows.filter((r) => r.targetValue === 1).length, trainAwayWinCount: trainRows.filter((r) => r.targetValue === 0).length, validationHomeWinCount: validationRows.filter((r) => r.targetValue === 1).length, validationAwayWinCount: validationRows.filter((r) => r.targetValue === 0).length, innerTrainDateRange: { startDate: '2026-04-01', endDate: '2026-04-02' }, innerValidationDateRange: { startDate: '2026-04-03', endDate: '2026-04-04' }, dateRangeProof: 'synthetic' },
+        predictions,
+        ref,
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const expectedBrier = ((0.8 - 1) ** 2 + (0.3 - 0) ** 2) / 2;
+      expect(result.value.candidateBrierScore).toBeCloseTo(expectedBrier);
+      expect(result.value.p50BrierScore).toBeCloseTo(0.25);
+      expect(result.value.foldTrainPriorBrierScore).toBeCloseTo(0.25);
+    });
+  });
+
+  describe('E3-C reference leakage and deterministic behavior', () => {
+    it('does not use feature values for reference derivation', () => {
+      const trainRows: MLBOuterTrainRow[] = [
+        { exampleId: 't1', split: 'TRAIN', vector: buildValidVector('t1', '2026-04-01'), targetValue: 1 },
+        { exampleId: 't2', split: 'TRAIN', vector: buildValidVector('t2', '2026-04-02'), targetValue: 0 },
+      ];
+      const validationRows: MLBOuterTrainRow[] = [
+        { exampleId: 'v1', split: 'TRAIN', vector: buildValidVector('v1', '2026-04-03'), targetValue: 1 },
+        { exampleId: 'v2', split: 'TRAIN', vector: buildValidVector('v2', '2026-04-03'), targetValue: 0 },
+      ];
+
+      const reference = buildMLBInnerDevelopmentReferenceFacts(
+        { foldId: 'FOLD_LEAK', innerTrainRows: trainRows, innerValidationRows: validationRows, trainRowCount: trainRows.length, validationRowCount: validationRows.length, trainHomeWinCount: trainRows.filter((r) => r.targetValue === 1).length, trainAwayWinCount: trainRows.filter((r) => r.targetValue === 0).length, validationHomeWinCount: validationRows.filter((r) => r.targetValue === 1).length, validationAwayWinCount: validationRows.filter((r) => r.targetValue === 0).length, innerTrainDateRange: { startDate: '2026-04-01', endDate: '2026-04-02' }, innerValidationDateRange: { startDate: '2026-04-03', endDate: '2026-04-03' }, dateRangeProof: 'synthetic' },
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(reference.ok).toBe(true);
+      if (!reference.ok) return;
+
+      const differentFeatureRows: MLBOuterTrainRow[] = [
+        { exampleId: 't1', split: 'TRAIN', vector: buildValidVector('t1', '2026-04-01', { values: [{ featureId: 'f-99', value: 999, wasMissing: false }] }), targetValue: 1 },
+        { exampleId: 't2', split: 'TRAIN', vector: buildValidVector('t2', '2026-04-02', { values: [{ featureId: 'f-99', value: 999, wasMissing: false }] }), targetValue: 0 },
+      ];
+      const differentValidationRows: MLBOuterTrainRow[] = [
+        { exampleId: 'v1', split: 'TRAIN', vector: buildValidVector('v1', '2026-04-03', { values: [{ featureId: 'f-99', value: 999, wasMissing: false }] }), targetValue: 1 },
+        { exampleId: 'v2', split: 'TRAIN', vector: buildValidVector('v2', '2026-04-03', { values: [{ featureId: 'f-99', value: 999, wasMissing: false }] }), targetValue: 0 },
+      ];
+
+      const reference2 = buildMLBInnerDevelopmentReferenceFacts(
+        { foldId: 'FOLD_LEAK', innerTrainRows: differentFeatureRows, innerValidationRows: differentValidationRows, trainRowCount: differentFeatureRows.length, validationRowCount: differentValidationRows.length, trainHomeWinCount: differentFeatureRows.filter((r) => r.targetValue === 1).length, trainAwayWinCount: differentFeatureRows.filter((r) => r.targetValue === 0).length, validationHomeWinCount: differentValidationRows.filter((r) => r.targetValue === 1).length, validationAwayWinCount: differentValidationRows.filter((r) => r.targetValue === 0).length, innerTrainDateRange: { startDate: '2026-04-01', endDate: '2026-04-02' }, innerValidationDateRange: { startDate: '2026-04-03', endDate: '2026-04-03' }, dateRangeProof: 'synthetic' },
+        { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' },
+      );
+      expect(reference2.ok).toBe(true);
+      if (!reference2.ok) return;
+
+      expect(reference.value.foldTrainPrior.probability).toBe(reference2.value.foldTrainPrior.probability);
+      expect(reference.value.p50.probability).toBe(reference2.value.p50.probability);
+    });
+
+    it('proves prediction contract carries no target label and evaluation uses fold-owned targets', () => {
+      const trainRows: MLBOuterTrainRow[] = [
+        { exampleId: 't1', split: 'TRAIN', vector: buildValidVector('t1', '2026-04-01'), targetValue: 1 },
+        { exampleId: 't2', split: 'TRAIN', vector: buildValidVector('t2', '2026-04-02'), targetValue: 0 },
+      ];
+      const validationRows: MLBOuterTrainRow[] = [
+        { exampleId: 'v1', split: 'TRAIN', vector: buildValidVector('v1', '2026-04-03'), targetValue: 1 },
+        { exampleId: 'v2', split: 'TRAIN', vector: buildValidVector('v2', '2026-04-04'), targetValue: 0 },
+      ];
+      const fold: MLBFoldMaterialization = {
+        foldId: 'FOLD_CONTRACT',
+        innerTrainRows: trainRows,
+        innerValidationRows: validationRows,
+        trainRowCount: trainRows.length,
+        validationRowCount: validationRows.length,
+        trainHomeWinCount: trainRows.filter((r) => r.targetValue === 1).length,
+        trainAwayWinCount: trainRows.filter((r) => r.targetValue === 0).length,
+        validationHomeWinCount: validationRows.filter((r) => r.targetValue === 1).length,
+        validationAwayWinCount: validationRows.filter((r) => r.targetValue === 0).length,
+        innerTrainDateRange: { startDate: '2026-04-01', endDate: '2026-04-02' },
+        innerValidationDateRange: { startDate: '2026-04-03', endDate: '2026-04-04' },
+        dateRangeProof: 'synthetic',
+      };
+
+      const predictions: MLBInnerCandidatePredictionRecord[] = [
+        { candidateRecipeId: 'recipe-1', foldId: 'FOLD_CONTRACT', exampleId: 'v1', homeWinProbability: 0.9 },
+        { candidateRecipeId: 'recipe-1', foldId: 'FOLD_CONTRACT', exampleId: 'v2', homeWinProbability: 0.1 },
+      ];
+
+      const result = evaluateMLBInnerFoldMetrics(fold, predictions, {
+        contractVersion: 'mlb-inner-development-reference-facts-v1',
+        sport: 'MLB',
+        target: 'OFFICIAL_FINAL_GAME_WINNER',
+        foldId: 'FOLD_CONTRACT',
+        matrixId: 'matrix-1',
+        manifestId: 'manifest-1',
+        datasetId: 'dataset-1',
+        innerTrainRowCount: trainRows.length,
+        innerValidationRowCount: validationRows.length,
+        innerTrainHomeWinCount: trainRows.filter((r) => r.targetValue === 1).length,
+        innerTrainAwayWinCount: trainRows.filter((r) => r.targetValue === 0).length,
+        innerTrainHomeWinPrior: 0.5,
+        p50: { probability: 0.5, logLoss: 0, brierScore: 0.25, rocAuc: 0.5 },
+        foldTrainPrior: { probability: 0.5, logLoss: 0, brierScore: 0.25, rocAuc: 0.5 },
+      }, { matrixId: 'matrix-1', manifestId: 'manifest-1', datasetId: 'dataset-1' });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      const expectedLogLoss = ((-Math.log(0.9)) + (-Math.log(0.9))) / 2;
+      expect(result.value.candidateLogLoss).toBeCloseTo(expectedLogLoss);
+      expect(result.value.candidateBrierScore).toBeCloseTo(((0.9 - 1) ** 2 + (0.1 - 0) ** 2) / 2);
+      expect(result.value.rowCount).toBe(2);
+      expect(result.value.targetHomeWinCount).toBe(1);
+      expect(result.value.targetAwayWinCount).toBe(1);
     });
   });
 });
