@@ -16,8 +16,17 @@ import {
   MLBInnerAggregateResultIssue,
   MLBInnerCandidateGateResult,
   MLBInnerCandidateGateResultIssue,
+  MLBInnerCandidateRecipe,
+  MLBInnerCandidateRecipeFingerprintIssue,
+  MLBInnerDevelopmentRecipeBudget,
+  MLBInnerDevelopmentRecipeBudgetIssue,
   MLB_TRAIN_ONLY_INNER_ROW_COLLECTION_CONTRACT_VERSION,
   MLB_TRAIN_ONLY_INNER_VALIDATION_FOLDS_CONTRACT_VERSION,
+  MLB_INNER_CANDIDATE_RECIPE_FINGERPRINT_CONTRACT_VERSION,
+  MLB_INNER_DEVELOPMENT_CYCLE_ID,
+  MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+  computeMLBInnerCandidateRecipeFingerprint,
+  recordInnerCandidateRecipeExecution,
   MLBTrainOnlyInnerRowCollection,
   MLBTrainOnlyInnerValidationFolds,
   MLBFoldMaterialization,
@@ -696,7 +705,7 @@ describe('mlb-train-only-inner-development-evaluator', () => {
       expect(source).not.toMatch(/import.*trainer/);
     });
 
-    it('contains E3-D aggregation and eligibility logic but no ranking or budget', () => {
+    it('contains E3-D aggregation and eligibility logic but no ranking', () => {
       const source = require('fs').readFileSync(
         require('path').resolve(__dirname, '../../../src/prediction/mlb/mlb-train-only-inner-development-evaluator.ts'),
         'utf8',
@@ -704,8 +713,7 @@ describe('mlb-train-only-inner-development-evaluator', () => {
       expect(source).toMatch(/evaluateMLBTrainOnlyInnerCandidate/);
       expect(source).toMatch(/INNER_ELIGIBLE/);
       expect(source).not.toMatch(/rankInner/);
-      expect(source).not.toMatch(/recipeBudget/);
-      expect(source).not.toMatch(/RECIPE_BUDGET/);
+      expect(source).toMatch(/RECIPE_BUDGET/);
       expect(source).not.toMatch(/outer.*VALIDATION.*evaluat/i);
       expect(source).not.toMatch(/TEST.*evaluat/i);
     });
@@ -1863,5 +1871,1062 @@ describe('E3-D aggregate inner eligibility', () => {
       ];
       assertGateFailure(foldResults, 'INVALID_FOLD_RESULT');
     });
+  });
+});
+
+describe('MLBInnerCandidateRecipe validation', () => {
+  it('accepts a valid recipe', () => {
+    const recipe: MLBInnerCandidateRecipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: 0.1 },
+      optimizerConfig: { lr: 0.01 },
+      otherModelAffectingChoices: { seed: 42 },
+      complexityRank: 1,
+    };
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.fingerprint).toHaveLength(64);
+      expect(result.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
+  it('rejects missing candidateRecipeId', () => {
+    const recipe = {
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: {},
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'MISSING_FIELD' && i.path === '$.recipe.candidateRecipeId')).toBe(true);
+    }
+  });
+
+  it('rejects empty candidateRecipeId', () => {
+    const recipe = {
+      candidateRecipeId: '  ',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: {},
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_RECIPE_ID')).toBe(true);
+    }
+  });
+
+  it('rejects empty policy IDs', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: '',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: {},
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'EMPTY_POLICY_ID')).toBe(true);
+    }
+  });
+
+  it('rejects non-positive complexityRank', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: {},
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 0,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_COMPLEXITY_RANK')).toBe(true);
+    }
+  });
+
+  it('rejects non-integer complexityRank', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: {},
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1.5,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_COMPLEXITY_RANK')).toBe(true);
+    }
+  });
+});
+
+describe('MLBInnerCandidateRecipe fingerprint determinism', () => {
+  function buildRecipe(overrides: Record<string, unknown> = {}): MLBInnerCandidateRecipe {
+    return {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: 0.1 },
+      optimizerConfig: { lr: 0.01 },
+      otherModelAffectingChoices: { seed: 42 },
+      complexityRank: 1,
+      ...overrides,
+    } as MLBInnerCandidateRecipe;
+  }
+
+  it('A: same exact recipe repeated = same fingerprint', () => {
+    const recipe = buildRecipe();
+    const a = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    const b = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).toBe(b.fingerprint);
+    }
+  });
+
+  it('B: different candidateRecipeId only = same fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ candidateRecipeId: 'alpha' }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ candidateRecipeId: 'beta' }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).toBe(b.fingerprint);
+    }
+  });
+
+  it('C: different complexityRank only = same fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ complexityRank: 1 }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ complexityRank: 99 }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).toBe(b.fingerprint);
+    }
+  });
+
+  it('D: different preprocessingPolicyId = different fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ preprocessingPolicyId: 'prep-a' }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ preprocessingPolicyId: 'prep-b' }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).not.toBe(b.fingerprint);
+    }
+  });
+
+  it('E: different featurePolicyId = different fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ featurePolicyId: 'feat-a' }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ featurePolicyId: 'feat-b' }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).not.toBe(b.fingerprint);
+    }
+  });
+
+  it('F: different modelFamilyId = different fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ modelFamilyId: 'model-a' }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ modelFamilyId: 'model-b' }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).not.toBe(b.fingerprint);
+    }
+  });
+
+  it('G: different regularizationConfig = different fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ regularizationConfig: { l2: 0.1 } }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ regularizationConfig: { l2: 0.2 } }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).not.toBe(b.fingerprint);
+    }
+  });
+
+  it('H: different optimizerConfig = different fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ optimizerConfig: { lr: 0.01 } }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ optimizerConfig: { lr: 0.02 } }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).not.toBe(b.fingerprint);
+    }
+  });
+
+  it('I: different otherModelAffectingChoices = different fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ otherModelAffectingChoices: { seed: 42 } }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ otherModelAffectingChoices: { seed: 99 } }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).not.toBe(b.fingerprint);
+    }
+  });
+
+  it('J: nested object key insertion order only = same fingerprint', () => {
+    const aConfig = { a: 1, b: { c: 2, d: 3 } };
+    const bConfig = { b: { d: 3, c: 2 }, a: 1 };
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ regularizationConfig: aConfig }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ regularizationConfig: bConfig }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).toBe(b.fingerprint);
+    }
+  });
+
+  it('K: top-level config object key insertion order only = same fingerprint', () => {
+    const aConfig = { a: 1, b: 2, c: 3 };
+    const bConfig = { c: 3, a: 1, b: 2 };
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ optimizerConfig: aConfig }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ optimizerConfig: bConfig }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).toBe(b.fingerprint);
+    }
+  });
+
+  it('L: array element order differs = different fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ otherModelAffectingChoices: [1, 2, 3] }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ otherModelAffectingChoices: [3, 2, 1] }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).not.toBe(b.fingerprint);
+    }
+  });
+
+  it('M: 0 vs -0 = same fingerprint', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ regularizationConfig: { l2: 0 } }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({ regularizationConfig: { l2: -0 } }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).toBe(b.fingerprint);
+    }
+  });
+
+  it('N: nested legal structures = deterministic', () => {
+    const a = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({
+      regularizationConfig: { l2: 0.1, layers: [64, 128], nested: { a: 1, b: 2 } },
+      optimizerConfig: { lr: 0.01, momentum: 0.9 },
+      otherModelAffectingChoices: { dropout: 0.5 },
+    }));
+    const b = computeMLBInnerCandidateRecipeFingerprint(buildRecipe({
+      regularizationConfig: { layers: [64, 128], nested: { b: 2, a: 1 }, l2: 0.1 },
+      optimizerConfig: { momentum: 0.9, lr: 0.01 },
+      otherModelAffectingChoices: { dropout: 0.5 },
+    }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(a.fingerprint).toBe(b.fingerprint);
+      expect(a.fingerprint).toHaveLength(64);
+      expect(a.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
+  it('known-answer vector', () => {
+    const recipe: MLBInnerCandidateRecipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: 0.1 },
+      optimizerConfig: { lr: 0.01 },
+      otherModelAffectingChoices: { seed: 42 },
+      complexityRank: 1,
+    };
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.fingerprint).toBe('59b4ba1214ed2c635597996ca94d62e2fe2619866cc63bdf79ddc93acaddb1ca');
+    }
+  });
+});
+
+describe('MLBInnerCandidateRecipe fingerprint malformed input', () => {
+  it('rejects undefined in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: undefined,
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_JSON_VALUE')).toBe(true);
+    }
+  });
+
+  it('rejects NaN in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: Number.NaN },
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'NONFINITE_NUMBER')).toBe(true);
+    }
+  });
+
+  it('rejects Infinity in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: Infinity },
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'NONFINITE_NUMBER')).toBe(true);
+    }
+  });
+
+  it('rejects -Infinity in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: -Infinity },
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'NONFINITE_NUMBER')).toBe(true);
+    }
+  });
+
+  it('rejects bigint in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: BigInt(1) },
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_JSON_VALUE')).toBe(true);
+    }
+  });
+
+  it('rejects symbol in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: Symbol('test') },
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_JSON_VALUE')).toBe(true);
+    }
+  });
+
+  it('rejects function in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: () => 0.1 },
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_JSON_VALUE')).toBe(true);
+    }
+  });
+
+  it('rejects Date in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: new Date('2026-01-01'),
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'NOT_PLAIN_OBJECT')).toBe(true);
+    }
+  });
+
+  it('rejects Map in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: new Map([['l2', 0.1]]),
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'NOT_PLAIN_OBJECT')).toBe(true);
+    }
+  });
+
+  it('rejects Set in config', () => {
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: new Set([0.1]),
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'NOT_PLAIN_OBJECT')).toBe(true);
+    }
+  });
+
+  it('rejects custom class instance in config', () => {
+    class Foo { x = 1; }
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: new Foo(),
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'NOT_PLAIN_OBJECT')).toBe(true);
+    }
+  });
+
+  it('rejects getter/accessor property in config', () => {
+    const config = { l2: 0.1 };
+    Object.defineProperty(config, 'l2', {
+      get() { return 0.2; },
+      enumerable: true,
+      configurable: true,
+    });
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: config,
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_JSON_VALUE')).toBe(true);
+    }
+  });
+
+  it('rejects cyclic object in config', () => {
+    const config: Record<string, unknown> = { l2: 0.1 };
+    (config as { self?: unknown }).self = config;
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: config,
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'CYCLIC_STRUCTURE')).toBe(true);
+    }
+  });
+
+  it('rejects cyclic array in config', () => {
+    const arr: unknown[] = [0.1];
+    arr.push(arr);
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: arr,
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'CYCLIC_STRUCTURE')).toBe(true);
+    }
+  });
+
+  it('rejects nested cycle', () => {
+    const inner: Record<string, unknown> = { l2: 0.1 };
+    (inner as { outer?: unknown }).outer = { inner };
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: inner,
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'CYCLIC_STRUCTURE')).toBe(true);
+    }
+  });
+
+  it('accepts non-cyclic shared reference', () => {
+    const shared = { value: 1 };
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { left: shared, right: shared },
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.fingerprint).toHaveLength(64);
+      expect(result.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
+  it('rejects symbol-keyed own property in config', () => {
+    const config: Record<symbol, number> = { [Symbol('secret')]: 1 };
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: config,
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_JSON_VALUE')).toBe(true);
+    }
+  });
+});
+
+describe('MLBInnerDevelopmentRecipeBudget validation', () => {
+  function buildBudget(overrides: Record<string, unknown> = {}): MLBInnerDevelopmentRecipeBudget {
+    const base: MLBInnerDevelopmentRecipeBudget = {
+      contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+      cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+      maxDistinctRecipes: 12,
+      seenRecipeIds: [],
+      seenRecipeFingerprints: [],
+      seenComplexityRanks: [],
+      evaluationCount: 0,
+    };
+    return { ...base, ...overrides } as MLBInnerDevelopmentRecipeBudget;
+  }
+
+  it('accepts a valid empty budget', () => {
+    const result = recordInnerCandidateRecipeExecution(
+      buildBudget(),
+      {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.seenRecipeIds).toHaveLength(1);
+      expect(result.value.evaluationCount).toBe(1);
+    }
+  });
+
+  it('rejects wrong contractVersion', () => {
+    const budget = buildBudget({ contractVersion: 'wrong' } as unknown as Record<string, unknown>);
+    const result = recordInnerCandidateRecipeExecution(
+      budget,
+      {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_LITERAL' && i.path === '$.budget.contractVersion')).toBe(true);
+    }
+  });
+
+  it('rejects wrong cycleId', () => {
+    const budget = buildBudget({ cycleId: 'wrong-cycle' } as unknown as Record<string, unknown>);
+    const result = recordInnerCandidateRecipeExecution(
+      budget,
+      {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_LITERAL' && i.path === '$.budget.cycleId')).toBe(true);
+    }
+  });
+
+  it('rejects maxDistinctRecipes !== 12', () => {
+    const budget = buildBudget({ maxDistinctRecipes: 11 } as unknown as Record<string, unknown>);
+    const result = recordInnerCandidateRecipeExecution(
+      budget,
+      {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_NUMBER')).toBe(true);
+    }
+  });
+
+  it('rejects mismatched seen array lengths', () => {
+    const budget = buildBudget({
+      seenRecipeIds: ['recipe-1'],
+      seenRecipeFingerprints: [],
+      seenComplexityRanks: [1],
+    });
+    const result = recordInnerCandidateRecipeExecution(
+      budget,
+      {
+        candidateRecipeId: 'recipe-2',
+        preprocessingPolicyId: 'prep-2',
+        featurePolicyId: 'feat-2',
+        modelFamilyId: 'model-2',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_ARRAY')).toBe(true);
+    }
+  });
+
+  it('rejects seen arrays length > 12', () => {
+    const longIds = Array.from({ length: 13 }, (_, i) => `recipe-${i}`);
+    const longFingerprints = Array.from({ length: 13 }, () => 'a'.repeat(64));
+    const longRanks = Array.from({ length: 13 }, () => 1);
+    const budget = buildBudget({
+      seenRecipeIds: longIds,
+      seenRecipeFingerprints: longFingerprints,
+      seenComplexityRanks: longRanks,
+    });
+    const result = recordInnerCandidateRecipeExecution(
+      budget,
+      {
+        candidateRecipeId: 'recipe-13',
+        preprocessingPolicyId: 'prep-13',
+        featurePolicyId: 'feat-13',
+        modelFamilyId: 'model-13',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_NUMBER')).toBe(true);
+    }
+  });
+
+  it('rejects duplicate recipe IDs in budget', () => {
+    const budget = buildBudget({
+      seenRecipeIds: ['recipe-1', 'recipe-1'],
+      seenRecipeFingerprints: ['a'.repeat(64), 'b'.repeat(64)],
+      seenComplexityRanks: [1, 2],
+    });
+    const result = recordInnerCandidateRecipeExecution(
+      budget,
+      {
+        candidateRecipeId: 'recipe-2',
+        preprocessingPolicyId: 'prep-2',
+        featurePolicyId: 'feat-2',
+        modelFamilyId: 'model-2',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_STRING')).toBe(true);
+    }
+  });
+
+  it('rejects duplicate fingerprints in budget', () => {
+    const fingerprint = 'a'.repeat(64);
+    const budget = buildBudget({
+      seenRecipeIds: ['recipe-1', 'recipe-2'],
+      seenRecipeFingerprints: [fingerprint, fingerprint],
+      seenComplexityRanks: [1, 2],
+    });
+    const result = recordInnerCandidateRecipeExecution(
+      budget,
+      {
+        candidateRecipeId: 'recipe-3',
+        preprocessingPolicyId: 'prep-3',
+        featurePolicyId: 'feat-3',
+        modelFamilyId: 'model-3',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_STRING')).toBe(true);
+    }
+  });
+
+  it('rejects non-positive complexityRank in budget', () => {
+    const budget = buildBudget({
+      seenRecipeIds: ['recipe-1'],
+      seenRecipeFingerprints: ['a'.repeat(64)],
+      seenComplexityRanks: [0],
+    });
+    const result = recordInnerCandidateRecipeExecution(
+      budget,
+      {
+        candidateRecipeId: 'recipe-1',
+        preprocessingPolicyId: 'prep-1',
+        featurePolicyId: 'feat-1',
+        modelFamilyId: 'model-1',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_INTEGER')).toBe(true);
+    }
+  });
+
+  it('rejects evaluationCount < distinct recipe count', () => {
+    const budget = buildBudget({
+      seenRecipeIds: ['recipe-1'],
+      seenRecipeFingerprints: ['a'.repeat(64)],
+      seenComplexityRanks: [1],
+      evaluationCount: 0,
+    });
+    const result = recordInnerCandidateRecipeExecution(
+      budget,
+      {
+        candidateRecipeId: 'recipe-2',
+        preprocessingPolicyId: 'prep-2',
+        featurePolicyId: 'feat-2',
+        modelFamilyId: 'model-2',
+        regularizationConfig: {},
+        optimizerConfig: {},
+        otherModelAffectingChoices: {},
+        complexityRank: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_NUMBER')).toBe(true);
+    }
+  });
+});
+
+describe('recordInnerCandidateRecipeExecution transitions', () => {
+  function buildEmptyBudget(): MLBInnerDevelopmentRecipeBudget {
+    return {
+      contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+      cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+      maxDistinctRecipes: 12,
+      seenRecipeIds: [],
+      seenRecipeFingerprints: [],
+      seenComplexityRanks: [],
+      evaluationCount: 0,
+    };
+  }
+
+  function buildRecipe(id: string, overrides: Record<string, unknown> = {}): MLBInnerCandidateRecipe {
+    const base: MLBInnerCandidateRecipe = {
+      candidateRecipeId: id,
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: { l2: 0.1 },
+      optimizerConfig: { lr: 0.01 },
+      otherModelAffectingChoices: { seed: 42 },
+      complexityRank: 1,
+    };
+    return { ...base, ...overrides } as MLBInnerCandidateRecipe;
+  }
+
+  it('registers new distinct recipe and increments evaluationCount', () => {
+    const budget = buildEmptyBudget();
+    const result = recordInnerCandidateRecipeExecution(budget, buildRecipe('recipe-1'));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.seenRecipeIds).toHaveLength(1);
+      expect(result.value.seenRecipeFingerprints).toHaveLength(1);
+      expect(result.value.evaluationCount).toBe(1);
+      expect(result.value.seenRecipeIds[0]).toBe('recipe-1');
+    }
+  });
+
+  it('exact re-execution increments evaluationCount but does not consume new slot', () => {
+    const budget = buildEmptyBudget();
+    const first = recordInnerCandidateRecipeExecution(budget, buildRecipe('recipe-1'));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const second = recordInnerCandidateRecipeExecution(first.value, buildRecipe('recipe-1'));
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.value.seenRecipeIds).toHaveLength(1);
+      expect(second.value.evaluationCount).toBe(2);
+      expect(second.value.seenRecipeFingerprints).toBe(first.value.seenRecipeFingerprints);
+    }
+  });
+
+  it('alias conflict: same fingerprint, different candidateRecipeId = IDENTITY_ALIAS_CONFLICT', () => {
+    const budget = buildEmptyBudget();
+    const first = recordInnerCandidateRecipeExecution(budget, buildRecipe('recipe-1'));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const aliasResult = recordInnerCandidateRecipeExecution(first.value, buildRecipe('recipe-1-renamed'));
+    expect(aliasResult.ok).toBe(false);
+    if (!aliasResult.ok) {
+      expect(aliasResult.issues.some((i) => i.code === 'IDENTITY_ALIAS_CONFLICT')).toBe(true);
+      expect(aliasResult.issues[0].path).toBe('$.candidateRecipe.candidateRecipeId');
+    }
+  });
+
+  it('mutation conflict: same candidateRecipeId, different fingerprint = IDENTITY_MUTATION_CONFLICT', () => {
+    const budget = buildEmptyBudget();
+    const first = recordInnerCandidateRecipeExecution(budget, buildRecipe('recipe-1'));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const mutated = recordInnerCandidateRecipeExecution(first.value, buildRecipe('recipe-1', { regularizationConfig: { l2: 0.2 } }));
+    expect(mutated.ok).toBe(false);
+    if (!mutated.ok) {
+      expect(mutated.issues.some((i) => i.code === 'IDENTITY_MUTATION_CONFLICT')).toBe(true);
+      expect(mutated.issues[0].path).toBe('$.candidateRecipe');
+    }
+  });
+
+  it('complexity mismatch: same ID, same fingerprint, different complexityRank = COMPLEXITY_RANK_MISMATCH', () => {
+    const budget = buildEmptyBudget();
+    const first = recordInnerCandidateRecipeExecution(budget, buildRecipe('recipe-1', { complexityRank: 1 } as unknown as MLBInnerCandidateRecipe));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const mismatched = recordInnerCandidateRecipeExecution(first.value, buildRecipe('recipe-1', { complexityRank: 2 } as unknown as MLBInnerCandidateRecipe));
+    expect(mismatched.ok).toBe(false);
+    if (!mismatched.ok) {
+      expect(mismatched.issues.some((i) => i.code === 'COMPLEXITY_RANK_MISMATCH')).toBe(true);
+      expect(mismatched.issues[0].path).toBe('$.candidateRecipe.complexityRank');
+    }
+  });
+
+  it('twelfth distinct recipe is allowed', () => {
+    let budget = buildEmptyBudget();
+    for (let i = 1; i <= 11; i++) {
+      const result = recordInnerCandidateRecipeExecution(budget, buildRecipe(`recipe-${i}`, { regularizationConfig: { l2: i / 100 } }));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      budget = result.value;
+    }
+
+    const twelfth = recordInnerCandidateRecipeExecution(budget, buildRecipe('recipe-12', { regularizationConfig: { l2: 0.99 } }));
+    expect(twelfth.ok).toBe(true);
+    if (twelfth.ok) {
+      expect(twelfth.value.seenRecipeIds).toHaveLength(12);
+      expect(twelfth.value.evaluationCount).toBe(12);
+    }
+  });
+
+  it('thirteenth distinct recipe is rejected before state mutation', () => {
+    let budget = buildEmptyBudget();
+    for (let i = 1; i <= 12; i++) {
+      const result = recordInnerCandidateRecipeExecution(budget, buildRecipe(`recipe-${i}`, { regularizationConfig: { l2: i / 100 } }));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      budget = result.value;
+    }
+
+    const thirteenth = recordInnerCandidateRecipeExecution(budget, buildRecipe('recipe-13', { regularizationConfig: { l2: 0.99 } }));
+    expect(thirteenth.ok).toBe(false);
+    if (!thirteenth.ok) {
+      expect(thirteenth.issues.some((i) => i.code === 'BUDGET_EXHAUSTED')).toBe(true);
+      expect(thirteenth.issues[0].path).toBe('$.budget.seenRecipeIds');
+    }
+  });
+
+  it('thirteenth attempt does not change state', () => {
+    let budget = buildEmptyBudget();
+    for (let i = 1; i <= 12; i++) {
+      const result = recordInnerCandidateRecipeExecution(budget, buildRecipe(`recipe-${i}`, { regularizationConfig: { l2: i / 100 } }));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      budget = result.value;
+    }
+
+    const idsBefore = budget.seenRecipeIds;
+    const fpBefore = budget.seenRecipeFingerprints;
+    const ranksBefore = budget.seenComplexityRanks;
+    const evalBefore = budget.evaluationCount;
+
+    const thirteenth = recordInnerCandidateRecipeExecution(budget, buildRecipe('recipe-13', { regularizationConfig: { l2: 0.99 } }));
+    expect(thirteenth.ok).toBe(false);
+    if (thirteenth.ok) return;
+
+    expect(budget.seenRecipeIds).toBe(idsBefore);
+    expect(budget.seenRecipeFingerprints).toBe(fpBefore);
+    expect(budget.seenComplexityRanks).toBe(ranksBefore);
+    expect(budget.evaluationCount).toBe(evalBefore);
+  });
+});
+
+describe('MLBInnerCandidateRecipe runtime safety', () => {
+  it('does not execute attacker-controlled getters during validation', () => {
+    let getterExecuted = false;
+    const config = {
+      get l2() {
+        getterExecuted = true;
+        return 0.1;
+      },
+    };
+    const recipe = {
+      candidateRecipeId: 'recipe-1',
+      preprocessingPolicyId: 'prep-1',
+      featurePolicyId: 'feat-1',
+      modelFamilyId: 'model-1',
+      regularizationConfig: config,
+      optimizerConfig: {},
+      otherModelAffectingChoices: {},
+      complexityRank: 1,
+    } as unknown as MLBInnerCandidateRecipe;
+    const result = computeMLBInnerCandidateRecipeFingerprint(recipe);
+    expect(result.ok).toBe(false);
+    expect(getterExecuted).toBe(false);
   });
 });

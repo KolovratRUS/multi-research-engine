@@ -1,4 +1,5 @@
 import { assertNoOddsContamination } from '../firewall/odds-contamination-guard';
+import { createHash } from 'node:crypto';
 import {
   validateMLBTrainingMatrix,
   type MLBTrainingMatrix,
@@ -21,6 +22,15 @@ export const MLB_TRAIN_ONLY_INNER_ROW_COLLECTION_CONTRACT_VERSION =
 
 export const MLB_TRAIN_ONLY_INNER_VALIDATION_FOLDS_CONTRACT_VERSION =
   'mlb-train-only-inner-validation-folds-v1' as const;
+
+export const MLB_INNER_CANDIDATE_RECIPE_FINGERPRINT_CONTRACT_VERSION =
+  'mlb-inner-candidate-recipe-fingerprint-v1' as const;
+
+export const MLB_INNER_DEVELOPMENT_CYCLE_ID =
+  'mlb-v1-train-only-inner-development-cycle-v1' as const;
+
+export const MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION =
+  'mlb-inner-development-recipe-budget-v1' as const;
 
 export type MLBOuterTrainRow = MLBTrainingMatrixRow & Readonly<{ split: 'TRAIN' }>;
 
@@ -280,12 +290,74 @@ export type MLBInnerCandidateGateResultIssue = Readonly<{
   message: string;
 }>;
 
+export type MLBInnerCandidateRecipe = Readonly<{
+  candidateRecipeId: string;
+  preprocessingPolicyId: string;
+  featurePolicyId: string;
+  modelFamilyId: string;
+  regularizationConfig: unknown;
+  optimizerConfig: unknown;
+  otherModelAffectingChoices: unknown;
+  complexityRank: number;
+}>;
+
+export type MLBInnerCandidateRecipeFingerprintIssue = Readonly<{
+  code:
+    | 'MISSING_FIELD'
+    | 'UNKNOWN_FIELD'
+    | 'NOT_PLAIN_OBJECT'
+    | 'INVALID_JSON_VALUE'
+    | 'INVALID_STRING'
+    | 'INVALID_LITERAL'
+    | 'INVALID_INTEGER'
+    | 'INVALID_NUMBER'
+    | 'INVALID_ARRAY'
+    | 'NONFINITE_NUMBER'
+    | 'CYCLIC_STRUCTURE'
+    | 'INVALID_RECIPE_ID'
+    | 'EMPTY_POLICY_ID'
+    | 'INVALID_COMPLEXITY_RANK';
+  path: string;
+  message: string;
+}>;
+
+export type MLBInnerDevelopmentRecipeBudget = Readonly<{
+  contractVersion: 'mlb-inner-development-recipe-budget-v1';
+  cycleId: typeof MLB_INNER_DEVELOPMENT_CYCLE_ID;
+  maxDistinctRecipes: 12;
+  seenRecipeIds: readonly string[];
+  seenRecipeFingerprints: readonly string[];
+  seenComplexityRanks: readonly number[];
+  evaluationCount: number;
+}>;
+
+export type MLBInnerDevelopmentRecipeBudgetIssue = Readonly<{
+  code:
+    | 'MISSING_FIELD'
+    | 'UNKNOWN_FIELD'
+    | 'NOT_PLAIN_OBJECT'
+    | 'INVALID_JSON_VALUE'
+    | 'INVALID_STRING'
+    | 'INVALID_LITERAL'
+    | 'INVALID_NUMBER'
+    | 'INVALID_INTEGER'
+    | 'INVALID_ARRAY'
+    | 'BUDGET_EXHAUSTED'
+    | 'IDENTITY_ALIAS_CONFLICT'
+    | 'IDENTITY_MUTATION_CONFLICT'
+    | 'COMPLEXITY_RANK_MISMATCH';
+  path: string;
+  message: string;
+}>;
+
 type EvaluatorIssue =
   | MLBTrainOnlyInnerRowCollectionIssue
   | MLBTrainOnlyInnerValidationFoldsIssue
   | MLBInnerFoldMetricResultIssue
   | MLBInnerAggregateResultIssue
-  | MLBInnerCandidateGateResultIssue;
+  | MLBInnerCandidateGateResultIssue
+  | MLBInnerCandidateRecipeFingerprintIssue
+  | MLBInnerDevelopmentRecipeBudgetIssue;
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F]/;
 const PROHIBITED_ROW_FIELDS = new Set(['odds', 'sportsbook', 'moneyline']);
@@ -2476,4 +2548,575 @@ export function evaluateMLBTrainOnlyInnerCandidateGate(
   }
 
   return classifyInnerCandidateGate(aggregateResult.value);
+}
+
+function isJSONSafeValue(
+  value: unknown,
+  path: string,
+  issues: MLBInnerCandidateRecipeFingerprintIssue[],
+  seen: WeakSet<object> = new WeakSet(),
+): boolean {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') {
+    return true;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      pushIssue(issues, 'NONFINITE_NUMBER', path, `${path} must be a finite number`);
+      return false;
+    }
+    return true;
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      pushIssue(issues, 'CYCLIC_STRUCTURE', path, `${path} is a cyclic structure`);
+      return false;
+    }
+    seen.add(value);
+    try {
+      for (let i = 0; i < value.length; i++) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, i);
+        if (!descriptor) {
+          continue;
+        }
+        if (!isDataDescriptor(descriptor)) {
+          pushIssue(issues, 'INVALID_JSON_VALUE', `${path}[${i}]`, `${path}[${i}] is an accessor property`);
+          return false;
+        }
+        if (!isJSONSafeValue(descriptor.value, `${path}[${i}]`, issues, seen)) {
+          return false;
+        }
+      }
+      return true;
+    } finally {
+      seen.delete(value);
+    }
+  }
+  if (isPlainObject(value)) {
+    if (seen.has(value)) {
+      pushIssue(issues, 'CYCLIC_STRUCTURE', path, `${path} is a cyclic structure`);
+      return false;
+    }
+    seen.add(value);
+    try {
+      const symbols = Object.getOwnPropertySymbols(value);
+      for (const sym of symbols) {
+        pushIssue(issues, 'INVALID_JSON_VALUE', `${path}.${String(sym)}`, `${path} contains a symbol-keyed property`);
+        return false;
+      }
+      const keys = Object.getOwnPropertyNames(value);
+      for (const key of keys) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (!isDataDescriptor(descriptor)) {
+          pushIssue(issues, 'INVALID_JSON_VALUE', `${path}.${key}`, `${path}.${key} is an accessor property`);
+          return false;
+        }
+        if (!isJSONSafeValue(descriptor.value, `${path}.${key}`, issues, seen)) {
+          return false;
+        }
+      }
+      return true;
+    } finally {
+      seen.delete(value);
+    }
+  }
+  if (typeof value === 'undefined') {
+    pushIssue(issues, 'INVALID_JSON_VALUE', path, `${path} is undefined`);
+  } else if (typeof value === 'bigint') {
+    pushIssue(issues, 'INVALID_JSON_VALUE', path, `${path} is bigint`);
+  } else if (typeof value === 'symbol') {
+    pushIssue(issues, 'INVALID_JSON_VALUE', path, `${path} is symbol`);
+  } else if (typeof value === 'function') {
+    pushIssue(issues, 'INVALID_JSON_VALUE', path, `${path} is function`);
+  } else {
+    pushIssue(issues, 'NOT_PLAIN_OBJECT', path, `${path} is not a plain object`);
+  }
+  return false;
+}
+
+function canonicalizeJSONSafeValue(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+    return Object.is(value, -0) ? 0 : value;
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      return null;
+    }
+    seen.add(value);
+    try {
+      const result: unknown[] = [];
+      for (let i = 0; i < value.length; i++) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, i);
+        if (!descriptor) {
+          result[i] = null;
+        } else if (!isDataDescriptor(descriptor)) {
+          return null;
+        } else {
+          result[i] = canonicalizeJSONSafeValue(descriptor.value, seen);
+        }
+      }
+      return result;
+    } finally {
+      seen.delete(value);
+    }
+  }
+  if (isPlainObject(value)) {
+    if (seen.has(value)) {
+      return null;
+    }
+    seen.add(value);
+    try {
+      const symbols = Object.getOwnPropertySymbols(value);
+      if (symbols.length > 0) {
+        return null;
+      }
+      const keys = Object.getOwnPropertyNames(value).sort();
+      const result: Record<string, unknown> = {};
+      for (const key of keys) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        if (!isDataDescriptor(descriptor)) {
+          return null;
+        }
+        result[key] = canonicalizeJSONSafeValue(descriptor.value, seen);
+      }
+      return result;
+    } finally {
+      seen.delete(value);
+    }
+  }
+  return null;
+}
+
+function validateMLBInnerCandidateRecipe(
+  recipe: unknown,
+  path: string,
+  issues: MLBInnerCandidateRecipeFingerprintIssue[],
+): boolean {
+  if (!isPlainObject(recipe)) {
+    pushIssue(issues, 'NOT_PLAIN_OBJECT', path, 'recipe must be a plain object');
+    return false;
+  }
+
+  addKnownFieldIssues(
+    recipe,
+    new Set([
+      'candidateRecipeId',
+      'preprocessingPolicyId',
+      'featurePolicyId',
+      'modelFamilyId',
+      'regularizationConfig',
+      'optimizerConfig',
+      'otherModelAffectingChoices',
+      'complexityRank',
+    ]),
+    path,
+    issues,
+  );
+
+  const rawId = ownDataProperty(recipe, 'candidateRecipeId', `${path}.candidateRecipeId`, issues);
+  if (rawId.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `${path}.candidateRecipeId`, 'candidateRecipeId is required');
+    return false;
+  }
+  if (rawId.kind === 'accessor') {
+    return false;
+  }
+  if (typeof rawId.value !== 'string' || rawId.value.trim() === '' || rawId.value !== rawId.value.trim()) {
+    pushIssue(issues, 'INVALID_RECIPE_ID', `${path}.candidateRecipeId`, 'candidateRecipeId must be a non-empty trimmed string');
+    return false;
+  }
+
+  const requiredStringFields = [
+    { key: 'preprocessingPolicyId', code: 'EMPTY_POLICY_ID', message: 'preprocessingPolicyId must be a non-empty trimmed string' },
+    { key: 'featurePolicyId', code: 'EMPTY_POLICY_ID', message: 'featurePolicyId must be a non-empty trimmed string' },
+    { key: 'modelFamilyId', code: 'EMPTY_POLICY_ID', message: 'modelFamilyId must be a non-empty trimmed string' },
+  ] as const;
+
+  for (const field of requiredStringFields) {
+    const raw = ownDataProperty(recipe, field.key, `${path}.${field.key}`, issues);
+    if (raw.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `${path}.${field.key}`, `${field.key} is required`);
+      return false;
+    }
+    if (raw.kind === 'accessor') {
+      return false;
+    }
+    if (typeof raw.value !== 'string' || raw.value.trim() === '' || raw.value !== raw.value.trim()) {
+      pushIssue(issues, field.code, `${path}.${field.key}`, field.message);
+      return false;
+    }
+  }
+
+  const rawComplexity = ownDataProperty(recipe, 'complexityRank', `${path}.complexityRank`, issues);
+  if (rawComplexity.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `${path}.complexityRank`, 'complexityRank is required');
+    return false;
+  }
+  if (rawComplexity.kind === 'accessor') {
+    return false;
+  }
+  if (typeof rawComplexity.value !== 'number' || !Number.isInteger(rawComplexity.value) || rawComplexity.value <= 0) {
+    pushIssue(issues, 'INVALID_COMPLEXITY_RANK', `${path}.complexityRank`, 'complexityRank must be a positive integer');
+    return false;
+  }
+
+  const configFields = [
+    { key: 'regularizationConfig', path: `${path}.regularizationConfig` },
+    { key: 'optimizerConfig', path: `${path}.optimizerConfig` },
+    { key: 'otherModelAffectingChoices', path: `${path}.otherModelAffectingChoices` },
+  ];
+
+  for (const field of configFields) {
+    const raw = ownDataProperty(recipe, field.key, field.path, issues);
+    if (raw.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', field.path, `${field.key} is required`);
+      return false;
+    }
+    if (raw.kind === 'accessor') {
+      return false;
+    }
+    if (!isJSONSafeValue(raw.value, field.path, issues)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function validateMLBInnerDevelopmentRecipeBudget(
+  budget: unknown,
+  path: string,
+  issues: MLBInnerDevelopmentRecipeBudgetIssue[],
+): boolean {
+  if (!isPlainObject(budget)) {
+    pushIssue(issues, 'NOT_PLAIN_OBJECT', path, 'budget must be a plain object');
+    return false;
+  }
+
+  addKnownFieldIssues(
+    budget,
+    new Set([
+      'contractVersion',
+      'cycleId',
+      'maxDistinctRecipes',
+      'seenRecipeIds',
+      'seenRecipeFingerprints',
+      'seenComplexityRanks',
+      'evaluationCount',
+    ]),
+    path,
+    issues,
+  );
+
+  const contractVersion = ownDataProperty(budget, 'contractVersion', `${path}.contractVersion`, issues);
+  if (contractVersion.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `${path}.contractVersion`, 'contractVersion is required');
+    return false;
+  }
+  if (contractVersion.kind === 'data' && contractVersion.value !== MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION) {
+    pushIssue(issues, 'INVALID_LITERAL', `${path}.contractVersion`, `contractVersion must be ${MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION}`);
+    return false;
+  }
+  if (contractVersion.kind === 'accessor') {
+    return false;
+  }
+
+  const cycleId = ownDataProperty(budget, 'cycleId', `${path}.cycleId`, issues);
+  if (cycleId.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `${path}.cycleId`, 'cycleId is required');
+    return false;
+  }
+  if (cycleId.kind === 'data' && cycleId.value !== MLB_INNER_DEVELOPMENT_CYCLE_ID) {
+    pushIssue(issues, 'INVALID_LITERAL', `${path}.cycleId`, `cycleId must be ${MLB_INNER_DEVELOPMENT_CYCLE_ID}`);
+    return false;
+  }
+  if (cycleId.kind === 'accessor') {
+    return false;
+  }
+
+  const maxDistinctRecipes = ownDataProperty(budget, 'maxDistinctRecipes', `${path}.maxDistinctRecipes`, issues);
+  if (maxDistinctRecipes.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `${path}.maxDistinctRecipes`, 'maxDistinctRecipes is required');
+    return false;
+  }
+  if (maxDistinctRecipes.kind === 'accessor') {
+    return false;
+  }
+  if (typeof maxDistinctRecipes.value !== 'number' || maxDistinctRecipes.value !== 12) {
+    pushIssue(issues, 'INVALID_NUMBER', `${path}.maxDistinctRecipes`, 'maxDistinctRecipes must be 12');
+    return false;
+  }
+
+  const seenRecipeIds = ownDataProperty(budget, 'seenRecipeIds', `${path}.seenRecipeIds`, issues);
+  if (seenRecipeIds.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `${path}.seenRecipeIds`, 'seenRecipeIds is required');
+    return false;
+  }
+  if (seenRecipeIds.kind === 'accessor') {
+    return false;
+  }
+  if (!Array.isArray(seenRecipeIds.value)) {
+    pushIssue(issues, 'INVALID_ARRAY', `${path}.seenRecipeIds`, 'seenRecipeIds must be an array');
+    return false;
+  }
+
+  const seenRecipeFingerprints = ownDataProperty(budget, 'seenRecipeFingerprints', `${path}.seenRecipeFingerprints`, issues);
+  if (seenRecipeFingerprints.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `${path}.seenRecipeFingerprints`, 'seenRecipeFingerprints is required');
+    return false;
+  }
+  if (seenRecipeFingerprints.kind === 'accessor') {
+    return false;
+  }
+  if (!Array.isArray(seenRecipeFingerprints.value)) {
+    pushIssue(issues, 'INVALID_ARRAY', `${path}.seenRecipeFingerprints`, 'seenRecipeFingerprints must be an array');
+    return false;
+  }
+
+  const seenComplexityRanks = ownDataProperty(budget, 'seenComplexityRanks', `${path}.seenComplexityRanks`, issues);
+  if (seenComplexityRanks.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `${path}.seenComplexityRanks`, 'seenComplexityRanks is required');
+    return false;
+  }
+  if (seenComplexityRanks.kind === 'accessor') {
+    return false;
+  }
+  if (!Array.isArray(seenComplexityRanks.value)) {
+    pushIssue(issues, 'INVALID_ARRAY', `${path}.seenComplexityRanks`, 'seenComplexityRanks must be an array');
+    return false;
+  }
+
+  if (
+    seenRecipeIds.value.length !== seenRecipeFingerprints.value.length ||
+    seenRecipeIds.value.length !== seenComplexityRanks.value.length
+  ) {
+    pushIssue(issues, 'INVALID_ARRAY', `${path}.seen*`, 'seen arrays must have identical length');
+    return false;
+  }
+
+  if (seenRecipeIds.value.length > 12) {
+    pushIssue(issues, 'INVALID_NUMBER', `${path}.seenRecipeIds`, 'seen arrays length must not exceed 12');
+    return false;
+  }
+
+  const idSet = new Set<string>();
+  for (let i = 0; i < seenRecipeIds.value.length; i++) {
+    const rawId = seenRecipeIds.value[i];
+    if (typeof rawId !== 'string' || rawId.trim() === '' || rawId !== rawId.trim()) {
+      pushIssue(issues, 'INVALID_STRING', `${path}.seenRecipeIds[${i}]`, `seenRecipeIds[${i}] must be a non-empty trimmed string`);
+      return false;
+    }
+    if (idSet.has(rawId)) {
+      pushIssue(issues, 'INVALID_STRING', `${path}.seenRecipeIds[${i}]`, `Duplicate recipe ID ${rawId}`);
+      return false;
+    }
+    idSet.add(rawId);
+  }
+
+  const fingerprintSet = new Set<string>();
+  for (let i = 0; i < seenRecipeFingerprints.value.length; i++) {
+    const rawFingerprint = seenRecipeFingerprints.value[i];
+    if (typeof rawFingerprint !== 'string') {
+      pushIssue(issues, 'INVALID_STRING', `${path}.seenRecipeFingerprints[${i}]`, 'fingerprint must be a string');
+      return false;
+    }
+    if (!/^[0-9a-f]{64}$/.test(rawFingerprint)) {
+      pushIssue(issues, 'INVALID_STRING', `${path}.seenRecipeFingerprints[${i}]`, 'fingerprint must be lowercase 64-char hex');
+      return false;
+    }
+    if (fingerprintSet.has(rawFingerprint)) {
+      pushIssue(issues, 'INVALID_STRING', `${path}.seenRecipeFingerprints[${i}]`, `Duplicate fingerprint ${rawFingerprint}`);
+      return false;
+    }
+    fingerprintSet.add(rawFingerprint);
+  }
+
+  for (let i = 0; i < seenComplexityRanks.value.length; i++) {
+    const rawRank = seenComplexityRanks.value[i];
+    if (typeof rawRank !== 'number' || !Number.isInteger(rawRank) || rawRank <= 0) {
+      pushIssue(issues, 'INVALID_INTEGER', `${path}.seenComplexityRanks[${i}]`, 'complexityRank must be a positive integer');
+      return false;
+    }
+  }
+
+  const evaluationCount = ownDataProperty(budget, 'evaluationCount', `${path}.evaluationCount`, issues);
+  if (evaluationCount.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `${path}.evaluationCount`, 'evaluationCount is required');
+    return false;
+  }
+  if (evaluationCount.kind === 'accessor') {
+    return false;
+  }
+  if (typeof evaluationCount.value !== 'number' || !Number.isInteger(evaluationCount.value) || evaluationCount.value < 0) {
+    pushIssue(issues, 'INVALID_INTEGER', `${path}.evaluationCount`, 'evaluationCount must be a non-negative integer');
+    return false;
+  }
+  if (evaluationCount.value < seenRecipeIds.value.length) {
+    pushIssue(issues, 'INVALID_NUMBER', `${path}.evaluationCount`, 'evaluationCount must be >= distinct recipe count');
+    return false;
+  }
+
+  return true;
+}
+
+function serializeCanonicalRecipeFingerprintPayload(
+  recipe: MLBInnerCandidateRecipe,
+): string {
+  const payload: Record<string, unknown> = {
+    fingerprintContractVersion: MLB_INNER_CANDIDATE_RECIPE_FINGERPRINT_CONTRACT_VERSION,
+    preprocessingPolicyId: recipe.preprocessingPolicyId,
+    featurePolicyId: recipe.featurePolicyId,
+    modelFamilyId: recipe.modelFamilyId,
+    regularizationConfig: canonicalizeJSONSafeValue(recipe.regularizationConfig),
+    optimizerConfig: canonicalizeJSONSafeValue(recipe.optimizerConfig),
+    otherModelAffectingChoices: canonicalizeJSONSafeValue(recipe.otherModelAffectingChoices),
+  };
+
+  const sorted: Record<string, unknown> = {};
+  const keys = Object.getOwnPropertyNames(payload).sort();
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    sorted[key] = payload[key];
+  }
+
+  return JSON.stringify(sorted);
+}
+
+export type MLBInnerCandidateRecipeFingerprintResult =
+  | Readonly<{ ok: true; fingerprint: string }>
+  | Readonly<{ ok: false; issues: readonly MLBInnerCandidateRecipeFingerprintIssue[] }>;
+
+export type MLBInnerDevelopmentRecipeBudgetResult =
+  | Readonly<{ ok: true; value: MLBInnerDevelopmentRecipeBudget }>
+  | Readonly<{ ok: false; issues: readonly MLBInnerDevelopmentRecipeBudgetIssue[] }>;
+
+export function computeMLBInnerCandidateRecipeFingerprint(
+  recipe: MLBInnerCandidateRecipe,
+): MLBInnerCandidateRecipeFingerprintResult {
+  const issues: MLBInnerCandidateRecipeFingerprintIssue[] = [];
+
+  if (!validateMLBInnerCandidateRecipe(recipe, '$.recipe', issues)) {
+    return { ok: false, issues: issues as readonly MLBInnerCandidateRecipeFingerprintIssue[] };
+  }
+
+  const canonical = serializeCanonicalRecipeFingerprintPayload(recipe);
+  const fingerprint = createHash('sha256').update(canonical, 'utf8').digest('hex');
+
+  return { ok: true, fingerprint };
+}
+
+export function recordInnerCandidateRecipeExecution(
+  budget: MLBInnerDevelopmentRecipeBudget,
+  candidateRecipe: MLBInnerCandidateRecipe,
+): MLBInnerDevelopmentRecipeBudgetResult {
+  const budgetIssues: MLBInnerDevelopmentRecipeBudgetIssue[] = [];
+
+  if (!validateMLBInnerDevelopmentRecipeBudget(budget, '$.budget', budgetIssues)) {
+    return { ok: false, issues: budgetIssues as readonly MLBInnerDevelopmentRecipeBudgetIssue[] };
+  }
+
+  const recipeIssues: MLBInnerCandidateRecipeFingerprintIssue[] = [];
+  if (!validateMLBInnerCandidateRecipe(candidateRecipe, '$.candidateRecipe', recipeIssues)) {
+    return { ok: false, issues: recipeIssues as readonly MLBInnerDevelopmentRecipeBudgetIssue[] };
+  }
+
+  const fingerprintResult = computeMLBInnerCandidateRecipeFingerprint(candidateRecipe);
+  if (!fingerprintResult.ok) {
+    return { ok: false, issues: recipeIssues as readonly MLBInnerDevelopmentRecipeBudgetIssue[] };
+  }
+  const fingerprint = fingerprintResult.fingerprint;
+
+  const existingIdIndex = budget.seenRecipeIds.indexOf(candidateRecipe.candidateRecipeId);
+  const existingFingerprintIndex = budget.seenRecipeFingerprints.indexOf(fingerprint);
+
+  if (existingIdIndex !== -1 && existingFingerprintIndex !== -1) {
+    if (budget.seenComplexityRanks[existingIdIndex] !== candidateRecipe.complexityRank) {
+      return {
+        ok: false,
+        issues: [
+          {
+            code: 'COMPLEXITY_RANK_MISMATCH',
+            path: '$.candidateRecipe.complexityRank',
+            message: `Registered complexityRank ${budget.seenComplexityRanks[existingIdIndex]} differs from requested ${candidateRecipe.complexityRank}`,
+          } as MLBInnerDevelopmentRecipeBudgetIssue,
+        ],
+      };
+    }
+    const newEvaluationCount = budget.evaluationCount + 1;
+    return {
+      ok: true,
+      value: {
+        contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+        cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        maxDistinctRecipes: 12,
+        seenRecipeIds: budget.seenRecipeIds,
+        seenRecipeFingerprints: budget.seenRecipeFingerprints,
+        seenComplexityRanks: budget.seenComplexityRanks,
+        evaluationCount: newEvaluationCount,
+      },
+    };
+  }
+
+  if (existingIdIndex !== -1 && existingFingerprintIndex === -1) {
+    return {
+      ok: false,
+      issues: [
+        {
+          code: 'IDENTITY_MUTATION_CONFLICT',
+          path: '$.candidateRecipe',
+          message: `candidateRecipeId ${candidateRecipe.candidateRecipeId} is registered with a different fingerprint`,
+        } as MLBInnerDevelopmentRecipeBudgetIssue,
+      ],
+    };
+  }
+
+  if (existingIdIndex === -1 && existingFingerprintIndex !== -1) {
+    const registeredId = budget.seenRecipeIds[existingFingerprintIndex];
+    return {
+      ok: false,
+      issues: [
+        {
+          code: 'IDENTITY_ALIAS_CONFLICT',
+          path: '$.candidateRecipe.candidateRecipeId',
+          message: `fingerprint already registered under candidateRecipeId ${registeredId}`,
+        } as MLBInnerDevelopmentRecipeBudgetIssue,
+      ],
+    };
+  }
+
+  if (budget.seenRecipeIds.length >= 12) {
+    return {
+      ok: false,
+      issues: [
+        {
+          code: 'BUDGET_EXHAUSTED',
+          path: '$.budget.seenRecipeIds',
+          message: 'Maximum of 12 distinct recipes reached',
+        } as MLBInnerDevelopmentRecipeBudgetIssue,
+      ],
+    };
+  }
+
+  const newSeenRecipeIds = [...budget.seenRecipeIds, candidateRecipe.candidateRecipeId];
+  const newSeenRecipeFingerprints = [...budget.seenRecipeFingerprints, fingerprint];
+  const newSeenComplexityRanks = [...budget.seenComplexityRanks, candidateRecipe.complexityRank];
+  const newEvaluationCount = budget.evaluationCount + 1;
+
+  return {
+    ok: true,
+    value: {
+      contractVersion: MLB_INNER_DEVELOPMENT_RECIPE_BUDGET_CONTRACT_VERSION,
+      cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+      maxDistinctRecipes: 12,
+      seenRecipeIds: newSeenRecipeIds,
+      seenRecipeFingerprints: newSeenRecipeFingerprints,
+      seenComplexityRanks: newSeenComplexityRanks,
+      evaluationCount: newEvaluationCount,
+    },
+  };
 }
