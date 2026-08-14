@@ -58,3 +58,6 @@ temp
 
 # Prisma migrations are tracked in git
 # prisma/migrations/
+
+# Mutable MLB development runtime state
+var/mlb-development/
