@@ -88,6 +88,23 @@ export type MLBInnerDevelopmentCampaignGenesisResult =
     }>;
 
 /* -------------------------------------------------------------------------- */
+/*  Lock-held inspection result                                                */
+/* -------------------------------------------------------------------------- */
+
+export type MLBInnerDevelopmentCampaignInspectionResult =
+  | Readonly<{
+      ok: true;
+      state: 'READY';
+      anchor: MLBInnerDevelopmentCampaignAnchor;
+      ledger: MLBInnerDevelopmentCampaignLedger;
+    }>
+  | Readonly<{
+      ok: false;
+      state: MLBInnerDevelopmentCampaignLifecycleState;
+      issues: readonly MLBInnerDevelopmentCampaignLifecycleIssue[];
+    }>;
+
+/* -------------------------------------------------------------------------- */
 /*  Resume result                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -528,32 +545,32 @@ export async function initializeMLBInnerDevelopmentCampaign(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Resume / state inspection                                                 */
+/*  Lock-held lifecycle inspection                                             */
 /* -------------------------------------------------------------------------- */
 
-export async function resumeMLBInnerDevelopmentCampaign(
+/**
+ * Read-only lifecycle inspection intended to be called while the caller already
+ * owns the canonical B2-A campaign lock.
+ *
+ * This function performs the same anchor/ledger read, state classification, and
+ * campaign-identity reconciliation used by resume, but it does NOT acquire or
+ * release the campaign lock and does NOT mutate the filesystem.
+ *
+ * Future B3 registration orchestration should use this seam under its own
+ * acquired lock rather than reimplementing anchor/ledger read or state
+ * classification.
+ */
+export async function inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(
   repositoryRoot: string,
-): Promise<MLBInnerDevelopmentCampaignResumeResult> {
+): Promise<MLBInnerDevelopmentCampaignInspectionResult> {
   const issues: MLBInnerDevelopmentCampaignLifecycleIssue[] = [];
   const paths = resolveMLBInnerDevelopmentCampaignLifecyclePaths(repositoryRoot);
 
-  const lockResult = await acquireMLBInnerDevelopmentCampaignLock(repositoryRoot);
-  if (!lockResult.ok) {
-    pushLifecycleIssue(
-      issues,
-      'FAIL_CLOSED_LOCK_ACQUISITION_FAILED',
-      paths.lockPath,
-      lockResult.issues.map(i => i.message).join('; '),
-    );
-    return { ok: false, state: 'FAIL_CLOSED_LOCK_ACQUISITION_FAILED', issues: issues as readonly MLBInnerDevelopmentCampaignLifecycleIssue[] };
-  }
-
-  let lockReleased = false;
   let state: MLBInnerDevelopmentCampaignLifecycleState | 'READY' = 'READY';
   let anchorValue: MLBInnerDevelopmentCampaignAnchor | undefined;
   let ledgerValue: MLBInnerDevelopmentCampaignLedger | undefined;
 
-  const buildResumeResult = (): MLBInnerDevelopmentCampaignResumeResult => {
+  const buildInspectionResult = (): MLBInnerDevelopmentCampaignInspectionResult => {
     if (state === 'READY') {
       return {
         ok: true,
@@ -581,12 +598,12 @@ export async function resumeMLBInnerDevelopmentCampaign(
           path: paths.anchorPath,
           message: 'Campaign identity mismatch',
         });
-        return buildResumeResult();
+        return buildInspectionResult();
       }
 
       anchorValue = anchor;
       ledgerValue = ledger;
-      return buildResumeResult();
+      return buildInspectionResult();
     }
 
     if (anchorRead.ok) {
@@ -607,7 +624,7 @@ export async function resumeMLBInnerDevelopmentCampaign(
           });
         }
       }
-      return buildResumeResult();
+      return buildInspectionResult();
     }
 
     if (ledgerRead.ok) {
@@ -626,7 +643,7 @@ export async function resumeMLBInnerDevelopmentCampaign(
           message: anchorRead.issues.map(i => i.message).join('; '),
         });
       }
-      return buildResumeResult();
+      return buildInspectionResult();
     }
 
     if (anchorRead.issues[0]?.code !== 'ANCHOR_MISSING') {
@@ -636,7 +653,7 @@ export async function resumeMLBInnerDevelopmentCampaign(
         path: paths.anchorPath,
         message: anchorRead.issues.map(i => i.message).join('; '),
       });
-      return buildResumeResult();
+      return buildInspectionResult();
     }
 
     if (ledgerRead.issues[0]?.code !== 'LEDGER_MISSING') {
@@ -646,10 +663,60 @@ export async function resumeMLBInnerDevelopmentCampaign(
         path: paths.ledgerPath,
         message: ledgerRead.issues.map(i => i.message).join('; '),
       });
-      return buildResumeResult();
+      return buildInspectionResult();
     }
 
     state = 'NOT_INITIALIZED';
+    return buildInspectionResult();
+  } finally {
+    // No lock acquisition or release. No filesystem mutation.
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Resume / state inspection                                                 */
+/* -------------------------------------------------------------------------- */
+
+export async function resumeMLBInnerDevelopmentCampaign(
+  repositoryRoot: string,
+): Promise<MLBInnerDevelopmentCampaignResumeResult> {
+  const issues: MLBInnerDevelopmentCampaignLifecycleIssue[] = [];
+  const paths = resolveMLBInnerDevelopmentCampaignLifecyclePaths(repositoryRoot);
+
+  const lockResult = await acquireMLBInnerDevelopmentCampaignLock(repositoryRoot);
+  if (!lockResult.ok) {
+    pushLifecycleIssue(
+      issues,
+      'FAIL_CLOSED_LOCK_ACQUISITION_FAILED',
+      paths.lockPath,
+      lockResult.issues.map(i => i.message).join('; '),
+    );
+    return { ok: false, state: 'FAIL_CLOSED_LOCK_ACQUISITION_FAILED', issues: issues as readonly MLBInnerDevelopmentCampaignLifecycleIssue[] };
+  }
+
+  let lockReleased = false;
+  let inspectionResult = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(repositoryRoot);
+  let state: MLBInnerDevelopmentCampaignLifecycleState | 'READY' = inspectionResult.ok ? 'READY' : inspectionResult.state;
+  let anchorValue: MLBInnerDevelopmentCampaignAnchor | undefined = inspectionResult.ok ? inspectionResult.anchor : undefined;
+  let ledgerValue: MLBInnerDevelopmentCampaignLedger | undefined = inspectionResult.ok ? inspectionResult.ledger : undefined;
+
+  if (!inspectionResult.ok) {
+    issues.push(...inspectionResult.issues);
+  }
+
+  const buildResumeResult = (): MLBInnerDevelopmentCampaignResumeResult => {
+    if (state === 'READY') {
+      return {
+        ok: true,
+        state: 'READY',
+        anchor: anchorValue as MLBInnerDevelopmentCampaignAnchor,
+        ledger: ledgerValue as MLBInnerDevelopmentCampaignLedger,
+      };
+    }
+    return { ok: false, state: state as MLBInnerDevelopmentCampaignLifecycleState, issues: issues as readonly MLBInnerDevelopmentCampaignLifecycleIssue[] };
+  };
+
+  try {
     return buildResumeResult();
   } finally {
     if (!lockReleased) {

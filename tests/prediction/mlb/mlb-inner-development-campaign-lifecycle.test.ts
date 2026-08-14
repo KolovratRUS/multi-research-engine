@@ -461,4 +461,185 @@ describe('mlb-inner-development-campaign-lifecycle', () => {
       expect(ledgerExists).toBe(false);
     });
   });
+
+  describe('inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld', () => {
+    it('returns READY with validated ledger on healthy campaign under externally-held lock', async () => {
+      const { acquireMLBInnerDevelopmentCampaignLock, releaseMLBInnerDevelopmentCampaignLock } = await import('@/prediction/mlb/mlb-inner-development-campaign-ledger-store');
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+
+      await initializeMLBInnerDevelopmentCampaign(tempRoot, makeGenesisInput('2026-04-01T00:00:00.000Z'));
+      const lockResult = await acquireMLBInnerDevelopmentCampaignLock(tempRoot);
+      expect(lockResult.ok).toBe(true);
+
+      try {
+        const inspection = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+        expect(inspection.ok).toBe(true);
+        if (inspection.ok) {
+          expect(inspection.state).toBe('READY');
+          expect(inspection.anchor.anchorContractVersion).toBe(MLB_INNER_DEVELOPMENT_CAMPAIGN_ANCHOR_CONTRACT_VERSION);
+          expect(inspection.ledger.ledgerContractVersion).toBe(MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_CONTRACT_VERSION);
+        }
+      } finally {
+        if (lockResult.ok) {
+          await releaseMLBInnerDevelopmentCampaignLock(tempRoot, lockResult.ownershipToken);
+        }
+      }
+    });
+
+    it('does not release caller-owned lock', async () => {
+      const { acquireMLBInnerDevelopmentCampaignLock, releaseMLBInnerDevelopmentCampaignLock } = await import('@/prediction/mlb/mlb-inner-development-campaign-ledger-store');
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+
+      await initializeMLBInnerDevelopmentCampaign(tempRoot, makeGenesisInput('2026-04-01T00:00:00.000Z'));
+      const firstLock = await acquireMLBInnerDevelopmentCampaignLock(tempRoot);
+      expect(firstLock.ok).toBe(true);
+
+      if (firstLock.ok) {
+        await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+        const secondLock = await acquireMLBInnerDevelopmentCampaignLock(tempRoot);
+        expect(secondLock.ok).toBe(false);
+        if (!secondLock.ok) {
+          expect(secondLock.issues[0]?.code).toBe('LOCK_ALREADY_EXISTS');
+        }
+        await releaseMLBInnerDevelopmentCampaignLock(tempRoot, firstLock.ownershipToken);
+      }
+    });
+
+    it('does not acquire nested lock when lock is already held', async () => {
+      const { acquireMLBInnerDevelopmentCampaignLock, releaseMLBInnerDevelopmentCampaignLock } = await import('@/prediction/mlb/mlb-inner-development-campaign-ledger-store');
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+
+      await initializeMLBInnerDevelopmentCampaign(tempRoot, makeGenesisInput('2026-04-01T00:00:00.000Z'));
+      const firstLock = await acquireMLBInnerDevelopmentCampaignLock(tempRoot);
+      expect(firstLock.ok).toBe(true);
+
+      if (firstLock.ok) {
+        const inspection = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+        expect(inspection.ok).toBe(true);
+        if (inspection.ok) {
+          expect(inspection.state).toBe('READY');
+        }
+        await releaseMLBInnerDevelopmentCampaignLock(tempRoot, firstLock.ownershipToken);
+      }
+    });
+
+    it('returns NOT_INITIALIZED when both anchor and ledger are missing', async () => {
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+      const inspection = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+      expect(inspection.ok).toBe(false);
+      if (!inspection.ok) {
+        expect(inspection.state).toBe('NOT_INITIALIZED');
+      }
+    });
+
+    it('returns FAIL_CLOSED_LEDGER_WITHOUT_ANCHOR when ledger exists but anchor is missing', async () => {
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+      const ledgerDir = path.join(tempRoot, 'var', 'mlb-development', 'mlb-inner-development-campaign-ledger');
+      await fs.mkdir(ledgerDir, { recursive: true });
+      await fs.writeFile(path.join(ledgerDir, 'mlb-v1-train-only-inner-development-cycle-v1-ledger.json'), JSON.stringify({
+        ledgerContractVersion: MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_CONTRACT_VERSION,
+        developmentCycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        createdAt: '2026-04-01T00:00:00.000Z',
+        updatedAt: '2026-04-01T00:00:00.000Z',
+        budget: { contractVersion: 'mlb-inner-development-recipe-budget-v1', cycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID, maxDistinctRecipes: 12, seenRecipeIds: [], seenRecipeFingerprints: [], seenComplexityRanks: [], evaluationCount: 0 },
+        registeredRecipes: [],
+        attempts: [],
+      }));
+
+      const inspection = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+      expect(inspection.ok).toBe(false);
+      if (!inspection.ok) {
+        expect(inspection.state).toBe('FAIL_CLOSED_LEDGER_WITHOUT_ANCHOR');
+      }
+    });
+
+    it('returns FAIL_CLOSED_ANCHOR_WITHOUT_LEDGER when anchor exists but ledger is missing', async () => {
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+      await fs.mkdir(path.join(tempRoot, 'docs'), { recursive: true });
+      const identity = computeMLBInnerDevelopmentCampaignIdentity('2026-04-01T00:00:00.000Z');
+      const anchor = {
+        anchorContractVersion: MLB_INNER_DEVELOPMENT_CAMPAIGN_ANCHOR_CONTRACT_VERSION,
+        developmentCycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        canonicalLedgerDirectory: MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_DIRECTORY,
+        canonicalLedgerFilename: MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_FILENAME,
+        ledgerContractVersion: MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_CONTRACT_VERSION,
+        campaignIdentity: identity,
+      };
+      await fs.writeFile(path.join(tempRoot, 'docs', 'mlb-v1-train-only-inner-development-campaign-marker.md'), JSON.stringify(anchor, null, 2) + '\n');
+
+      const inspection = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+      expect(inspection.ok).toBe(false);
+      if (!inspection.ok) {
+        expect(inspection.state).toBe('FAIL_CLOSED_ANCHOR_WITHOUT_LEDGER');
+      }
+    });
+
+    it('returns FAIL_CLOSED_INVALID_ANCHOR for malformed anchor JSON', async () => {
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+      await fs.mkdir(path.join(tempRoot, 'docs'), { recursive: true });
+      await fs.writeFile(path.join(tempRoot, 'docs', 'mlb-v1-train-only-inner-development-campaign-marker.md'), 'not-json');
+
+      const inspection = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+      expect(inspection.ok).toBe(false);
+      if (!inspection.ok) {
+        expect(inspection.state).toBe('FAIL_CLOSED_INVALID_ANCHOR');
+      }
+    });
+
+    it('returns FAIL_CLOSED_INVALID_LEDGER for malformed ledger JSON', async () => {
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+      const ledgerDir = path.join(tempRoot, 'var', 'mlb-development', 'mlb-inner-development-campaign-ledger');
+      await fs.mkdir(ledgerDir, { recursive: true });
+      await fs.writeFile(path.join(ledgerDir, 'mlb-v1-train-only-inner-development-cycle-v1-ledger.json'), 'bad-json');
+      await fs.mkdir(path.join(tempRoot, 'docs'), { recursive: true });
+      const identity = computeMLBInnerDevelopmentCampaignIdentity('2026-04-01T00:00:00.000Z');
+      const anchor = {
+        anchorContractVersion: MLB_INNER_DEVELOPMENT_CAMPAIGN_ANCHOR_CONTRACT_VERSION,
+        developmentCycleId: MLB_INNER_DEVELOPMENT_CYCLE_ID,
+        canonicalLedgerDirectory: MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_DIRECTORY,
+        canonicalLedgerFilename: MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_FILENAME,
+        ledgerContractVersion: MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_CONTRACT_VERSION,
+        campaignIdentity: identity,
+      };
+      await fs.writeFile(path.join(tempRoot, 'docs', 'mlb-v1-train-only-inner-development-campaign-marker.md'), JSON.stringify(anchor, null, 2) + '\n');
+
+      const inspection = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+      expect(inspection.ok).toBe(false);
+      if (!inspection.ok) {
+        expect(inspection.state).toBe('FAIL_CLOSED_INVALID_LEDGER');
+      }
+    });
+
+    it('returns FAIL_CLOSED_CAMPAIGN_IDENTITY_MISMATCH on anchor/ledger identity mismatch', async () => {
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+      await initializeMLBInnerDevelopmentCampaign(tempRoot, makeGenesisInput('2026-04-01T00:00:00.000Z'));
+      const anchorPath = path.join(tempRoot, 'docs', 'mlb-v1-train-only-inner-development-campaign-marker.md');
+      const anchor = JSON.parse(await fs.readFile(anchorPath, 'utf-8'));
+      anchor.campaignIdentity = '0000000000000000000000000000000000000000000000000000000000000000';
+      await fs.writeFile(anchorPath, JSON.stringify(anchor, null, 2) + '\n');
+
+      const inspection = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+      expect(inspection.ok).toBe(false);
+      if (!inspection.ok) {
+        expect(inspection.state).toBe('FAIL_CLOSED_CAMPAIGN_IDENTITY_MISMATCH');
+      }
+    });
+
+    it('performs no filesystem mutation', async () => {
+      const { inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld } = await import('@/prediction/mlb/mlb-inner-development-campaign-lifecycle');
+      const anchorPath = path.join(tempRoot, 'docs', 'mlb-v1-train-only-inner-development-campaign-marker.md');
+      const ledgerPath = path.join(tempRoot, 'var', 'mlb-development', 'mlb-inner-development-campaign-ledger', 'mlb-v1-train-only-inner-development-cycle-v1-ledger.json');
+
+      const anchorBefore = await fs.access(anchorPath).then(() => true).catch(() => false);
+      const ledgerBefore = await fs.access(ledgerPath).then(() => true).catch(() => false);
+
+      await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+
+      const anchorAfter = await fs.access(anchorPath).then(() => true).catch(() => false);
+      const ledgerAfter = await fs.access(ledgerPath).then(() => true).catch(() => false);
+
+      expect(anchorAfter).toBe(anchorBefore);
+      expect(ledgerAfter).toBe(ledgerBefore);
+    });
+  });
 });
