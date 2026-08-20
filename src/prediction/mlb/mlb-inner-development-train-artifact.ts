@@ -23,14 +23,17 @@ import {
 export const MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_CONTRACT_VERSION =
   'mlb-inner-development-train-artifact-v1' as const;
 
-export const MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_ID =
-  `${MLB_INNER_DEVELOPMENT_CAMPAIGN_DATASET_ID}::${MLB_INNER_DEVELOPMENT_CAMPAIGN_MANIFEST_ID}::train-only` as const;
-
-export const MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_DATASET_ID =
-  MLB_INNER_DEVELOPMENT_CAMPAIGN_DATASET_ID;
-
 export const MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_FEATURE_MANIFEST_ID =
   MLB_INNER_DEVELOPMENT_CAMPAIGN_MANIFEST_ID;
+
+export const MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_DATASET_ID =
+  'mlb-historical-labelled-dataset-v1-2026-04-01-2026-04-23-360' as const;
+
+export const MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_MATRIX_ID =
+  `${MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_DATASET_ID}::${MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_FEATURE_MANIFEST_ID}` as const;
+
+export const MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_ID =
+  `${MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_DATASET_ID}::${MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_FEATURE_MANIFEST_ID}::train-only` as const;
 
 export const MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_FEATURE_POLICY_ID =
   MLB_INNER_DEVELOPMENT_CAMPAIGN_FEATURE_POLICY_ID;
@@ -611,6 +614,22 @@ export function validateMLBInnerDevelopmentTrainArtifact(
       );
     } else {
       validRowCollection = collectionResult.value;
+      if (validRowCollection.datasetId !== MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_DATASET_ID) {
+        pushIssue(
+          issues,
+          'INVALID_LITERAL',
+          '$.rowCollection.datasetId',
+          `rowCollection.datasetId must be ${MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_DATASET_ID}`,
+        );
+      }
+      if (validRowCollection.matrixId !== MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_MATRIX_ID) {
+        pushIssue(
+          issues,
+          'INVALID_LITERAL',
+          '$.rowCollection.matrixId',
+          `rowCollection.matrixId must be ${MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_MATRIX_ID}`,
+        );
+      }
       if (validRowCollection.rowCount !== MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_ROW_COUNT) {
         pushIssue(
           issues,

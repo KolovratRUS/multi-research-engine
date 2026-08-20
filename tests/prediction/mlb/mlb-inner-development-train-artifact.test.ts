@@ -3,6 +3,7 @@ import {
   MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_CONTRACT_VERSION,
   MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_ID,
   MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_DATASET_ID,
+  MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_MATRIX_ID,
   MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_FEATURE_MANIFEST_ID,
   MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_FEATURE_POLICY_ID,
   MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_PREPROCESSING_POLICY_ID,
@@ -82,7 +83,7 @@ function buildSyntheticTrainCollection(): MLBTrainOnlyInnerRowCollection {
   return buildCollectionFromRows(rows);
 }
 
-function buildCollectionFromRows(rows: MLBOuterTrainRow[]): MLBTrainOnlyInnerRowCollection {
+function buildCollectionFromRows(rows: readonly MLBOuterTrainRow[]): MLBTrainOnlyInnerRowCollection {
   const homeWinCount = rows.filter((r) => r.targetValue === 1).length;
   const awayWinCount = rows.filter((r) => r.targetValue === 0).length;
 
@@ -91,7 +92,7 @@ function buildCollectionFromRows(rows: MLBOuterTrainRow[]): MLBTrainOnlyInnerRow
     sport: 'MLB',
     target: 'OFFICIAL_FINAL_GAME_WINNER',
     targetEncoding: 'HOME_WIN_1_AWAY_WIN_0',
-    matrixId: 'mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360::mlb-real-pregame-winner-feature-manifest-v1',
+    matrixId: MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_MATRIX_ID,
     manifestId: MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_FEATURE_MANIFEST_ID,
     datasetId: MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_DATASET_ID,
     rowCount: rows.length,
@@ -152,13 +153,19 @@ describe('MLBInnerDevelopmentTrainArtifact contract constants', () => {
 
   it('2: exact deterministic artifact ID', () => {
     expect(MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_ID).toBe(
-      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360::mlb-real-pregame-winner-feature-manifest-v1::train-only',
+      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-04-23-360::mlb-real-pregame-winner-feature-manifest-v1::train-only',
     );
   });
 
   it('3: exact source dataset ID', () => {
     expect(MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_DATASET_ID).toBe(
-      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360',
+      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-04-23-360',
+    );
+  });
+
+  it('3b: exact source matrix ID', () => {
+    expect(MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_MATRIX_ID).toBe(
+      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-04-23-360::mlb-real-pregame-winner-feature-manifest-v1',
     );
   });
 
@@ -517,6 +524,117 @@ describe('validateMLBInnerDevelopmentTrainArtifact', () => {
     if (!result.ok) {
       expect(result.issues.some((i) => i.code === 'INVALID_JSON_VALUE')).toBe(true);
     }
+  });
+
+  it('40b: artifact full-corpus sourceDatasetId rejected', () => {
+    const rowCollection = buildSyntheticTrainCollection();
+    const bad = {
+      ...buildCanonicalArtifact({ rowCollection }),
+      sourceDatasetId: 'mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360',
+    };
+    const result = validateMLBInnerDevelopmentTrainArtifact(bad);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_LITERAL' && i.path === '$.sourceDatasetId')).toBe(true);
+    }
+  });
+
+  it('40c: rowCollection full-corpus datasetId rejected', () => {
+    const rows = buildSyntheticTrainCollection().rows;
+    const badCollection = buildCollectionFromRows(rows);
+    (badCollection as unknown as Record<string, unknown>).datasetId =
+      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360';
+    const bad = buildRawArtifact({ rowCollection: badCollection });
+    const result = validateMLBInnerDevelopmentTrainArtifact(bad);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_LITERAL' && i.path === '$.rowCollection.datasetId')).toBe(true);
+    }
+  });
+
+  it('40d: rowCollection full-corpus matrixId rejected', () => {
+    const rows = buildSyntheticTrainCollection().rows;
+    const badCollection = buildCollectionFromRows(rows);
+    (badCollection as unknown as Record<string, unknown>).matrixId =
+      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360::mlb-real-pregame-winner-feature-manifest-v1';
+    const bad = buildRawArtifact({ rowCollection: badCollection });
+    const result = validateMLBInnerDevelopmentTrainArtifact(bad);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_LITERAL' && i.path === '$.rowCollection.matrixId')).toBe(true);
+    }
+  });
+
+  it('40e: arbitrary non-empty rowCollection matrixId rejected', () => {
+    const rows = buildSyntheticTrainCollection().rows;
+    const badCollection = buildCollectionFromRows(rows);
+    (badCollection as unknown as Record<string, unknown>).matrixId = 'arbitrary-matrix-id';
+    const bad = buildRawArtifact({ rowCollection: badCollection });
+    const result = validateMLBInnerDevelopmentTrainArtifact(bad);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.code === 'INVALID_LITERAL' && i.path === '$.rowCollection.matrixId')).toBe(true);
+    }
+  });
+
+  it('40f: correct TRAIN-source matrixId accepted', () => {
+    const rows = buildSyntheticTrainCollection().rows;
+    const goodCollection = buildCollectionFromRows(rows);
+    const artifact = buildMLBInnerDevelopmentTrainArtifact(goodCollection);
+    expect(artifact.rowCollection.matrixId).toBe(MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_MATRIX_ID);
+  });
+
+  it('40g: serializer does not rewrite invalid datasetId', () => {
+    const rows = buildSyntheticTrainCollection().rows;
+    const badCollection = buildCollectionFromRows(rows);
+    (badCollection as unknown as Record<string, unknown>).datasetId =
+      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360';
+    const bad = buildRawArtifact({ rowCollection: badCollection });
+    const result = validateMLBInnerDevelopmentTrainArtifact(bad);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const datasetIssue = result.issues.find((i) => i.path === '$.rowCollection.datasetId');
+      expect(datasetIssue).toBeDefined();
+      expect(datasetIssue?.message).toContain('mlb-historical-labelled-dataset-v1-2026-04-01-2026-04-23-360');
+    }
+  });
+
+  it('40h: serializer does not rewrite invalid matrixId', () => {
+    const rows = buildSyntheticTrainCollection().rows;
+    const badCollection = buildCollectionFromRows(rows);
+    (badCollection as unknown as Record<string, unknown>).matrixId = 'arbitrary-matrix-id';
+    const bad = buildRawArtifact({ rowCollection: badCollection });
+    const result = validateMLBInnerDevelopmentTrainArtifact(bad);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const matrixIssue = result.issues.find((i) => i.path === '$.rowCollection.matrixId');
+      expect(matrixIssue).toBeDefined();
+      expect(matrixIssue?.message).toContain(MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_SOURCE_MATRIX_ID);
+    }
+  });
+
+  it('40i: builder does not rewrite invalid datasetId', () => {
+    const rows = buildSyntheticTrainCollection().rows;
+    const badCollection = buildCollectionFromRows(rows);
+    (badCollection as unknown as Record<string, unknown>).datasetId =
+      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360';
+    expect(() => buildMLBInnerDevelopmentTrainArtifact(badCollection)).toThrow();
+  });
+
+  it('40j: builder does not rewrite invalid matrixId', () => {
+    const rows = buildSyntheticTrainCollection().rows;
+    const badCollection = buildCollectionFromRows(rows);
+    (badCollection as unknown as Record<string, unknown>).matrixId = 'arbitrary-matrix-id';
+    expect(() => buildMLBInnerDevelopmentTrainArtifact(badCollection)).toThrow();
+  });
+
+  it('40k: full-lineage ID absent from valid sealed artifact bytes', () => {
+    const artifact = buildCanonicalArtifact();
+    const serialized = serializeMLBInnerDevelopmentTrainArtifact(artifact);
+    expect(serialized).not.toContain('mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360');
+    expect(serialized).not.toContain(
+      'mlb-historical-labelled-dataset-v1-2026-04-01-2026-05-03-360::mlb-real-pregame-winner-feature-manifest-v1',
+    );
   });
 });
 
