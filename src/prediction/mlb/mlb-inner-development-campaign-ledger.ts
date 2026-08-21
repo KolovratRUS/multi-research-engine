@@ -4,7 +4,14 @@ import {
   MLBInnerCandidateRecipe,
   MLBInnerDevelopmentRecipeBudget,
   computeMLBInnerCandidateRecipeFingerprint,
+  type MLBInnerFoldMetricResult,
+  type MLBInnerAggregateResult,
+  type MLBInnerCandidateGateResult,
 } from '@/prediction/mlb/mlb-train-only-inner-development-evaluator';
+import {
+  type MLBInnerDevelopmentCandidateExecutionIssue,
+  type MLBInnerDevelopmentCandidateExecutionResult,
+} from '@/prediction/mlb/mlb-inner-development-candidate-execution';
 
 export const MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_CONTRACT_VERSION =
   'mlb-inner-development-campaign-ledger-v1' as const;
@@ -58,16 +65,122 @@ export type MLBInnerDevelopmentRegisteredRecipeRecord = Readonly<{
   otherModelAffectingChoices: unknown;
 }>;
 
-export type MLBInnerDevelopmentAttemptRecord = Readonly<{
+export type MLBInnerDevelopmentBaseAttempt = Readonly<{
   attemptNumber: number;
   candidateRecipeId: string;
   recipeFingerprint: string;
   complexityRank: number;
   developmentCycleId: string;
-  status: MLBInnerDevelopmentAttemptStatus;
   attemptTimestamp: string;
   foldIds: readonly string[];
 }>;
+
+export type MLBInnerDevelopmentAttemptExecutionProvenance = Readonly<{
+  verifiedArtifactSha256: string;
+  verifiedArtifactByteLength: number;
+  artifactId: string;
+  foldPlanId: string;
+}>;
+
+export type MLBInnerDevelopmentAttemptTerminalSuccess = Readonly<{
+  kind: 'SUCCESS';
+  lowLevelFitCount: number;
+  foldResults: readonly MLBInnerFoldMetricResult[];
+  aggregate: MLBInnerAggregateResult;
+  gate: MLBInnerCandidateGateResult;
+}>;
+
+export type MLBInnerDevelopmentAttemptTerminalFailure = Readonly<{
+  kind: 'FAILURE';
+  lowLevelFitCount: number;
+  failedFoldId?: string;
+  issues: readonly MLBInnerDevelopmentCandidateExecutionIssue[];
+}>;
+
+export type MLBInnerDevelopmentAttemptTerminalEvidence =
+  | MLBInnerDevelopmentAttemptTerminalSuccess
+  | MLBInnerDevelopmentAttemptTerminalFailure;
+
+export type MLBInnerDevelopmentRegisteredAttempt = Readonly<{
+  attemptNumber: number;
+  candidateRecipeId: string;
+  recipeFingerprint: string;
+  complexityRank: number;
+  developmentCycleId: string;
+  status: 'REGISTERED';
+  attemptTimestamp: string;
+  foldIds: readonly string[];
+}>;
+
+export type MLBInnerDevelopmentRunningAttempt = Readonly<{
+  attemptNumber: number;
+  candidateRecipeId: string;
+  recipeFingerprint: string;
+  complexityRank: number;
+  developmentCycleId: string;
+  status: 'RUNNING';
+  attemptTimestamp: string;
+  foldIds: readonly string[];
+  executionProvenance: MLBInnerDevelopmentAttemptExecutionProvenance;
+}>;
+
+export type MLBInnerDevelopmentCompletedEligibleAttempt = Readonly<{
+  attemptNumber: number;
+  candidateRecipeId: string;
+  recipeFingerprint: string;
+  complexityRank: number;
+  developmentCycleId: string;
+  status: 'COMPLETED_INNER_ELIGIBLE';
+  attemptTimestamp: string;
+  foldIds: readonly string[];
+  executionProvenance: MLBInnerDevelopmentAttemptExecutionProvenance;
+  terminalExecution: MLBInnerDevelopmentAttemptTerminalSuccess;
+}>;
+
+export type MLBInnerDevelopmentCompletedRejectedAttempt = Readonly<{
+  attemptNumber: number;
+  candidateRecipeId: string;
+  recipeFingerprint: string;
+  complexityRank: number;
+  developmentCycleId: string;
+  status: 'COMPLETED_INNER_REJECTED';
+  attemptTimestamp: string;
+  foldIds: readonly string[];
+  executionProvenance: MLBInnerDevelopmentAttemptExecutionProvenance;
+  terminalExecution: MLBInnerDevelopmentAttemptTerminalSuccess;
+}>;
+
+export type MLBInnerDevelopmentFailedAttempt = Readonly<{
+  attemptNumber: number;
+  candidateRecipeId: string;
+  recipeFingerprint: string;
+  complexityRank: number;
+  developmentCycleId: string;
+  status: 'FAILED';
+  attemptTimestamp: string;
+  foldIds: readonly string[];
+  executionProvenance: MLBInnerDevelopmentAttemptExecutionProvenance;
+  terminalExecution: MLBInnerDevelopmentAttemptTerminalFailure;
+}>;
+
+export type MLBInnerDevelopmentInterruptedAttempt = Readonly<{
+  attemptNumber: number;
+  candidateRecipeId: string;
+  recipeFingerprint: string;
+  complexityRank: number;
+  developmentCycleId: string;
+  status: 'INTERRUPTED';
+  attemptTimestamp: string;
+  foldIds: readonly string[];
+}>;
+
+export type MLBInnerDevelopmentAttemptRecord =
+  | MLBInnerDevelopmentRegisteredAttempt
+  | MLBInnerDevelopmentRunningAttempt
+  | MLBInnerDevelopmentCompletedEligibleAttempt
+  | MLBInnerDevelopmentCompletedRejectedAttempt
+  | MLBInnerDevelopmentFailedAttempt
+  | MLBInnerDevelopmentInterruptedAttempt;
 
 export type MLBInnerDevelopmentCampaignLedger = Readonly<{
   ledgerContractVersion: typeof MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_CONTRACT_VERSION;
@@ -108,7 +221,19 @@ export type MLBInnerDevelopmentCampaignLedgerIssue = Readonly<{
     | 'RECIPE_DESCRIPTOR_MUTATED'
     | 'DUPLICATE_REGISTERED_RECIPE_ID'
     | 'DUPLICATE_REGISTERED_FINGERPRINT'
-    | 'RECIPE_COUNT_MISMATCH';
+    | 'RECIPE_COUNT_MISMATCH'
+    | 'MISSING_EXECUTION_PROVENANCE'
+    | 'UNEXPECTED_EXECUTION_PROVENANCE'
+    | 'INVALID_EXECUTION_PROVENANCE'
+    | 'MISSING_TERMINAL_EXECUTION'
+    | 'UNEXPECTED_TERMINAL_EXECUTION'
+    | 'INVALID_TERMINAL_EXECUTION'
+    | 'GATE_STATUS_MISMATCH'
+    | 'NONFINITE_METRIC'
+    | 'INVALID_FOLD_SET'
+    | 'MIXED_CANDIDATE_RECIPE_ID'
+    | 'CLASS_COUNT_MISMATCH'
+    | 'IDENTITY_MISMATCH';
   path: string;
   message: string;
 }>;
@@ -170,7 +295,56 @@ const RECIPE_RECORD_KNOWN_FIELDS = new Set([
   'otherModelAffectingChoices',
 ]);
 
-const ATTEMPT_RECORD_KNOWN_FIELDS = new Set([
+const ALL_ATTEMPT_KNOWN_FIELDS = new Set([
+  'attemptNumber',
+  'candidateRecipeId',
+  'recipeFingerprint',
+  'complexityRank',
+  'developmentCycleId',
+  'status',
+  'attemptTimestamp',
+  'foldIds',
+  'executionProvenance',
+  'terminalExecution',
+]);
+
+const REGISTERED_ATTEMPT_ALLOWED_FIELDS = new Set([
+  'attemptNumber',
+  'candidateRecipeId',
+  'recipeFingerprint',
+  'complexityRank',
+  'developmentCycleId',
+  'status',
+  'attemptTimestamp',
+  'foldIds',
+]);
+
+const RUNNING_ATTEMPT_ALLOWED_FIELDS = new Set([
+  'attemptNumber',
+  'candidateRecipeId',
+  'recipeFingerprint',
+  'complexityRank',
+  'developmentCycleId',
+  'status',
+  'attemptTimestamp',
+  'foldIds',
+  'executionProvenance',
+]);
+
+const TERMINAL_ATTEMPT_ALLOWED_FIELDS = new Set([
+  'attemptNumber',
+  'candidateRecipeId',
+  'recipeFingerprint',
+  'complexityRank',
+  'developmentCycleId',
+  'status',
+  'attemptTimestamp',
+  'foldIds',
+  'executionProvenance',
+  'terminalExecution',
+]);
+
+const INTERRUPTED_ATTEMPT_ALLOWED_FIELDS = new Set([
   'attemptNumber',
   'candidateRecipeId',
   'recipeFingerprint',
@@ -636,7 +810,7 @@ function validateAttemptRecord(
   }
 
   for (const key of Object.getOwnPropertyNames(attempt)) {
-    if (!ATTEMPT_RECORD_KNOWN_FIELDS.has(key)) {
+    if (!ALL_ATTEMPT_KNOWN_FIELDS.has(key)) {
       pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].${key}`, `Unknown field ${key}`);
       return null;
     }
@@ -744,7 +918,48 @@ function validateAttemptRecord(
     normalizedFoldIds.push(raw);
   }
 
-  return {
+  const allowedFields = new Set<string>();
+  switch (status.value) {
+    case 'REGISTERED':
+      REGISTERED_ATTEMPT_ALLOWED_FIELDS.forEach(allowedFields.add, allowedFields);
+      break;
+    case 'RUNNING':
+      RUNNING_ATTEMPT_ALLOWED_FIELDS.forEach(allowedFields.add, allowedFields);
+      break;
+    case 'COMPLETED_INNER_ELIGIBLE':
+    case 'COMPLETED_INNER_REJECTED':
+    case 'FAILED':
+      TERMINAL_ATTEMPT_ALLOWED_FIELDS.forEach(allowedFields.add, allowedFields);
+      break;
+    case 'INTERRUPTED':
+      INTERRUPTED_ATTEMPT_ALLOWED_FIELDS.forEach(allowedFields.add, allowedFields);
+      break;
+    default:
+      break;
+  }
+
+  for (const key of Object.getOwnPropertyNames(attempt)) {
+    if (!allowedFields.has(key)) {
+      const disallowedKey = key;
+      if (
+        disallowedKey === 'executionProvenance' ||
+        disallowedKey === 'terminalExecution'
+        ) {
+        if (status.value === 'REGISTERED' || status.value === 'INTERRUPTED') {
+          pushIssue(issues, 'UNEXPECTED_EXECUTION_PROVENANCE', `$.attempts[${index}].${disallowedKey}`, `${disallowedKey} is not allowed for status ${status.value}`);
+        } else if (status.value === 'RUNNING') {
+          pushIssue(issues, 'UNEXPECTED_TERMINAL_EXECUTION', `$.attempts[${index}].${disallowedKey}`, `${disallowedKey} is not allowed for status ${status.value}`);
+        } else {
+          pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].${disallowedKey}`, `Unknown field ${disallowedKey}`);
+        }
+      } else {
+        pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].${key}`, `Unknown field ${key}`);
+      }
+      return null;
+    }
+  }
+
+  const attemptRecordBase = {
     attemptNumber: attemptNumber.value as number,
     candidateRecipeId: candidateRecipeId.value as string,
     recipeFingerprint: recipeFingerprint.value as string,
@@ -754,6 +969,849 @@ function validateAttemptRecord(
     attemptTimestamp: attemptTimestamp.value as string,
     foldIds: normalizedFoldIds,
   };
+
+  if (status.value === 'REGISTERED' || status.value === 'INTERRUPTED') {
+    return attemptRecordBase as MLBInnerDevelopmentAttemptRecord;
+  }
+
+  if (status.value === 'RUNNING') {
+    const provenance = ownDataProperty(attempt, 'executionProvenance', `$.attempts[${index}].executionProvenance`, issues);
+    if (provenance.kind === 'accessor') return null;
+    if (provenance.kind === 'missing') {
+      pushIssue(issues, 'MISSING_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance`, 'executionProvenance is required for RUNNING');
+      return null;
+    }
+    if (!isPlainObject(provenance.value)) {
+      pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance`, 'executionProvenance must be a plain object');
+      return null;
+    }
+    if (!rejectSymbolProperties(provenance.value as Record<string, unknown>, `$.attempts[${index}].executionProvenance`, issues)) {
+      return null;
+    }
+    for (const key of Object.getOwnPropertyNames(provenance.value)) {
+      if (!PROVENANCE_KNOWN_FIELDS.has(key)) {
+        pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].executionProvenance.${key}`, `Unknown field ${key}`);
+        return null;
+      }
+    }
+
+    const verifiedArtifactSha256 = ownDataProperty(provenance.value, 'verifiedArtifactSha256', `$.attempts[${index}].executionProvenance.verifiedArtifactSha256`, issues);
+    if (verifiedArtifactSha256.kind === 'accessor') return null;
+    if (verifiedArtifactSha256.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.verifiedArtifactSha256`, 'verifiedArtifactSha256 is required');
+      return null;
+    }
+    if (typeof verifiedArtifactSha256.value !== 'string' || !/^[0-9a-f]{64}$/.test(verifiedArtifactSha256.value)) {
+      pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.verifiedArtifactSha256`, 'verifiedArtifactSha256 must be lowercase 64-char hex');
+      return null;
+    }
+
+    const verifiedArtifactByteLength = ownDataProperty(provenance.value, 'verifiedArtifactByteLength', `$.attempts[${index}].executionProvenance.verifiedArtifactByteLength`, issues);
+    if (verifiedArtifactByteLength.kind === 'accessor') return null;
+    if (verifiedArtifactByteLength.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.verifiedArtifactByteLength`, 'verifiedArtifactByteLength is required');
+      return null;
+    }
+    if (typeof verifiedArtifactByteLength.value !== 'number' || !Number.isInteger(verifiedArtifactByteLength.value) || verifiedArtifactByteLength.value <= 0) {
+      pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.verifiedArtifactByteLength`, 'verifiedArtifactByteLength must be a positive integer');
+      return null;
+    }
+
+    const artifactId = ownDataProperty(provenance.value, 'artifactId', `$.attempts[${index}].executionProvenance.artifactId`, issues);
+    if (artifactId.kind === 'accessor') return null;
+    if (artifactId.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.artifactId`, 'artifactId is required');
+      return null;
+    }
+    if (typeof artifactId.value !== 'string' || artifactId.value.trim() === '' || artifactId.value !== artifactId.value.trim()) {
+      pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.artifactId`, 'artifactId must be a non-empty trimmed string');
+      return null;
+    }
+
+    const foldPlanId = ownDataProperty(provenance.value, 'foldPlanId', `$.attempts[${index}].executionProvenance.foldPlanId`, issues);
+    if (foldPlanId.kind === 'accessor') return null;
+    if (foldPlanId.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.foldPlanId`, 'foldPlanId is required');
+      return null;
+    }
+    if (typeof foldPlanId.value !== 'string' || foldPlanId.value.trim() === '' || foldPlanId.value !== foldPlanId.value.trim()) {
+      pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.foldPlanId`, 'foldPlanId must be a non-empty trimmed string');
+      return null;
+    }
+
+    return {
+      ...attemptRecordBase,
+      status: 'RUNNING' as const,
+      executionProvenance: {
+        verifiedArtifactSha256: verifiedArtifactSha256.value as string,
+        verifiedArtifactByteLength: verifiedArtifactByteLength.value as number,
+        artifactId: artifactId.value as string,
+        foldPlanId: foldPlanId.value as string,
+      },
+    };
+  }
+
+  const provenance = ownDataProperty(attempt, 'executionProvenance', `$.attempts[${index}].executionProvenance`, issues);
+  if (provenance.kind === 'accessor') return null;
+  if (provenance.kind === 'missing') {
+    pushIssue(issues, 'MISSING_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance`, 'executionProvenance is required for terminal attempts');
+    return null;
+  }
+  if (!isPlainObject(provenance.value)) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance`, 'executionProvenance must be a plain object');
+    return null;
+  }
+  if (!rejectSymbolProperties(provenance.value as Record<string, unknown>, `$.attempts[${index}].executionProvenance`, issues)) {
+    return null;
+  }
+  for (const key of Object.getOwnPropertyNames(provenance.value)) {
+    if (!PROVENANCE_KNOWN_FIELDS.has(key)) {
+      pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].executionProvenance.${key}`, `Unknown field ${key}`);
+      return null;
+    }
+  }
+
+  const tVerifiedArtifactSha256 = ownDataProperty(provenance.value, 'verifiedArtifactSha256', `$.attempts[${index}].executionProvenance.verifiedArtifactSha256`, issues);
+  if (tVerifiedArtifactSha256.kind === 'accessor') return null;
+  if (tVerifiedArtifactSha256.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.verifiedArtifactSha256`, 'verifiedArtifactSha256 is required');
+    return null;
+  }
+  if (typeof tVerifiedArtifactSha256.value !== 'string' || !/^[0-9a-f]{64}$/.test(tVerifiedArtifactSha256.value)) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.verifiedArtifactSha256`, 'verifiedArtifactSha256 must be lowercase 64-char hex');
+    return null;
+  }
+
+  const tVerifiedArtifactByteLength = ownDataProperty(provenance.value, 'verifiedArtifactByteLength', `$.attempts[${index}].executionProvenance.verifiedArtifactByteLength`, issues);
+  if (tVerifiedArtifactByteLength.kind === 'accessor') return null;
+  if (tVerifiedArtifactByteLength.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.verifiedArtifactByteLength`, 'verifiedArtifactByteLength is required');
+    return null;
+  }
+  if (typeof tVerifiedArtifactByteLength.value !== 'number' || !Number.isInteger(tVerifiedArtifactByteLength.value) || tVerifiedArtifactByteLength.value <= 0) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.verifiedArtifactByteLength`, 'verifiedArtifactByteLength must be a positive integer');
+    return null;
+  }
+
+  const tArtifactId = ownDataProperty(provenance.value, 'artifactId', `$.attempts[${index}].executionProvenance.artifactId`, issues);
+  if (tArtifactId.kind === 'accessor') return null;
+  if (tArtifactId.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.artifactId`, 'artifactId is required');
+    return null;
+  }
+  if (typeof tArtifactId.value !== 'string' || tArtifactId.value.trim() === '' || tArtifactId.value !== tArtifactId.value.trim()) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.artifactId`, 'artifactId must be a non-empty trimmed string');
+    return null;
+  }
+
+  const tFoldPlanId = ownDataProperty(provenance.value, 'foldPlanId', `$.attempts[${index}].executionProvenance.foldPlanId`, issues);
+  if (tFoldPlanId.kind === 'accessor') return null;
+  if (tFoldPlanId.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.foldPlanId`, 'foldPlanId is required');
+    return null;
+  }
+  if (typeof tFoldPlanId.value !== 'string' || tFoldPlanId.value.trim() === '' || tFoldPlanId.value !== tFoldPlanId.value.trim()) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.foldPlanId`, 'foldPlanId must be a non-empty trimmed string');
+    return null;
+  }
+
+  const normalizedProvenance: MLBInnerDevelopmentAttemptExecutionProvenance = {
+    verifiedArtifactSha256: tVerifiedArtifactSha256.value as string,
+    verifiedArtifactByteLength: tVerifiedArtifactByteLength.value as number,
+    artifactId: tArtifactId.value as string,
+    foldPlanId: tFoldPlanId.value as string,
+  };
+
+  const terminal = ownDataProperty(attempt, 'terminalExecution', `$.attempts[${index}].terminalExecution`, issues);
+  if (terminal.kind === 'accessor') return null;
+  if (terminal.kind === 'missing') {
+    pushIssue(issues, 'MISSING_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution`, 'terminalExecution is required for terminal attempts');
+    return null;
+  }
+  if (!isPlainObject(terminal.value)) {
+    pushIssue(issues, 'INVALID_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution`, 'terminalExecution must be a plain object');
+    return null;
+  }
+  if (!rejectSymbolProperties(terminal.value as Record<string, unknown>, `$.attempts[${index}].terminalExecution`, issues)) {
+    return null;
+  }
+  for (const key of Object.getOwnPropertyNames(terminal.value)) {
+    if (!TERMINAL_KNOWN_FIELDS.has(key)) {
+      pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].terminalExecution.${key}`, `Unknown field ${key}`);
+      return null;
+    }
+  }
+
+  const terminalKind = ownDataProperty(terminal.value, 'kind', `$.attempts[${index}].terminalExecution.kind`, issues);
+  if (terminalKind.kind === 'accessor') return null;
+  if (terminalKind.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.kind`, 'kind is required');
+    return null;
+  }
+  const terminalKindValue = terminalKind.value as 'SUCCESS' | 'FAILURE';
+
+  if (status.value === 'COMPLETED_INNER_ELIGIBLE' || status.value === 'COMPLETED_INNER_REJECTED') {
+    if (terminalKindValue !== 'SUCCESS') {
+      pushIssue(issues, 'INVALID_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution.kind`, 'kind must be SUCCESS for eligible/rejected');
+      return null;
+    }
+  }
+
+  if (status.value === 'FAILED') {
+    if (terminalKindValue !== 'FAILURE') {
+      pushIssue(issues, 'INVALID_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution.kind`, 'kind must be FAILURE for failed');
+      return null;
+    }
+  }
+
+  const lowLevelFitCount = ownDataProperty(terminal.value, 'lowLevelFitCount', `$.attempts[${index}].terminalExecution.lowLevelFitCount`, issues);
+  if (lowLevelFitCount.kind === 'accessor') return null;
+  if (lowLevelFitCount.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.lowLevelFitCount`, 'lowLevelFitCount is required');
+    return null;
+  }
+  if (typeof lowLevelFitCount.value !== 'number' || !Number.isInteger(lowLevelFitCount.value) || lowLevelFitCount.value < 0) {
+    pushIssue(issues, 'INVALID_NUMBER', `$.attempts[${index}].terminalExecution.lowLevelFitCount`, 'lowLevelFitCount must be a non-negative integer');
+    return null;
+  }
+
+  if (terminalKindValue === 'SUCCESS') {
+    const foldResults = ownDataProperty(terminal.value, 'foldResults', `$.attempts[${index}].terminalExecution.foldResults`, issues);
+    if (foldResults.kind === 'accessor') return null;
+    if (foldResults.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults`, 'foldResults is required for SUCCESS');
+      return null;
+    }
+    if (!Array.isArray(foldResults.value)) {
+      pushIssue(issues, 'INVALID_ARRAY', `$.attempts[${index}].terminalExecution.foldResults`, 'foldResults must be an array');
+      return null;
+    }
+
+    const aggregate = ownDataProperty(terminal.value, 'aggregate', `$.attempts[${index}].terminalExecution.aggregate`, issues);
+    if (aggregate.kind === 'accessor') return null;
+    if (aggregate.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate`, 'aggregate is required for SUCCESS');
+      return null;
+    }
+    if (!isPlainObject(aggregate.value)) {
+      pushIssue(issues, 'INVALID_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution.aggregate`, 'aggregate must be a plain object');
+      return null;
+    }
+    if (!rejectSymbolProperties(aggregate.value as Record<string, unknown>, `$.attempts[${index}].terminalExecution.aggregate`, issues)) {
+      return null;
+    }
+    for (const key of Object.getOwnPropertyNames(aggregate.value)) {
+      if (!AGGREGATE_KNOWN_FIELDS.has(key)) {
+        pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].terminalExecution.aggregate.${key}`, `Unknown field ${key}`);
+        return null;
+      }
+    }
+
+    const aggregateContractVersion = ownDataProperty(aggregate.value, 'contractVersion', `$.attempts[${index}].terminalExecution.aggregate.contractVersion`, issues);
+    if (aggregateContractVersion.kind === 'accessor') return null;
+    if (aggregateContractVersion.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.contractVersion`, 'contractVersion is required');
+      return null;
+    }
+    if (aggregateContractVersion.value !== 'mlb-inner-aggregate-result-v1') {
+      pushIssue(issues, 'INVALID_LITERAL', `$.attempts[${index}].terminalExecution.aggregate.contractVersion`, `contractVersion must be mlb-inner-aggregate-result-v1`);
+      return null;
+    }
+
+    const aggregateCandidateRecipeId = ownDataProperty(aggregate.value, 'candidateRecipeId', `$.attempts[${index}].terminalExecution.aggregate.candidateRecipeId`, issues);
+    if (aggregateCandidateRecipeId.kind === 'accessor') return null;
+    if (aggregateCandidateRecipeId.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.candidateRecipeId`, 'candidateRecipeId is required');
+      return null;
+    }
+    if (typeof aggregateCandidateRecipeId.value !== 'string' || aggregateCandidateRecipeId.value.trim() === '' || aggregateCandidateRecipeId.value !== aggregateCandidateRecipeId.value.trim()) {
+      pushIssue(issues, 'INVALID_STRING', `$.attempts[${index}].terminalExecution.aggregate.candidateRecipeId`, 'candidateRecipeId must be a non-empty trimmed string');
+      return null;
+    }
+    if (aggregateCandidateRecipeId.value !== attemptRecordBase.candidateRecipeId) {
+      pushIssue(issues, 'IDENTITY_MISMATCH', `$.attempts[${index}].terminalExecution.aggregate.candidateRecipeId`, 'aggregate candidateRecipeId must match attempt candidateRecipeId');
+      return null;
+    }
+
+    const foldCount = ownDataProperty(aggregate.value, 'foldCount', `$.attempts[${index}].terminalExecution.aggregate.foldCount`, issues);
+    if (foldCount.kind === 'accessor') return null;
+    if (foldCount.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.foldCount`, 'foldCount is required');
+      return null;
+    }
+    if (typeof foldCount.value !== 'number' || !Number.isInteger(foldCount.value) || foldCount.value <= 0) {
+      pushIssue(issues, 'INVALID_INTEGER', `$.attempts[${index}].terminalExecution.aggregate.foldCount`, 'foldCount must be a positive integer');
+      return null;
+    }
+    if (foldCount.value !== (foldResults.value as unknown[]).length) {
+      pushIssue(issues, 'INVALID_FOLD_SET', `$.attempts[${index}].terminalExecution.aggregate.foldCount`, 'aggregate foldCount must equal terminalExecution.foldResults.length');
+      return null;
+    }
+    if (!attemptRecordBase.foldIds || foldCount.value !== attemptRecordBase.foldIds.length) {
+      pushIssue(issues, 'INVALID_FOLD_SET', `$.attempts[${index}].terminalExecution.aggregate.foldCount`, 'aggregate foldCount must equal attempt.foldIds.length');
+      return null;
+    }
+
+    const aggregateValidationRowCount = ownDataProperty(aggregate.value, 'aggregateValidationRowCount', `$.attempts[${index}].terminalExecution.aggregate.aggregateValidationRowCount`, issues);
+    if (aggregateValidationRowCount.kind === 'accessor') return null;
+    if (aggregateValidationRowCount.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateValidationRowCount`, 'aggregateValidationRowCount is required');
+      return null;
+    }
+    if (typeof aggregateValidationRowCount.value !== 'number' || !Number.isInteger(aggregateValidationRowCount.value) || aggregateValidationRowCount.value <= 0) {
+      pushIssue(issues, 'INVALID_INTEGER', `$.attempts[${index}].terminalExecution.aggregate.aggregateValidationRowCount`, 'aggregateValidationRowCount must be a positive integer');
+      return null;
+    }
+
+    const aggregateCandidateLogLoss = ownDataProperty(aggregate.value, 'aggregateCandidateLogLoss', `$.attempts[${index}].terminalExecution.aggregate.aggregateCandidateLogLoss`, issues);
+    if (aggregateCandidateLogLoss.kind === 'accessor') return null;
+    if (aggregateCandidateLogLoss.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateCandidateLogLoss`, 'aggregateCandidateLogLoss is required');
+      return null;
+    }
+    if (typeof aggregateCandidateLogLoss.value !== 'number' || !Number.isFinite(aggregateCandidateLogLoss.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.aggregateCandidateLogLoss`, 'aggregateCandidateLogLoss must be a finite number');
+      return null;
+    }
+
+    const aggregateCandidateBrierScore = ownDataProperty(aggregate.value, 'aggregateCandidateBrierScore', `$.attempts[${index}].terminalExecution.aggregate.aggregateCandidateBrierScore`, issues);
+    if (aggregateCandidateBrierScore.kind === 'accessor') return null;
+    if (aggregateCandidateBrierScore.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateCandidateBrierScore`, 'aggregateCandidateBrierScore is required');
+      return null;
+    }
+    if (typeof aggregateCandidateBrierScore.value !== 'number' || !Number.isFinite(aggregateCandidateBrierScore.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.aggregateCandidateBrierScore`, 'aggregateCandidateBrierScore must be a finite number');
+      return null;
+    }
+
+    const aggregateCandidateRocAuc = ownDataProperty(aggregate.value, 'aggregateCandidateRocAuc', `$.attempts[${index}].terminalExecution.aggregate.aggregateCandidateRocAuc`, issues);
+    if (aggregateCandidateRocAuc.kind === 'accessor') return null;
+    if (aggregateCandidateRocAuc.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateCandidateRocAuc`, 'aggregateCandidateRocAuc is required');
+      return null;
+    }
+    if (typeof aggregateCandidateRocAuc.value !== 'number' || !Number.isFinite(aggregateCandidateRocAuc.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.aggregateCandidateRocAuc`, 'aggregateCandidateRocAuc must be a finite number');
+      return null;
+    }
+
+    const aggregateP50LogLoss = ownDataProperty(aggregate.value, 'aggregateP50LogLoss', `$.attempts[${index}].terminalExecution.aggregate.aggregateP50LogLoss`, issues);
+    if (aggregateP50LogLoss.kind === 'accessor') return null;
+    if (aggregateP50LogLoss.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateP50LogLoss`, 'aggregateP50LogLoss is required');
+      return null;
+    }
+    if (typeof aggregateP50LogLoss.value !== 'number' || !Number.isFinite(aggregateP50LogLoss.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.aggregateP50LogLoss`, 'aggregateP50LogLoss must be a finite number');
+      return null;
+    }
+
+    const aggregateP50BrierScore = ownDataProperty(aggregate.value, 'aggregateP50BrierScore', `$.attempts[${index}].terminalExecution.aggregate.aggregateP50BrierScore`, issues);
+    if (aggregateP50BrierScore.kind === 'accessor') return null;
+    if (aggregateP50BrierScore.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateP50BrierScore`, 'aggregateP50BrierScore is required');
+      return null;
+    }
+    if (typeof aggregateP50BrierScore.value !== 'number' || !Number.isFinite(aggregateP50BrierScore.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.aggregateP50BrierScore`, 'aggregateP50BrierScore must be a finite number');
+      return null;
+    }
+
+    const aggregateP50RocAuc = ownDataProperty(aggregate.value, 'aggregateP50RocAuc', `$.attempts[${index}].terminalExecution.aggregate.aggregateP50RocAuc`, issues);
+    if (aggregateP50RocAuc.kind === 'accessor') return null;
+    if (aggregateP50RocAuc.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateP50RocAuc`, 'aggregateP50RocAuc is required');
+      return null;
+    }
+    if (typeof aggregateP50RocAuc.value !== 'number' || !Number.isFinite(aggregateP50RocAuc.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.aggregateP50RocAuc`, 'aggregateP50RocAuc must be a finite number');
+      return null;
+    }
+
+    const aggregateFoldTrainPriorLogLoss = ownDataProperty(aggregate.value, 'aggregateFoldTrainPriorLogLoss', `$.attempts[${index}].terminalExecution.aggregate.aggregateFoldTrainPriorLogLoss`, issues);
+    if (aggregateFoldTrainPriorLogLoss.kind === 'accessor') return null;
+    if (aggregateFoldTrainPriorLogLoss.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateFoldTrainPriorLogLoss`, 'aggregateFoldTrainPriorLogLoss is required');
+      return null;
+    }
+    if (typeof aggregateFoldTrainPriorLogLoss.value !== 'number' || !Number.isFinite(aggregateFoldTrainPriorLogLoss.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.aggregateFoldTrainPriorLogLoss`, 'aggregateFoldTrainPriorLogLoss must be a finite number');
+      return null;
+    }
+
+    const aggregateFoldTrainPriorBrierScore = ownDataProperty(aggregate.value, 'aggregateFoldTrainPriorBrierScore', `$.attempts[${index}].terminalExecution.aggregate.aggregateFoldTrainPriorBrierScore`, issues);
+    if (aggregateFoldTrainPriorBrierScore.kind === 'accessor') return null;
+    if (aggregateFoldTrainPriorBrierScore.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateFoldTrainPriorBrierScore`, 'aggregateFoldTrainPriorBrierScore is required');
+      return null;
+    }
+    if (typeof aggregateFoldTrainPriorBrierScore.value !== 'number' || !Number.isFinite(aggregateFoldTrainPriorBrierScore.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.aggregateFoldTrainPriorBrierScore`, 'aggregateFoldTrainPriorBrierScore must be a finite number');
+      return null;
+    }
+
+    const aggregateFoldTrainPriorRocAuc = ownDataProperty(aggregate.value, 'aggregateFoldTrainPriorRocAuc', `$.attempts[${index}].terminalExecution.aggregate.aggregateFoldTrainPriorRocAuc`, issues);
+    if (aggregateFoldTrainPriorRocAuc.kind === 'accessor') return null;
+    if (aggregateFoldTrainPriorRocAuc.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.aggregateFoldTrainPriorRocAuc`, 'aggregateFoldTrainPriorRocAuc is required');
+      return null;
+    }
+    if (typeof aggregateFoldTrainPriorRocAuc.value !== 'number' || !Number.isFinite(aggregateFoldTrainPriorRocAuc.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.aggregateFoldTrainPriorRocAuc`, 'aggregateFoldTrainPriorRocAuc must be a finite number');
+      return null;
+    }
+
+    const worstFoldCandidateLogLoss = ownDataProperty(aggregate.value, 'worstFoldCandidateLogLoss', `$.attempts[${index}].terminalExecution.aggregate.worstFoldCandidateLogLoss`, issues);
+    if (worstFoldCandidateLogLoss.kind === 'accessor') return null;
+    if (worstFoldCandidateLogLoss.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.worstFoldCandidateLogLoss`, 'worstFoldCandidateLogLoss is required');
+      return null;
+    }
+    if (typeof worstFoldCandidateLogLoss.value !== 'number' || !Number.isFinite(worstFoldCandidateLogLoss.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.worstFoldCandidateLogLoss`, 'worstFoldCandidateLogLoss must be a finite number');
+      return null;
+    }
+
+    const worstFoldCandidateBrierScore = ownDataProperty(aggregate.value, 'worstFoldCandidateBrierScore', `$.attempts[${index}].terminalExecution.aggregate.worstFoldCandidateBrierScore`, issues);
+    if (worstFoldCandidateBrierScore.kind === 'accessor') return null;
+    if (worstFoldCandidateBrierScore.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.aggregate.worstFoldCandidateBrierScore`, 'worstFoldCandidateBrierScore is required');
+      return null;
+    }
+    if (typeof worstFoldCandidateBrierScore.value !== 'number' || !Number.isFinite(worstFoldCandidateBrierScore.value)) {
+      pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.aggregate.worstFoldCandidateBrierScore`, 'worstFoldCandidateBrierScore must be a finite number');
+      return null;
+    }
+
+    const validateBeatingCount = (value: unknown, field: string, path: string) => {
+      const result = ownDataProperty(value as Record<string, unknown>, field, path, issues);
+      if (result.kind === 'accessor') return null as never;
+      if (result.kind === 'missing') {
+        pushIssue(issues, 'MISSING_FIELD', path, `${field} is required`);
+        return null as never;
+      }
+      if (typeof result.value !== 'number' || !Number.isInteger(result.value) || result.value < 0) {
+        pushIssue(issues, 'INVALID_INTEGER', path, `${field} must be a non-negative integer`);
+        return null as never;
+      }
+      if (result.value > (foldCount.value as number)) {
+        pushIssue(issues, 'INVALID_INTEGER', path, `${field} must not exceed foldCount`);
+        return null as never;
+      }
+      return result.value as number;
+    };
+
+    const foldsBeatingP50OnLogLoss = validateBeatingCount(aggregate.value, 'foldsBeatingP50OnLogLoss', `$.attempts[${index}].terminalExecution.aggregate.foldsBeatingP50OnLogLoss`);
+    if (foldsBeatingP50OnLogLoss === null as never) return null;
+
+    const foldsBeatingP50OnBrier = validateBeatingCount(aggregate.value, 'foldsBeatingP50OnBrier', `$.attempts[${index}].terminalExecution.aggregate.foldsBeatingP50OnBrier`);
+    if (foldsBeatingP50OnBrier === null as never) return null;
+
+    const foldsBeatingFoldTrainPriorOnLogLoss = validateBeatingCount(aggregate.value, 'foldsBeatingFoldTrainPriorOnLogLoss', `$.attempts[${index}].terminalExecution.aggregate.foldsBeatingFoldTrainPriorOnLogLoss`);
+    if (foldsBeatingFoldTrainPriorOnLogLoss === null as never) return null;
+
+    const foldsBeatingFoldTrainPriorOnBrier = validateBeatingCount(aggregate.value, 'foldsBeatingFoldTrainPriorOnBrier', `$.attempts[${index}].terminalExecution.aggregate.foldsBeatingFoldTrainPriorOnBrier`);
+    if (foldsBeatingFoldTrainPriorOnBrier === null as never) return null;
+
+    const gate = ownDataProperty(terminal.value, 'gate', `$.attempts[${index}].terminalExecution.gate`, issues);
+    if (gate.kind === 'accessor') return null;
+    if (gate.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.gate`, 'gate is required for SUCCESS');
+      return null;
+    }
+    if (!isPlainObject(gate.value)) {
+      pushIssue(issues, 'INVALID_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution.gate`, 'gate must be a plain object');
+      return null;
+    }
+    if (!rejectSymbolProperties(gate.value as Record<string, unknown>, `$.attempts[${index}].terminalExecution.gate`, issues)) {
+      return null;
+    }
+    for (const key of Object.getOwnPropertyNames(gate.value)) {
+      if (!GATE_KNOWN_FIELDS.has(key)) {
+        pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].terminalExecution.gate.${key}`, `Unknown field ${key}`);
+        return null;
+      }
+    }
+
+    const eligibility = ownDataProperty(gate.value, 'eligibility', `$.attempts[${index}].terminalExecution.gate.eligibility`, issues);
+    if (eligibility.kind === 'accessor') return null;
+    if (eligibility.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.gate.eligibility`, 'eligibility is required');
+      return null;
+    }
+    if (eligibility.value !== 'INNER_ELIGIBLE' && eligibility.value !== 'INNER_REJECTED') {
+      pushIssue(issues, 'INVALID_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution.gate.eligibility`, 'eligibility must be INNER_ELIGIBLE or INNER_REJECTED');
+      return null;
+    }
+    if (status.value === 'COMPLETED_INNER_ELIGIBLE' && eligibility.value !== 'INNER_ELIGIBLE') {
+      pushIssue(issues, 'GATE_STATUS_MISMATCH', `$.attempts[${index}].terminalExecution.gate.eligibility`, 'eligible status requires INNER_ELIGIBLE gate');
+      return null;
+    }
+    if (status.value === 'COMPLETED_INNER_REJECTED' && eligibility.value !== 'INNER_REJECTED') {
+      pushIssue(issues, 'GATE_STATUS_MISMATCH', `$.attempts[${index}].terminalExecution.gate.eligibility`, 'rejected status requires INNER_REJECTED gate');
+      return null;
+    }
+
+    const reasons = ownDataProperty(gate.value, 'reasons', `$.attempts[${index}].terminalExecution.gate.reasons`, issues);
+    if (reasons.kind === 'accessor') return null;
+    if (reasons.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.gate.reasons`, 'reasons is required');
+      return null;
+    }
+    if (!Array.isArray(reasons.value)) {
+      pushIssue(issues, 'INVALID_ARRAY', `$.attempts[${index}].terminalExecution.gate.reasons`, 'reasons must be an array');
+      return null;
+    }
+
+    const terminalExecutionRaw = {
+      kind: 'SUCCESS',
+      lowLevelFitCount: lowLevelFitCount.value as number,
+      foldResults: (foldResults.value as unknown[]).map((foldResult, foldIndex) => {
+        const readResult = readDataArrayElement(foldResults.value, foldIndex, `$.attempts[${index}].terminalExecution.foldResults`, issues);
+        if (!readResult.ok) return null as never;
+        const rawFold = readResult.value;
+        if (!isPlainObject(rawFold)) {
+          pushIssue(issues, 'INVALID_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}]`, 'fold result must be a plain object');
+          return null as never;
+        }
+        if (!rejectSymbolProperties(rawFold as Record<string, unknown>, `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}]`, issues)) {
+          return null as never;
+        }
+        for (const foldKey of Object.getOwnPropertyNames(rawFold)) {
+          if (!FOLD_RESULT_KNOWN_FIELDS.has(foldKey)) {
+            pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].${foldKey}`, `Unknown field ${foldKey}`);
+            return null as never;
+          }
+        }
+
+        const contractVersion = ownDataProperty(rawFold, 'contractVersion', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].contractVersion`, issues);
+        if (contractVersion.kind === 'accessor') return null as never;
+        if (contractVersion.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].contractVersion`, 'contractVersion is required');
+          return null as never;
+        }
+        if (contractVersion.value !== 'mlb-inner-fold-metric-result-v1') {
+          pushIssue(issues, 'INVALID_LITERAL', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].contractVersion`, `contractVersion must be mlb-inner-fold-metric-result-v1`);
+          return null as never;
+        }
+
+        const foldId = ownDataProperty(rawFold, 'foldId', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldId`, issues);
+        if (foldId.kind === 'accessor') return null as never;
+        if (foldId.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldId`, 'foldId is required');
+          return null as never;
+        }
+        if (typeof foldId.value !== 'string' || foldId.value.trim() === '' || foldId.value !== foldId.value.trim()) {
+          pushIssue(issues, 'INVALID_STRING', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldId`, 'foldId must be a non-empty trimmed string');
+          return null as never;
+        }
+
+        const candidateRecipeId = ownDataProperty(rawFold, 'candidateRecipeId', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateRecipeId`, issues);
+        if (candidateRecipeId.kind === 'accessor') return null as never;
+        if (candidateRecipeId.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateRecipeId`, 'candidateRecipeId is required');
+          return null as never;
+        }
+        if (typeof candidateRecipeId.value !== 'string' || candidateRecipeId.value.trim() === '' || candidateRecipeId.value !== candidateRecipeId.value.trim()) {
+          pushIssue(issues, 'INVALID_STRING', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateRecipeId`, 'candidateRecipeId must be a non-empty trimmed string');
+          return null as never;
+        }
+        if (candidateRecipeId.value !== attemptRecordBase.candidateRecipeId) {
+          pushIssue(issues, 'MIXED_CANDIDATE_RECIPE_ID', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateRecipeId`, 'fold candidateRecipeId must match attempt candidateRecipeId');
+          return null as never;
+        }
+
+        const rowCount = ownDataProperty(rawFold, 'rowCount', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].rowCount`, issues);
+        if (rowCount.kind === 'accessor') return null as never;
+        if (rowCount.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].rowCount`, 'rowCount is required');
+          return null as never;
+        }
+        if (typeof rowCount.value !== 'number' || !Number.isInteger(rowCount.value) || rowCount.value <= 0) {
+          pushIssue(issues, 'INVALID_INTEGER', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].rowCount`, 'rowCount must be a positive integer');
+          return null as never;
+        }
+
+        const targetHomeWinCount = ownDataProperty(rawFold, 'targetHomeWinCount', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].targetHomeWinCount`, issues);
+        if (targetHomeWinCount.kind === 'accessor') return null as never;
+        if (targetHomeWinCount.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].targetHomeWinCount`, 'targetHomeWinCount is required');
+          return null as never;
+        }
+        if (typeof targetHomeWinCount.value !== 'number' || !Number.isInteger(targetHomeWinCount.value) || targetHomeWinCount.value < 0) {
+          pushIssue(issues, 'INVALID_INTEGER', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].targetHomeWinCount`, 'targetHomeWinCount must be a non-negative integer');
+          return null as never;
+        }
+
+        const targetAwayWinCount = ownDataProperty(rawFold, 'targetAwayWinCount', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].targetAwayWinCount`, issues);
+        if (targetAwayWinCount.kind === 'accessor') return null as never;
+        if (targetAwayWinCount.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].targetAwayWinCount`, 'targetAwayWinCount is required');
+          return null as never;
+        }
+        if (typeof targetAwayWinCount.value !== 'number' || !Number.isInteger(targetAwayWinCount.value) || targetAwayWinCount.value < 0) {
+          pushIssue(issues, 'INVALID_INTEGER', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].targetAwayWinCount`, 'targetAwayWinCount must be a non-negative integer');
+          return null as never;
+        }
+        if (targetHomeWinCount.value + targetAwayWinCount.value !== rowCount.value) {
+          pushIssue(issues, 'CLASS_COUNT_MISMATCH', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}]`, 'targetHomeWinCount + targetAwayWinCount must equal rowCount');
+          return null as never;
+        }
+
+        const candidateLogLoss = ownDataProperty(rawFold, 'candidateLogLoss', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateLogLoss`, issues);
+        if (candidateLogLoss.kind === 'accessor') return null as never;
+        if (candidateLogLoss.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateLogLoss`, 'candidateLogLoss is required');
+          return null as never;
+        }
+        if (typeof candidateLogLoss.value !== 'number' || !Number.isFinite(candidateLogLoss.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateLogLoss`, 'candidateLogLoss must be a finite number');
+          return null as never;
+        }
+
+        const candidateBrierScore = ownDataProperty(rawFold, 'candidateBrierScore', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateBrierScore`, issues);
+        if (candidateBrierScore.kind === 'accessor') return null as never;
+        if (candidateBrierScore.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateBrierScore`, 'candidateBrierScore is required');
+          return null as never;
+        }
+        if (typeof candidateBrierScore.value !== 'number' || !Number.isFinite(candidateBrierScore.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateBrierScore`, 'candidateBrierScore must be a finite number');
+          return null as never;
+        }
+
+        const candidateRocAuc = ownDataProperty(rawFold, 'candidateRocAuc', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateRocAuc`, issues);
+        if (candidateRocAuc.kind === 'accessor') return null as never;
+        if (candidateRocAuc.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateRocAuc`, 'candidateRocAuc is required');
+          return null as never;
+        }
+        if (typeof candidateRocAuc.value !== 'number' || !Number.isFinite(candidateRocAuc.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].candidateRocAuc`, 'candidateRocAuc must be a finite number');
+          return null as never;
+        }
+
+        const p50LogLoss = ownDataProperty(rawFold, 'p50LogLoss', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].p50LogLoss`, issues);
+        if (p50LogLoss.kind === 'accessor') return null as never;
+        if (p50LogLoss.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].p50LogLoss`, 'p50LogLoss is required');
+          return null as never;
+        }
+        if (typeof p50LogLoss.value !== 'number' || !Number.isFinite(p50LogLoss.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].p50LogLoss`, 'p50LogLoss must be a finite number');
+          return null as never;
+        }
+
+        const p50BrierScore = ownDataProperty(rawFold, 'p50BrierScore', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].p50BrierScore`, issues);
+        if (p50BrierScore.kind === 'accessor') return null as never;
+        if (p50BrierScore.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].p50BrierScore`, 'p50BrierScore is required');
+          return null as never;
+        }
+        if (typeof p50BrierScore.value !== 'number' || !Number.isFinite(p50BrierScore.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].p50BrierScore`, 'p50BrierScore must be a finite number');
+          return null as never;
+        }
+
+        const p50RocAuc = ownDataProperty(rawFold, 'p50RocAuc', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].p50RocAuc`, issues);
+        if (p50RocAuc.kind === 'accessor') return null as never;
+        if (p50RocAuc.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].p50RocAuc`, 'p50RocAuc is required');
+          return null as never;
+        }
+        if (typeof p50RocAuc.value !== 'number' || !Number.isFinite(p50RocAuc.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].p50RocAuc`, 'p50RocAuc must be a finite number');
+          return null as never;
+        }
+
+        const foldTrainPriorLogLoss = ownDataProperty(rawFold, 'foldTrainPriorLogLoss', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorLogLoss`, issues);
+        if (foldTrainPriorLogLoss.kind === 'accessor') return null as never;
+        if (foldTrainPriorLogLoss.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorLogLoss`, 'foldTrainPriorLogLoss is required');
+          return null as never;
+        }
+        if (typeof foldTrainPriorLogLoss.value !== 'number' || !Number.isFinite(foldTrainPriorLogLoss.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorLogLoss`, 'foldTrainPriorLogLoss must be a finite number');
+          return null as never;
+        }
+
+        const foldTrainPriorBrierScore = ownDataProperty(rawFold, 'foldTrainPriorBrierScore', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorBrierScore`, issues);
+        if (foldTrainPriorBrierScore.kind === 'accessor') return null as never;
+        if (foldTrainPriorBrierScore.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorBrierScore`, 'foldTrainPriorBrierScore is required');
+          return null as never;
+        }
+        if (typeof foldTrainPriorBrierScore.value !== 'number' || !Number.isFinite(foldTrainPriorBrierScore.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorBrierScore`, 'foldTrainPriorBrierScore must be a finite number');
+          return null as never;
+        }
+
+        const foldTrainPriorRocAuc = ownDataProperty(rawFold, 'foldTrainPriorRocAuc', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorRocAuc`, issues);
+        if (foldTrainPriorRocAuc.kind === 'accessor') return null as never;
+        if (foldTrainPriorRocAuc.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorRocAuc`, 'foldTrainPriorRocAuc is required');
+          return null as never;
+        }
+        if (typeof foldTrainPriorRocAuc.value !== 'number' || !Number.isFinite(foldTrainPriorRocAuc.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorRocAuc`, 'foldTrainPriorRocAuc must be a finite number');
+          return null as never;
+        }
+
+        const foldTrainPriorProbability = ownDataProperty(rawFold, 'foldTrainPriorProbability', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorProbability`, issues);
+        if (foldTrainPriorProbability.kind === 'accessor') return null as never;
+        if (foldTrainPriorProbability.kind === 'missing') {
+          pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorProbability`, 'foldTrainPriorProbability is required');
+          return null as never;
+        }
+        if (typeof foldTrainPriorProbability.value !== 'number' || !Number.isFinite(foldTrainPriorProbability.value)) {
+          pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].foldTrainPriorProbability`, 'foldTrainPriorProbability must be a finite number');
+          return null as never;
+        }
+
+        return {
+          contractVersion: contractVersion.value as 'mlb-inner-fold-metric-result-v1',
+          foldId: foldId.value as string,
+          candidateRecipeId: candidateRecipeId.value as string,
+          rowCount: rowCount.value as number,
+          targetHomeWinCount: targetHomeWinCount.value as number,
+          targetAwayWinCount: targetAwayWinCount.value as number,
+          candidateLogLoss: candidateLogLoss.value as number,
+          candidateBrierScore: candidateBrierScore.value as number,
+          candidateRocAuc: candidateRocAuc.value as number,
+          p50LogLoss: p50LogLoss.value as number,
+          p50BrierScore: p50BrierScore.value as number,
+          p50RocAuc: p50RocAuc.value as number,
+          foldTrainPriorLogLoss: foldTrainPriorLogLoss.value as number,
+          foldTrainPriorBrierScore: foldTrainPriorBrierScore.value as number,
+          foldTrainPriorRocAuc: foldTrainPriorRocAuc.value as number,
+          foldTrainPriorProbability: foldTrainPriorProbability.value as number,
+        };
+      }),
+      aggregate: aggregate.value as MLBInnerAggregateResult,
+      gate: gate.value as MLBInnerCandidateGateResult,
+    };
+
+    const normalizedFoldResults = terminalExecutionRaw.foldResults as unknown[];
+    if (normalizedFoldResults.some((fold) => fold === null)) {
+      return null as never;
+    }
+    const typedFoldResults = normalizedFoldResults as MLBInnerFoldMetricResult[];
+    if (!attemptRecordBase.foldIds || typedFoldResults.length !== attemptRecordBase.foldIds.length) {
+      pushIssue(issues, 'INVALID_FOLD_SET', `$.attempts[${index}].terminalExecution.foldResults`, 'foldResults length must equal attempt.foldIds.length');
+      return null as never;
+    }
+    for (let i = 0; i < typedFoldResults.length; i++) {
+      if (typedFoldResults[i].foldId !== attemptRecordBase.foldIds[i]) {
+        pushIssue(issues, 'INVALID_FOLD_SET', `$.attempts[${index}].terminalExecution.foldResults[${i}]`, `foldResults[${i}].foldId must equal attempt.foldIds[${i}]`);
+        return null as never;
+      }
+    }
+
+    const terminalExecution = {
+      ...terminalExecutionRaw,
+      foldResults: typedFoldResults,
+    } as MLBInnerDevelopmentAttemptTerminalSuccess;
+
+    return {
+      ...attemptRecordBase,
+      status: status.value as 'COMPLETED_INNER_ELIGIBLE' | 'COMPLETED_INNER_REJECTED',
+      executionProvenance: normalizedProvenance,
+      terminalExecution,
+    };
+  } else {
+    const failedFoldId = ownDataProperty(terminal.value, 'failedFoldId', `$.attempts[${index}].terminalExecution.failedFoldId`, issues);
+  if (failedFoldId.kind !== 'missing' && failedFoldId.kind !== 'data') {
+    return null;
+  }
+  if (failedFoldId.kind === 'data') {
+    if (typeof failedFoldId.value !== 'string' || failedFoldId.value.trim() === '' || failedFoldId.value !== failedFoldId.value.trim()) {
+      pushIssue(issues, 'INVALID_STRING', `$.attempts[${index}].terminalExecution.failedFoldId`, 'failedFoldId must be a non-empty trimmed string when present');
+      return null;
+    }
+  }
+
+  const terminalIssues = ownDataProperty(terminal.value, 'issues', `$.attempts[${index}].terminalExecution.issues`, issues);
+  if (terminalIssues.kind === 'accessor') return null;
+  if (terminalIssues.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.issues`, 'issues is required');
+    return null;
+  }
+  if (!Array.isArray(terminalIssues.value)) {
+    pushIssue(issues, 'INVALID_ARRAY', `$.attempts[${index}].terminalExecution.issues`, 'issues must be an array');
+    return null;
+  }
+  const normalizedTerminalIssues: MLBInnerDevelopmentCandidateExecutionIssue[] = [];
+  for (let i = 0; i < (terminalIssues.value as unknown[]).length; i++) {
+    const issueResult = readDataArrayElement(terminalIssues.value, i, `$.attempts[${index}].terminalExecution.issues`, issues);
+    if (!issueResult.ok) return null;
+    const rawIssue = issueResult.value;
+    if (!isPlainObject(rawIssue)) {
+      pushIssue(issues, 'INVALID_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution.issues[${i}]`, 'issue must be a plain object');
+      return null;
+    }
+    if (!rejectSymbolProperties(rawIssue as Record<string, unknown>, `$.attempts[${index}].terminalExecution.issues[${i}]`, issues)) {
+      return null;
+    }
+    for (const issueKey of Object.getOwnPropertyNames(rawIssue)) {
+      if (!TERMINAL_ISSUE_KNOWN_FIELDS.has(issueKey)) {
+        pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].terminalExecution.issues[${i}].${issueKey}`, `Unknown field ${issueKey}`);
+        return null;
+      }
+    }
+
+    const issueCode = ownDataProperty(rawIssue, 'code', `$.attempts[${index}].terminalExecution.issues[${i}].code`, issues);
+    if (issueCode.kind === 'accessor') return null;
+    if (issueCode.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.issues[${i}].code`, 'code is required');
+      return null;
+    }
+    if (typeof issueCode.value !== 'string' || issueCode.value.trim() === '' || issueCode.value !== issueCode.value.trim()) {
+      pushIssue(issues, 'INVALID_STRING', `$.attempts[${index}].terminalExecution.issues[${i}].code`, 'code must be a non-empty trimmed string');
+      return null;
+    }
+
+    const issuePath = ownDataProperty(rawIssue, 'path', `$.attempts[${index}].terminalExecution.issues[${i}].path`, issues);
+    if (issuePath.kind === 'accessor') return null;
+    if (issuePath.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.issues[${i}].path`, 'path is required');
+      return null;
+    }
+    if (typeof issuePath.value !== 'string' || issuePath.value.trim() === '' || issuePath.value !== issuePath.value.trim()) {
+      pushIssue(issues, 'INVALID_STRING', `$.attempts[${index}].terminalExecution.issues[${i}].path`, 'path must be a non-empty trimmed string');
+      return null;
+    }
+
+    const issueMessage = ownDataProperty(rawIssue, 'message', `$.attempts[${index}].terminalExecution.issues[${i}].message`, issues);
+    if (issueMessage.kind === 'accessor') return null;
+    if (issueMessage.kind === 'missing') {
+      pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].terminalExecution.issues[${i}].message`, 'message is required');
+      return null;
+    }
+    if (typeof issueMessage.value !== 'string' || issueMessage.value.trim() === '' || issueMessage.value !== issueMessage.value.trim()) {
+      pushIssue(issues, 'INVALID_STRING', `$.attempts[${index}].terminalExecution.issues[${i}].message`, 'message must be a non-empty trimmed string');
+      return null;
+    }
+
+    normalizedTerminalIssues.push({
+      code: issueCode.value as MLBInnerDevelopmentCandidateExecutionIssue['code'],
+      path: issuePath.value as string,
+      message: issueMessage.value as string,
+    });
+  }
+
+  return {
+    ...attemptRecordBase,
+    status: 'FAILED' as const,
+    executionProvenance: normalizedProvenance,
+    terminalExecution: {
+      kind: 'FAILURE',
+      lowLevelFitCount: lowLevelFitCount.value as number,
+      failedFoldId: failedFoldId.kind === 'data' ? (failedFoldId.value as string) : undefined,
+      issues: normalizedTerminalIssues,
+    },
+  };
+}
 }
 
 function validateMLBInnerDevelopmentCampaignLedger(
@@ -1145,6 +2203,300 @@ function pushAnchorIssue(
   message: string,
 ): void {
   issues.push({ code, path, message });
+}
+
+const PROVENANCE_KNOWN_FIELDS = new Set([
+  'verifiedArtifactSha256',
+  'verifiedArtifactByteLength',
+  'artifactId',
+  'foldPlanId',
+]);
+
+const TERMINAL_KNOWN_FIELDS = new Set([
+  'kind',
+  'lowLevelFitCount',
+  'foldResults',
+  'aggregate',
+  'gate',
+  'failedFoldId',
+  'issues',
+]);
+
+const FOLD_RESULT_KNOWN_FIELDS = new Set([
+  'contractVersion',
+  'foldId',
+  'candidateRecipeId',
+  'rowCount',
+  'targetHomeWinCount',
+  'targetAwayWinCount',
+  'candidateLogLoss',
+  'candidateBrierScore',
+  'candidateRocAuc',
+  'p50LogLoss',
+  'p50BrierScore',
+  'p50RocAuc',
+  'foldTrainPriorLogLoss',
+  'foldTrainPriorBrierScore',
+  'foldTrainPriorRocAuc',
+  'foldTrainPriorProbability',
+]);
+
+const AGGREGATE_KNOWN_FIELDS = new Set([
+  'contractVersion',
+  'candidateRecipeId',
+  'foldCount',
+  'aggregateValidationRowCount',
+  'aggregateCandidateLogLoss',
+  'aggregateCandidateBrierScore',
+  'aggregateCandidateRocAuc',
+  'aggregateP50LogLoss',
+  'aggregateP50BrierScore',
+  'aggregateP50RocAuc',
+  'aggregateFoldTrainPriorLogLoss',
+  'aggregateFoldTrainPriorBrierScore',
+  'aggregateFoldTrainPriorRocAuc',
+  'worstFoldCandidateLogLoss',
+  'worstFoldCandidateBrierScore',
+  'foldsBeatingP50OnLogLoss',
+  'foldsBeatingP50OnBrier',
+  'foldsBeatingFoldTrainPriorOnLogLoss',
+  'foldsBeatingFoldTrainPriorOnBrier',
+]);
+
+const GATE_KNOWN_FIELDS = new Set([
+  'eligibility',
+  'reasons',
+]);
+
+const TERMINAL_ISSUE_KNOWN_FIELDS = new Set([
+  'code',
+  'path',
+  'message',
+]);
+
+function validateExecutionProvenance(
+  provenance: unknown,
+  index: number,
+  issues: MLBInnerDevelopmentCampaignLedgerIssue[],
+): MLBInnerDevelopmentAttemptExecutionProvenance | null {
+  if (!isPlainObject(provenance)) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance`, 'executionProvenance must be a plain object');
+    return null;
+  }
+  if (!rejectSymbolProperties(provenance as Record<string, unknown>, `$.attempts[${index}].executionProvenance`, issues)) {
+    return null;
+  }
+  for (const key of Object.getOwnPropertyNames(provenance)) {
+    if (!PROVENANCE_KNOWN_FIELDS.has(key)) {
+      pushIssue(issues, 'UNKNOWN_FIELD', `$.attempts[${index}].executionProvenance.${key}`, `Unknown field ${key}`);
+      return null;
+    }
+  }
+
+  const verifiedArtifactSha256 = ownDataProperty(provenance, 'verifiedArtifactSha256', `$.attempts[${index}].executionProvenance.verifiedArtifactSha256`, issues);
+  if (verifiedArtifactSha256.kind === 'accessor') return null;
+  if (verifiedArtifactSha256.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.verifiedArtifactSha256`, 'verifiedArtifactSha256 is required');
+    return null;
+  }
+  if (typeof verifiedArtifactSha256.value !== 'string' || !/^[0-9a-f]{64}$/.test(verifiedArtifactSha256.value)) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.verifiedArtifactSha256`, 'verifiedArtifactSha256 must be lowercase 64-char hex');
+    return null;
+  }
+
+  const verifiedArtifactByteLength = ownDataProperty(provenance, 'verifiedArtifactByteLength', `$.attempts[${index}].executionProvenance.verifiedArtifactByteLength`, issues);
+  if (verifiedArtifactByteLength.kind === 'accessor') return null;
+  if (verifiedArtifactByteLength.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.verifiedArtifactByteLength`, 'verifiedArtifactByteLength is required');
+    return null;
+  }
+  if (typeof verifiedArtifactByteLength.value !== 'number' || !Number.isInteger(verifiedArtifactByteLength.value) || verifiedArtifactByteLength.value <= 0) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.verifiedArtifactByteLength`, 'verifiedArtifactByteLength must be a positive integer');
+    return null;
+  }
+
+  const artifactId = ownDataProperty(provenance, 'artifactId', `$.attempts[${index}].executionProvenance.artifactId`, issues);
+  if (artifactId.kind === 'accessor') return null;
+  if (artifactId.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.artifactId`, 'artifactId is required');
+    return null;
+  }
+  if (typeof artifactId.value !== 'string' || artifactId.value.trim() === '' || artifactId.value !== artifactId.value.trim()) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.artifactId`, 'artifactId must be a non-empty trimmed string');
+    return null;
+  }
+
+  const foldPlanId = ownDataProperty(provenance, 'foldPlanId', `$.attempts[${index}].executionProvenance.foldPlanId`, issues);
+  if (foldPlanId.kind === 'accessor') return null;
+  if (foldPlanId.kind === 'missing') {
+    pushIssue(issues, 'MISSING_FIELD', `$.attempts[${index}].executionProvenance.foldPlanId`, 'foldPlanId is required');
+    return null;
+  }
+  if (typeof foldPlanId.value !== 'string' || foldPlanId.value.trim() === '' || foldPlanId.value !== foldPlanId.value.trim()) {
+    pushIssue(issues, 'INVALID_EXECUTION_PROVENANCE', `$.attempts[${index}].executionProvenance.foldPlanId`, 'foldPlanId must be a non-empty trimmed string');
+    return null;
+  }
+
+  return {
+    verifiedArtifactSha256: verifiedArtifactSha256.value as string,
+    verifiedArtifactByteLength: verifiedArtifactByteLength.value as number,
+    artifactId: artifactId.value as string,
+    foldPlanId: foldPlanId.value as string,
+  };
+}
+
+export type MLBInnerDevelopmentAttemptTransitionResult =
+  | Readonly<{ ok: true; value: MLBInnerDevelopmentCampaignLedger }>
+  | Readonly<{ ok: false; issues: readonly MLBInnerDevelopmentCampaignLedgerIssue[] }>;
+
+export function transformMLBInnerDevelopmentAttemptToRunning(
+  ledger: MLBInnerDevelopmentCampaignLedger,
+  candidateRecipeId: string,
+  attemptNumber: number,
+  executionProvenance: MLBInnerDevelopmentAttemptExecutionProvenance,
+): MLBInnerDevelopmentAttemptTransitionResult {
+  const issues: MLBInnerDevelopmentCampaignLedgerIssue[] = [];
+
+  const recipeIndex = ledger.registeredRecipes.findIndex(
+    recipe => recipe.candidateRecipeId === candidateRecipeId,
+  );
+  if (recipeIndex === -1) {
+    pushIssue(issues, 'UNREGISTERED_RECIPE_REFERENCE', '$.candidateRecipeId', `Unknown candidateRecipeId ${candidateRecipeId}`);
+    return { ok: false, issues: issues as readonly MLBInnerDevelopmentCampaignLedgerIssue[] };
+  }
+
+  const attemptIndex = ledger.attempts.findIndex(
+    attempt =>
+      attempt.candidateRecipeId === candidateRecipeId && attempt.attemptNumber === attemptNumber,
+  );
+  if (attemptIndex === -1) {
+    pushIssue(issues, 'MISSING_FIELD', '$.attempts', `Attempt ${attemptNumber} for ${candidateRecipeId} not found`);
+    return { ok: false, issues: issues as readonly MLBInnerDevelopmentCampaignLedgerIssue[] };
+  }
+
+  const target = ledger.attempts[attemptIndex];
+  if (target.status !== 'REGISTERED') {
+    pushIssue(issues, 'INVALID_STATUS', `$.attempts[${attemptIndex}].status`, `Attempt must be REGISTERED, got ${target.status}`);
+    return { ok: false, issues: issues as readonly MLBInnerDevelopmentCampaignLedgerIssue[] };
+  }
+
+  const provenanceValidation = validateExecutionProvenance(executionProvenance, attemptIndex, issues);
+  if (!provenanceValidation) {
+    return { ok: false, issues: issues as readonly MLBInnerDevelopmentCampaignLedgerIssue[] };
+  }
+
+  const updatedAttempt: MLBInnerDevelopmentRunningAttempt = {
+    ...target,
+    status: 'RUNNING',
+    executionProvenance: provenanceValidation,
+  };
+
+  const updatedLedger: MLBInnerDevelopmentCampaignLedger = {
+    ...ledger,
+    attempts: ledger.attempts.map((attempt, idx) => (idx === attemptIndex ? updatedAttempt : attempt)),
+  };
+
+  const validation = validateMLBInnerDevelopmentCampaignLedger(updatedLedger);
+  if (!validation.ok) {
+    return { ok: false, issues: validation.issues };
+  }
+
+  return { ok: true, value: validation.value };
+}
+
+export function transformMLBInnerDevelopmentAttemptToTerminal(
+  ledger: MLBInnerDevelopmentCampaignLedger,
+  candidateRecipeId: string,
+  attemptNumber: number,
+  executionResult: MLBInnerDevelopmentCandidateExecutionResult,
+): MLBInnerDevelopmentAttemptTransitionResult {
+  const issues: MLBInnerDevelopmentCampaignLedgerIssue[] = [];
+
+  const recipeIndex = ledger.registeredRecipes.findIndex(
+    recipe => recipe.candidateRecipeId === candidateRecipeId,
+  );
+  if (recipeIndex === -1) {
+    pushIssue(issues, 'UNREGISTERED_RECIPE_REFERENCE', '$.candidateRecipeId', `Unknown candidateRecipeId ${candidateRecipeId}`);
+    return { ok: false, issues: issues as readonly MLBInnerDevelopmentCampaignLedgerIssue[] };
+  }
+
+  const attemptIndex = ledger.attempts.findIndex(
+    attempt =>
+      attempt.candidateRecipeId === candidateRecipeId && attempt.attemptNumber === attemptNumber,
+  );
+  if (attemptIndex === -1) {
+    pushIssue(issues, 'MISSING_FIELD', '$.attempts', `Attempt ${attemptNumber} for ${candidateRecipeId} not found`);
+    return { ok: false, issues: issues as readonly MLBInnerDevelopmentCampaignLedgerIssue[] };
+  }
+
+  const target = ledger.attempts[attemptIndex];
+  if (target.status !== 'RUNNING') {
+    pushIssue(issues, 'INVALID_STATUS', `$.attempts[${attemptIndex}].status`, `Attempt must be RUNNING, got ${target.status}`);
+    return { ok: false, issues: issues as readonly MLBInnerDevelopmentCampaignLedgerIssue[] };
+  }
+
+  if (target.status !== 'RUNNING' || !('executionProvenance' in target)) {
+    pushIssue(issues, 'MISSING_EXECUTION_PROVENANCE', `$.attempts[${attemptIndex}].executionProvenance`, 'RUNNING attempt missing executionProvenance');
+    return { ok: false, issues: issues as readonly MLBInnerDevelopmentCampaignLedgerIssue[] };
+  }
+
+  if (executionResult.ok) {
+    const eligibility = executionResult.value.gate.eligibility;
+    const terminalStatus = eligibility === 'INNER_ELIGIBLE'
+      ? 'COMPLETED_INNER_ELIGIBLE'
+      : 'COMPLETED_INNER_REJECTED';
+
+    const terminalExecution: MLBInnerDevelopmentAttemptTerminalSuccess = {
+      kind: 'SUCCESS',
+      lowLevelFitCount: executionResult.value.lowLevelFitCount,
+      foldResults: executionResult.value.foldResults,
+      aggregate: executionResult.value.aggregate,
+      gate: executionResult.value.gate,
+    };
+
+    const updatedAttempt = {
+      ...target,
+      status: terminalStatus,
+      terminalExecution,
+    } as MLBInnerDevelopmentCompletedEligibleAttempt | MLBInnerDevelopmentCompletedRejectedAttempt;
+
+    const updatedLedger: MLBInnerDevelopmentCampaignLedger = {
+      ...ledger,
+      attempts: ledger.attempts.map((attempt, idx) => (idx === attemptIndex ? updatedAttempt : attempt)),
+    };
+
+    const validation = validateMLBInnerDevelopmentCampaignLedger(updatedLedger);
+    if (!validation.ok) {
+      return { ok: false, issues: validation.issues };
+    }
+
+    return { ok: true, value: validation.value };
+  }
+
+  const terminalExecution: MLBInnerDevelopmentAttemptTerminalFailure = {
+    kind: 'FAILURE',
+    lowLevelFitCount: executionResult.lowLevelFitCount,
+    failedFoldId: executionResult.failedFoldId,
+    issues: executionResult.issues,
+  };
+
+  const updatedAttempt: MLBInnerDevelopmentFailedAttempt = {
+    ...target,
+    status: 'FAILED',
+    terminalExecution,
+  };
+
+  const updatedLedger: MLBInnerDevelopmentCampaignLedger = {
+    ...ledger,
+    attempts: ledger.attempts.map((attempt, idx) => (idx === attemptIndex ? updatedAttempt : attempt)),
+  };
+
+  const validation = validateMLBInnerDevelopmentCampaignLedger(updatedLedger);
+  if (!validation.ok) {
+    return { ok: false, issues: validation.issues };
+  }
+
+  return { ok: true, value: validation.value };
 }
 
 export {
