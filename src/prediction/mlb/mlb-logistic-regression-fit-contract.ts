@@ -6,6 +6,7 @@ import {
   type MLBTrainingMatrix,
   type MLBTrainingMatrixRow,
 } from './mlb-training-matrix-contract';
+import { type MLBFeatureVector } from './mlb-feature-vector-contract';
 import {
   MLB_MODEL_EVALUATION_PLAN_CONTRACT_VERSION,
   validateMLBModelEvaluationPlan,
@@ -1122,6 +1123,214 @@ function sumOfSquaredCoefficients(
   return sum;
 }
 
+export type MLBDeterministicLogisticRegressionModelFitOutcome =
+  | Readonly<{
+      ok: true;
+      value: {
+        coefficients: MLBModelCoefficient[];
+        intercept: number;
+        iterationsCompleted: number;
+        converged: boolean;
+        finalTrainingObjective: number;
+        trainingRowCount: number;
+        featureIds: readonly string[];
+      };
+    }>
+  | Readonly<{
+      ok: false;
+      issues: MLBModelFitEvaluationIssue[];
+    }>;
+
+export function fitMLBDeterministicLogisticRegressionModel(
+  configuration: MLBModelTrainingConfiguration,
+  featureIds: readonly string[],
+  trainRows: readonly MLBTrainingMatrixRow[],
+): MLBDeterministicLogisticRegressionModelFitOutcome {
+  const issues: MLBModelFitEvaluationIssue[] = [];
+
+  const learningRate = configuration.optimization.learningRate;
+  const maxIterations = configuration.optimization.maxIterations;
+  const tolerance = configuration.optimization.tolerance;
+  const l2Strength = configuration.regularization.strength;
+  const featureCount = featureIds.length;
+
+  const intercept = 0;
+  const coefficients: MLBModelCoefficient[] = [];
+  for (const featureId of featureIds) {
+    coefficients.push({
+      featureId,
+      valueCoefficient: 0,
+      missingIndicatorCoefficient: 0,
+    });
+  }
+
+  let currentIntercept = intercept;
+  const currentValueCoefficients = new Array<number>(featureCount).fill(0);
+  const currentMissingCoefficients = new Array<number>(featureCount).fill(0);
+
+  let iterationsCompleted = 0;
+  let converged = false;
+
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
+    const gradientsInterceptParts: number[] = [];
+    const gradientsValueParts: number[][] = [];
+    const gradientsMissingParts: number[][] = [];
+
+    for (let f = 0; f < featureCount; f++) {
+      gradientsValueParts[f] = [];
+      gradientsMissingParts[f] = [];
+    }
+
+    for (const row of trainRows) {
+      const vector = row.vector;
+      const featureValues: number[] = [];
+      const missingFlags: number[] = [];
+      for (const val of vector.values) {
+        featureValues.push(val.value);
+        missingFlags.push(val.wasMissing ? 1 : 0);
+      }
+
+      let score = currentIntercept;
+      for (let f = 0; f < featureCount; f++) {
+        score += currentValueCoefficients[f] * featureValues[f];
+        score += currentMissingCoefficients[f] * missingFlags[f];
+      }
+
+      if (!assertFinite(score, '$.score', issues)) {
+        return { ok: false, issues: sortIssues(issues) };
+      }
+
+      const probability = stableSigmoid(score);
+      if (!assertFinite(probability, '$.probability', issues)) {
+        return { ok: false, issues: sortIssues(issues) };
+      }
+
+      const error = probability - row.targetValue;
+      if (!assertFinite(error, '$.error', issues)) {
+        return { ok: false, issues: sortIssues(issues) };
+      }
+
+      gradientsInterceptParts.push(error);
+      for (let f = 0; f < featureCount; f++) {
+        gradientsValueParts[f].push(error * featureValues[f]);
+        gradientsMissingParts[f].push(error * missingFlags[f]);
+      }
+    }
+
+    const trainSize = trainRows.length;
+    const gradientIntercept = gradientsInterceptParts.reduce((a, b) => a + b, 0) / trainSize;
+    const gradientValues: number[] = [];
+    const gradientMissing: number[] = [];
+    for (let f = 0; f < featureCount; f++) {
+      const gv = gradientsValueParts[f].reduce((a, b) => a + b, 0) / trainSize + l2Strength * currentValueCoefficients[f];
+      const gm = gradientsMissingParts[f].reduce((a, b) => a + b, 0) / trainSize + l2Strength * currentMissingCoefficients[f];
+      if (!assertFinite(gv, `$.gradientValues[${f}]`, issues)) {
+        return { ok: false, issues: sortIssues(issues) };
+      }
+      if (!assertFinite(gm, `$.gradientMissing[${f}]`, issues)) {
+        return { ok: false, issues: sortIssues(issues) };
+      }
+      gradientValues.push(gv);
+      gradientMissing.push(gm);
+    }
+
+    const updateIntercept = currentIntercept - learningRate * gradientIntercept;
+    const updateValues: number[] = [];
+    const updateMissing: number[] = [];
+    for (let f = 0; f < featureCount; f++) {
+      const uv = currentValueCoefficients[f] - learningRate * gradientValues[f];
+      const um = currentMissingCoefficients[f] - learningRate * gradientMissing[f];
+      if (!assertFinite(uv, `$.updateValues[${f}]`, issues)) {
+        return { ok: false, issues: sortIssues(issues) };
+      }
+      if (!assertFinite(um, `$.updateMissing[${f}]`, issues)) {
+        return { ok: false, issues: sortIssues(issues) };
+      }
+      updateValues.push(uv);
+      updateMissing.push(um);
+    }
+
+    let maxUpdate = 0;
+    const absUpdateIntercept = Math.abs(updateIntercept - currentIntercept);
+    if (absUpdateIntercept > maxUpdate) maxUpdate = absUpdateIntercept;
+    for (let f = 0; f < featureCount; f++) {
+      const absUpdateValue = Math.abs(updateValues[f] - currentValueCoefficients[f]);
+      const absUpdateMissing = Math.abs(updateMissing[f] - currentMissingCoefficients[f]);
+      if (absUpdateValue > maxUpdate) maxUpdate = absUpdateValue;
+      if (absUpdateMissing > maxUpdate) maxUpdate = absUpdateMissing;
+    }
+    if (!assertFinite(maxUpdate, '$.maxUpdate', issues)) {
+      return { ok: false, issues: sortIssues(issues) };
+    }
+
+    currentIntercept = updateIntercept === 0 ? 0 : updateIntercept;
+    for (let f = 0; f < featureCount; f++) {
+      currentValueCoefficients[f] = updateValues[f] === 0 ? 0 : updateValues[f];
+      currentMissingCoefficients[f] = updateMissing[f] === 0 ? 0 : updateMissing[f];
+    }
+
+    iterationsCompleted = iteration + 1;
+
+    if (maxUpdate <= tolerance) {
+      converged = true;
+      break;
+    }
+  }
+
+  let finalObjective = 0;
+  for (const row of trainRows) {
+    const vector = row.vector;
+    let score = currentIntercept;
+    for (let f = 0; f < featureCount; f++) {
+      score += currentValueCoefficients[f] * vector.values[f].value;
+      score += currentMissingCoefficients[f] * (vector.values[f].wasMissing ? 1 : 0);
+    }
+    if (!assertFinite(score, '$.finalScore', issues)) {
+      return { ok: false, issues: sortIssues(issues) };
+    }
+    const probability = stableSigmoid(score);
+    if (!assertFinite(probability, '$.finalProbability', issues)) {
+      return { ok: false, issues: sortIssues(issues) };
+    }
+    finalObjective += calculateLogLoss(probability, row.targetValue);
+  }
+  const computedFinalObjective = finalObjective / trainRows.length + 0.5 * l2Strength * sumOfSquaredCoefficients(coefficients.map((c, i) => ({ ...c, valueCoefficient: currentValueCoefficients[i], missingIndicatorCoefficient: currentMissingCoefficients[i] })));
+  if (!assertFinite(computedFinalObjective, '$.finalTrainingObjective', issues)) {
+    return { ok: false, issues: sortIssues(issues) };
+  }
+
+  const finalCoefficients: MLBModelCoefficient[] = coefficients.map((c, i) => ({
+    featureId: c.featureId,
+    valueCoefficient: currentValueCoefficients[i] === 0 ? 0 : currentValueCoefficients[i],
+    missingIndicatorCoefficient: currentMissingCoefficients[i] === 0 ? 0 : currentMissingCoefficients[i],
+  }));
+
+  return {
+    ok: true,
+    value: {
+      intercept: currentIntercept === 0 ? 0 : currentIntercept,
+      coefficients: finalCoefficients,
+      iterationsCompleted,
+      converged,
+      finalTrainingObjective: computedFinalObjective,
+      trainingRowCount: trainRows.length,
+      featureIds,
+    },
+  };
+}
+
+export function predictMLBHomeWinProbability(
+  model: MLBDeterministicLogisticRegressionModel,
+  vector: MLBFeatureVector,
+): number {
+  let score = model.intercept;
+  for (let f = 0; f < model.featureIds.length; f++) {
+    score += model.coefficients[f].valueCoefficient * vector.values[f].value;
+    score += model.coefficients[f].missingIndicatorCoefficient * (vector.values[f].wasMissing ? 1 : 0);
+  }
+  return stableSigmoid(score);
+}
+
 export function validateMLBDeterministicLogisticRegressionModel(
   value: unknown,
 ):
@@ -1570,162 +1779,15 @@ export function fitAndEvaluateMLBDeterministicLogisticRegression(
     };
   }
 
-  const intercept = 0;
-  const coefficients: MLBModelCoefficient[] = [];
-  for (const featureId of featureIds) {
-    coefficients.push({
-      featureId,
-      valueCoefficient: 0,
-      missingIndicatorCoefficient: 0,
-    });
+  const modelResult = fitMLBDeterministicLogisticRegressionModel(
+    validatedConfig,
+    featureIds,
+    trainRows,
+  );
+  if (!modelResult.ok) {
+    return { ok: false, issues: modelResult.issues };
   }
-
-  const learningRate = validatedConfig.optimization.learningRate;
-  const maxIterations = validatedConfig.optimization.maxIterations;
-  const tolerance = validatedConfig.optimization.tolerance;
-  const l2Strength = validatedConfig.regularization.strength;
-  const featureCount = featureIds.length;
-
-  let currentIntercept = intercept;
-  const currentValueCoefficients = new Array<number>(featureCount).fill(0);
-  const currentMissingCoefficients = new Array<number>(featureCount).fill(0);
-
-  let iterationsCompleted = 0;
-  let converged = false;
-
-  for (let iteration = 0; iteration < maxIterations; iteration++) {
-    const gradientsInterceptParts: number[] = [];
-    const gradientsValueParts: number[][] = [];
-    const gradientsMissingParts: number[][] = [];
-
-    for (let f = 0; f < featureCount; f++) {
-      gradientsValueParts[f] = [];
-      gradientsMissingParts[f] = [];
-    }
-
-    for (const row of trainRows) {
-      const vector = row.vector;
-      const featureValues: number[] = [];
-      const missingFlags: number[] = [];
-      for (const val of vector.values) {
-        featureValues.push(val.value);
-        missingFlags.push(val.wasMissing ? 1 : 0);
-      }
-
-      let score = currentIntercept;
-      for (let f = 0; f < featureCount; f++) {
-        score += currentValueCoefficients[f] * featureValues[f];
-        score += currentMissingCoefficients[f] * missingFlags[f];
-      }
-
-      if (!assertFinite(score, '$.score', issues)) {
-        return { ok: false, issues: sortIssues(issues) };
-      }
-
-      const probability = stableSigmoid(score);
-      if (!assertFinite(probability, '$.probability', issues)) {
-        return { ok: false, issues: sortIssues(issues) };
-      }
-
-      const error = probability - row.targetValue;
-      if (!assertFinite(error, '$.error', issues)) {
-        return { ok: false, issues: sortIssues(issues) };
-      }
-
-      gradientsInterceptParts.push(error);
-      for (let f = 0; f < featureCount; f++) {
-        gradientsValueParts[f].push(error * featureValues[f]);
-        gradientsMissingParts[f].push(error * missingFlags[f]);
-      }
-    }
-
-    const trainSize = trainRows.length;
-    const gradientIntercept = gradientsInterceptParts.reduce((a, b) => a + b, 0) / trainSize;
-    const gradientValues: number[] = [];
-    const gradientMissing: number[] = [];
-    for (let f = 0; f < featureCount; f++) {
-      const gv = gradientsValueParts[f].reduce((a, b) => a + b, 0) / trainSize + l2Strength * currentValueCoefficients[f];
-      const gm = gradientsMissingParts[f].reduce((a, b) => a + b, 0) / trainSize + l2Strength * currentMissingCoefficients[f];
-      if (!assertFinite(gv, `$.gradientValues[${f}]`, issues)) {
-        return { ok: false, issues: sortIssues(issues) };
-      }
-      if (!assertFinite(gm, `$.gradientMissing[${f}]`, issues)) {
-        return { ok: false, issues: sortIssues(issues) };
-      }
-      gradientValues.push(gv);
-      gradientMissing.push(gm);
-    }
-
-    const updateIntercept = currentIntercept - learningRate * gradientIntercept;
-    const updateValues: number[] = [];
-    const updateMissing: number[] = [];
-    for (let f = 0; f < featureCount; f++) {
-      const uv = currentValueCoefficients[f] - learningRate * gradientValues[f];
-      const um = currentMissingCoefficients[f] - learningRate * gradientMissing[f];
-      if (!assertFinite(uv, `$.updateValues[${f}]`, issues)) {
-        return { ok: false, issues: sortIssues(issues) };
-      }
-      if (!assertFinite(um, `$.updateMissing[${f}]`, issues)) {
-        return { ok: false, issues: sortIssues(issues) };
-      }
-      updateValues.push(uv);
-      updateMissing.push(um);
-    }
-
-    let maxUpdate = 0;
-    const absUpdateIntercept = Math.abs(updateIntercept - currentIntercept);
-    if (absUpdateIntercept > maxUpdate) maxUpdate = absUpdateIntercept;
-    for (let f = 0; f < featureCount; f++) {
-      const absUpdateValue = Math.abs(updateValues[f] - currentValueCoefficients[f]);
-      const absUpdateMissing = Math.abs(updateMissing[f] - currentMissingCoefficients[f]);
-      if (absUpdateValue > maxUpdate) maxUpdate = absUpdateValue;
-      if (absUpdateMissing > maxUpdate) maxUpdate = absUpdateMissing;
-    }
-    if (!assertFinite(maxUpdate, '$.maxUpdate', issues)) {
-      return { ok: false, issues: sortIssues(issues) };
-    }
-
-    currentIntercept = updateIntercept === 0 ? 0 : updateIntercept;
-    for (let f = 0; f < featureCount; f++) {
-      currentValueCoefficients[f] = updateValues[f] === 0 ? 0 : updateValues[f];
-      currentMissingCoefficients[f] = updateMissing[f] === 0 ? 0 : updateMissing[f];
-    }
-
-    iterationsCompleted = iteration + 1;
-
-    if (maxUpdate <= tolerance) {
-      converged = true;
-      break;
-    }
-  }
-
-  let finalObjective = 0;
-  for (const row of trainRows) {
-    const vector = row.vector;
-    let score = currentIntercept;
-    for (let f = 0; f < featureCount; f++) {
-      score += currentValueCoefficients[f] * vector.values[f].value;
-      score += currentMissingCoefficients[f] * (vector.values[f].wasMissing ? 1 : 0);
-    }
-    if (!assertFinite(score, '$.finalScore', issues)) {
-      return { ok: false, issues: sortIssues(issues) };
-    }
-    const probability = stableSigmoid(score);
-    if (!assertFinite(probability, '$.finalProbability', issues)) {
-      return { ok: false, issues: sortIssues(issues) };
-    }
-    finalObjective += calculateLogLoss(probability, row.targetValue);
-  }
-  const computedFinalObjective = finalObjective / trainRows.length + 0.5 * l2Strength * sumOfSquaredCoefficients(coefficients.map((c, i) => ({ ...c, valueCoefficient: currentValueCoefficients[i], missingIndicatorCoefficient: currentMissingCoefficients[i] })));
-  if (!assertFinite(computedFinalObjective, '$.finalTrainingObjective', issues)) {
-    return { ok: false, issues: sortIssues(issues) };
-  }
-
-  const finalCoefficients: MLBModelCoefficient[] = coefficients.map((c, i) => ({
-    featureId: c.featureId,
-    valueCoefficient: currentValueCoefficients[i] === 0 ? 0 : currentValueCoefficients[i],
-    missingIndicatorCoefficient: currentMissingCoefficients[i] === 0 ? 0 : currentMissingCoefficients[i],
-  }));
+  const modelValue = modelResult.value;
 
   const model: MLBDeterministicLogisticRegressionModel = {
     contractVersion: MLB_LOGISTIC_REGRESSION_MODEL_CONTRACT_VERSION,
@@ -1739,28 +1801,19 @@ export function fitAndEvaluateMLBDeterministicLogisticRegression(
     manifestId: validatedMatrix.manifestId,
     datasetId: validatedMatrix.datasetId,
     algorithm: 'L2_LOGISTIC_REGRESSION_BINARY_V1',
-    featureIds,
-    intercept: currentIntercept === 0 ? 0 : currentIntercept,
-    coefficients: finalCoefficients,
-    trainingRowCount: trainRows.length,
-    iterationsCompleted,
-    converged,
-    finalTrainingObjective: computedFinalObjective,
+    featureIds: modelValue.featureIds,
+    intercept: modelValue.intercept,
+    coefficients: modelValue.coefficients,
+    trainingRowCount: modelValue.trainingRowCount,
+    iterationsCompleted: modelValue.iterationsCompleted,
+    converged: modelValue.converged,
+    finalTrainingObjective: modelValue.finalTrainingObjective,
   };
 
   const validationProbabilities: number[] = [];
   const validationTargets: number[] = [];
   for (const row of validationRows) {
-    const vector = row.vector;
-    let score = currentIntercept;
-    for (let f = 0; f < featureCount; f++) {
-      score += currentValueCoefficients[f] * vector.values[f].value;
-      score += currentMissingCoefficients[f] * (vector.values[f].wasMissing ? 1 : 0);
-    }
-    if (!assertFinite(score, '$.validationScore', issues)) {
-      return { ok: false, issues: sortIssues(issues) };
-    }
-    const probability = stableSigmoid(score);
+    const probability = predictMLBHomeWinProbability(model, row.vector);
     if (!assertFinite(probability, '$.validationProbability', issues)) {
       return { ok: false, issues: sortIssues(issues) };
     }

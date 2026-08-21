@@ -3,18 +3,22 @@ import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import {
   fitAndEvaluateMLBDeterministicLogisticRegression,
+  fitMLBDeterministicLogisticRegressionModel,
   MLB_FIT_VALIDATION_RESULT_CONTRACT_VERSION,
   MLB_LOGISTIC_REGRESSION_MODEL_CONTRACT_VERSION,
   MLB_VALIDATION_EVALUATION_CONTRACT_VERSION,
+  predictMLBHomeWinProbability,
   type MLBModelFitEvaluationIssue,
   validateMLBDeterministicLogisticRegressionModel,
   validateMLBModelFitValidationResult,
   validateMLBModelValidationEvaluation,
 } from '@/prediction/mlb/mlb-logistic-regression-fit-contract';
-import { validateMLBTrainingMatrix } from '@/prediction/mlb/mlb-training-matrix-contract';
+import { validateMLBTrainingMatrix, type MLBTrainingMatrixRow } from '@/prediction/mlb/mlb-training-matrix-contract';
+import { type MLBFeatureVector } from '@/prediction/mlb/mlb-feature-vector-contract';
 import {
   validateMLBModelEvaluationPlan,
   validateMLBModelTrainingConfiguration,
+  type MLBModelTrainingConfiguration,
 } from '@/prediction/mlb/mlb-model-training-plan-contract';
 
 function createValidConfiguration(): Record<string, unknown> {
@@ -1387,6 +1391,71 @@ describe('Phase 8H MLB logistic regression fit contract', () => {
     }
   });
 
+  it('extracts deterministic model-fit primitive with identical math and no input mutation', () => {
+    const configuration = createValidConfiguration();
+    const plan = createValidEvaluationPlan();
+    const matrix = createValidMatrixFixture() as Record<string, unknown>;
+
+    assertValidConfiguration(configuration);
+    assertValidPlan(plan);
+    assertValidMatrix(matrix);
+
+    const fitResult = fitAndEvaluateMLBDeterministicLogisticRegression(configuration, plan, matrix);
+    expect(fitResult.ok).toBe(true);
+    if (!fitResult.ok) return;
+    const baseline = fitResult.value.model;
+
+    const featureIds = (plan.featureIds as string[]);
+    const trainRows = (matrix.rows as Record<string, unknown>[]).filter((row) => row.split === 'TRAIN') as Record<string, unknown>[];
+    const primitiveResult = fitMLBDeterministicLogisticRegressionModel(
+      configuration as unknown as MLBModelTrainingConfiguration,
+      featureIds,
+      trainRows as unknown as readonly MLBTrainingMatrixRow[],
+    );
+    expect(primitiveResult.ok).toBe(true);
+    if (!primitiveResult.ok) return;
+    expect(primitiveResult.value.intercept).toBeCloseTo(baseline.intercept, 10);
+    expect(primitiveResult.value.iterationsCompleted).toBe(baseline.iterationsCompleted);
+    expect(primitiveResult.value.converged).toBe(baseline.converged);
+    expect(primitiveResult.value.finalTrainingObjective).toBeCloseTo(baseline.finalTrainingObjective, 10);
+    expect(primitiveResult.value.coefficients).toHaveLength(baseline.coefficients.length);
+    for (let i = 0; i < baseline.coefficients.length; i++) {
+      expect(primitiveResult.value.coefficients[i].featureId).toBe(baseline.coefficients[i].featureId);
+      expect(primitiveResult.value.coefficients[i].valueCoefficient).toBeCloseTo(baseline.coefficients[i].valueCoefficient, 10);
+      expect(primitiveResult.value.coefficients[i].missingIndicatorCoefficient).toBeCloseTo(baseline.coefficients[i].missingIndicatorCoefficient, 10);
+    }
+    expect(JSON.stringify(matrix)).toBe(JSON.stringify(createValidMatrixFixture()));
+    expect(JSON.stringify(plan)).toBe(JSON.stringify(createValidEvaluationPlan()));
+  });
+
+  it('extracts deterministic prediction primitive with bounded probabilities and no mutation', () => {
+    const configuration = createValidConfiguration();
+    const plan = createValidEvaluationPlan();
+    const matrix = createValidMatrixFixture() as Record<string, unknown>;
+
+    assertValidConfiguration(configuration);
+    assertValidPlan(plan);
+    assertValidMatrix(matrix);
+
+    const fitResult = fitAndEvaluateMLBDeterministicLogisticRegression(configuration, plan, matrix);
+    expect(fitResult.ok).toBe(true);
+    if (!fitResult.ok) return;
+    const model = fitResult.value.model;
+
+    const validationRows = (matrix.rows as Record<string, unknown>[]).filter((row) => row.split === 'VALIDATION') as Record<string, unknown>[];
+    for (const row of validationRows) {
+      const probability = predictMLBHomeWinProbability(
+        model,
+        row.vector as unknown as MLBFeatureVector,
+      );
+      expect(Number.isFinite(probability)).toBe(true);
+      expect(probability).toBeGreaterThanOrEqual(0);
+      expect(probability).toBeLessThanOrEqual(1);
+    }
+    expect(JSON.stringify(matrix)).toBe(JSON.stringify(createValidMatrixFixture()));
+    expect(JSON.stringify(plan)).toBe(JSON.stringify(createValidEvaluationPlan()));
+  });
+
   it('verifies issue ordering, exact exports/imports, no TEST evaluation or inference route, and the static architecture boundary', async () => {
     const sourcePath = join(__dirname, '..', '..', '..', 'src', 'prediction', 'mlb', 'mlb-logistic-regression-fit-contract.ts');
     const testsPath = join(__dirname, '..', '..', '..', 'tests', 'prediction', 'mlb', 'mlb-logistic-regression-fit-contract.test.ts');
@@ -1404,6 +1473,9 @@ describe('Phase 8H MLB logistic regression fit contract', () => {
       'MLBModelValidationEvaluation',
       'MLBModelFitValidationResult',
       'MLBModelFitEvaluationIssue',
+      'MLBDeterministicLogisticRegressionModelFitOutcome',
+      'fitMLBDeterministicLogisticRegressionModel',
+      'predictMLBHomeWinProbability',
       'validateMLBDeterministicLogisticRegressionModel',
       'validateMLBModelValidationEvaluation',
       'validateMLBModelFitValidationResult',
@@ -1414,6 +1486,7 @@ describe('Phase 8H MLB logistic regression fit contract', () => {
     expect(importSources).toEqual([
       '../firewall/odds-contamination-guard',
       './mlb-training-matrix-contract',
+      './mlb-feature-vector-contract',
       './mlb-model-training-plan-contract',
     ]);
 
@@ -1422,7 +1495,7 @@ describe('Phase 8H MLB logistic regression fit contract', () => {
     expect((source.match(/function\s+validateMLBModelFitValidationResult\s*\(/g) ?? []).length).toBe(1);
     expect((source.match(/function\s+fitAndEvaluateMLBDeterministicLogisticRegression\s*\(/g) ?? []).length).toBe(1);
 
-    expect((tests.match(/it\(/g) ?? []).length).toBe(20);
+    expect((tests.match(/it\(/g) ?? []).length).toBe(22);
     expect(tests).not.toMatch(/\b(?:it|test)\s*\.\s*each\s*\(/);
 
     expect(source).not.toMatch(/export\s+(?:enum|interface)\s+/);
@@ -1460,6 +1533,6 @@ describe('Phase 8H MLB logistic regression fit contract', () => {
     expect(builderSource).not.toContain('rows:');
     expect(builderSource).not.toContain('predictions:');
     expect(builderSource).not.toContain('probabilities:');
-    expect(builderSource).toContain('stableSigmoid');
+    expect(builderSource).toContain('predictMLBHomeWinProbability');
   });
 });
