@@ -91,6 +91,7 @@ function validateTrainRow(
   return true;
 }
 
+// Both fold partitions originate from outer TRAIN; array position defines inner-fold role.
 function validateValidationRow(
   row: unknown,
   path: string,
@@ -98,7 +99,7 @@ function validateValidationRow(
   if (!isPlainObject(row)) {
     return false;
   }
-  if (row.split !== 'VALIDATION') {
+  if (row.split !== 'TRAIN') {
     return false;
   }
   if (typeof row.exampleId !== 'string' || row.exampleId.length === 0) {

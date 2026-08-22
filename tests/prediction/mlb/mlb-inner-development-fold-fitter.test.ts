@@ -62,7 +62,7 @@ function createTrainRow(overrides: Partial<MLBTrainingMatrixRow> = {}): MLBTrain
 function createValidationRow(overrides: Partial<MLBTrainingMatrixRow> = {}): MLBTrainingMatrixRow {
   return {
     exampleId: overrides.exampleId ?? 'valid-1',
-    split: 'VALIDATION',
+    split: 'TRAIN',
     vector: {
       contractVersion: 'mlb-feature-vector-v1',
       sport: 'MLB',
@@ -175,8 +175,9 @@ describe('Phase 8V-D3-C-E4-B4-I1B MLB inner development fold fitter', () => {
   });
 
   it('fails closed on invalid configuration with lowLevelFitCount 0', () => {
+    const configuration = { ...createValidConfiguration(), configId: '' };
     const outcome = fitMLBInnerDevelopmentFold({
-      configuration: { ...createValidConfiguration(), configId: '' } as unknown as MLBModelTrainingConfiguration,
+      configuration,
       trainRows: [createTrainRow()],
       validationRows: [createValidationRow()],
       foldId: 'fold-4',
@@ -329,6 +330,88 @@ describe('Phase 8V-D3-C-E4-B4-I1B MLB inner development fold fitter', () => {
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) {
       expect(collectIssueCodes(outcome.issues)).toContain('INVALID_VALIDATION_ROWS');
+      expect(outcome.lowLevelFitCount).toBe(0);
+    }
+  });
+
+  it('accepts inner validation rows with source split TRAIN', () => {
+    const configuration = createValidConfiguration();
+    const trainRows: MLBTrainingMatrixRow[] = [
+      createTrainRow({ exampleId: 'train-1', targetValue: 1 }),
+      createTrainRow({ exampleId: 'train-2', targetValue: 0 }),
+    ];
+    const validationRows: MLBTrainingMatrixRow[] = [
+      createValidationRow({ exampleId: 'valid-1', targetValue: 1 }),
+      createValidationRow({ exampleId: 'valid-2', targetValue: 0 }),
+    ];
+
+    const outcome = fitMLBInnerDevelopmentFold({
+      configuration,
+      trainRows,
+      validationRows,
+      foldId: 'fold-train-split',
+      candidateRecipeId: 'recipe-train-split',
+    });
+
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.value.lowLevelFitCount).toBe(1);
+      expect(outcome.value.predictions).toHaveLength(2);
+      expect(outcome.value.predictions[0].exampleId).toBe('valid-1');
+      expect(outcome.value.predictions[1].exampleId).toBe('valid-2');
+    }
+  });
+
+  it('rejects outer VALIDATION rows in validationRows for TRAIN-only inner fitter', () => {
+    const configuration = createValidConfiguration();
+    const trainRows: MLBTrainingMatrixRow[] = [
+      createTrainRow({ exampleId: 'train-1', targetValue: 1 }),
+      createTrainRow({ exampleId: 'train-2', targetValue: 0 }),
+    ];
+    const validationRows: MLBTrainingMatrixRow[] = [
+      createValidationRow({ exampleId: 'valid-1', targetValue: 1, split: 'VALIDATION' }),
+      createValidationRow({ exampleId: 'valid-2', targetValue: 0, split: 'VALIDATION' }),
+    ];
+
+    const outcome = fitMLBInnerDevelopmentFold({
+      configuration,
+      trainRows,
+      validationRows,
+      foldId: 'fold-outer-val',
+      candidateRecipeId: 'recipe-outer-val',
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      expect(collectIssueCodes(outcome.issues)).toContain('INVALID_VALIDATION_ROWS');
+      expect(outcome.issues.every(issue => issue.path.startsWith('$.validationRows'))).toBe(true);
+      expect(outcome.lowLevelFitCount).toBe(0);
+    }
+  });
+
+  it('rejects TEST rows in validationRows', () => {
+    const configuration = createValidConfiguration();
+    const trainRows: MLBTrainingMatrixRow[] = [
+      createTrainRow({ exampleId: 'train-1', targetValue: 1 }),
+      createTrainRow({ exampleId: 'train-2', targetValue: 0 }),
+    ];
+    const validationRows: MLBTrainingMatrixRow[] = [
+      createValidationRow({ exampleId: 'test-1', targetValue: 1, split: 'TEST' }),
+      createValidationRow({ exampleId: 'test-2', targetValue: 0, split: 'TEST' }),
+    ];
+
+    const outcome = fitMLBInnerDevelopmentFold({
+      configuration,
+      trainRows,
+      validationRows,
+      foldId: 'fold-test-split',
+      candidateRecipeId: 'recipe-test-split',
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      expect(collectIssueCodes(outcome.issues)).toContain('INVALID_VALIDATION_ROWS');
+      expect(outcome.issues.every(issue => issue.path.startsWith('$.validationRows'))).toBe(true);
       expect(outcome.lowLevelFitCount).toBe(0);
     }
   });
