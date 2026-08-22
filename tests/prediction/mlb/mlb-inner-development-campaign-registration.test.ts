@@ -40,6 +40,18 @@ import {
   MLBInnerDevelopmentCampaignRegistrationSuccess,
   MLBInnerDevelopmentCampaignRegistrationResult,
 } from '@/prediction/mlb/mlb-inner-development-campaign-registration';
+import {
+  claimMLBInnerDevelopmentAttemptForExecution,
+  finalizeMLBInnerDevelopmentAttemptTerminal,
+} from '@/prediction/mlb/mlb-inner-development-campaign-execution';
+import {
+  MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_EXPECTED_SHA256,
+  MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_EXPECTED_BYTE_LENGTH,
+} from '@/prediction/mlb/mlb-inner-development-train-artifact-runtime-provenance';
+import {
+  MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_ID,
+  MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_FOLD_PLAN_ID,
+} from '@/prediction/mlb/mlb-inner-development-train-artifact';
 
 const VALID_TIMESTAMP = '2026-04-01T00:00:00.000Z';
 
@@ -1073,6 +1085,85 @@ describe('mlb-inner-development-campaign-registration', () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.state).toBe('FAIL_CLOSED_INVALID_REGISTRATION_INPUT');
+    });
+  });
+
+  describe('failed-attempt same-recipe re-registration', () => {
+    it('re-registers the same recipe as attempt 2 after a failed prior attempt without consuming another distinct slot', async () => {
+      await setupReadyCampaign(tempRoot);
+      const recipe = makeRecipe({ candidateRecipeId: 'synthetic-recipe-1' });
+      const registrationInput = makeRegistrationInput({ candidateRecipe: recipe });
+
+      const first = await registerMLBInnerDevelopmentCampaignCandidate(tempRoot, registrationInput);
+      expect(first.ok).toBe(true);
+      if (!first.ok) return;
+
+      const claimResult = await claimMLBInnerDevelopmentAttemptForExecution({
+        repositoryRoot: tempRoot,
+        candidateRecipeId: recipe.candidateRecipeId,
+        attemptNumber: first.value.attemptNumber,
+        executionProvenance: {
+          verifiedArtifactSha256: MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_EXPECTED_SHA256,
+          verifiedArtifactByteLength: MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_EXPECTED_BYTE_LENGTH,
+          artifactId: MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_ID,
+          foldPlanId: MLB_INNER_DEVELOPMENT_TRAIN_ARTIFACT_FOLD_PLAN_ID,
+        },
+      });
+      expect(claimResult.ok).toBe(true);
+      if (!claimResult.ok) return;
+
+      const finalizeResult = await finalizeMLBInnerDevelopmentAttemptTerminal({
+        repositoryRoot: tempRoot,
+        candidateRecipeId: recipe.candidateRecipeId,
+        attemptNumber: first.value.attemptNumber,
+        executionResult: {
+          ok: false,
+          issues: [
+            {
+              code: 'FOLD_FIT_FAILURE',
+              path: '$.folds.FOLD_1',
+              message: 'Synthetic FOLD_1 failure',
+            },
+          ],
+          lowLevelFitCount: 0,
+          failedFoldId: 'FOLD_1',
+        },
+      });
+      expect(finalizeResult.ok).toBe(true);
+      if (!finalizeResult.ok) return;
+      expect(finalizeResult.state).toBe('FAILED');
+
+      const ledgerPath = path.join(tempRoot, MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_DIRECTORY, MLB_INNER_DEVELOPMENT_CAMPAIGN_LEDGER_FILENAME);
+      const ledgerRaw = await fs.readFile(ledgerPath, 'utf-8');
+      const ledger = JSON.parse(ledgerRaw);
+
+      expect(ledger.budget.evaluationCount).toBe(1);
+      expect(ledger.budget.seenRecipeIds).toHaveLength(1);
+      expect(ledger.registeredRecipes).toHaveLength(1);
+      expect(ledger.attempts).toHaveLength(1);
+      expect(ledger.attempts[0].status).toBe('FAILED');
+
+      const second = await registerMLBInnerDevelopmentCampaignCandidate(tempRoot, registrationInput);
+      expect(second.ok).toBe(true);
+      if (!second.ok) return;
+      expect(second.value.registrationSequence).toBe(1);
+      expect(second.value.attemptNumber).toBe(2);
+      expect(second.value.evaluationCount).toBe(2);
+      expect(second.value.distinctRecipeCount).toBe(1);
+
+      const updatedLedgerRaw = await fs.readFile(ledgerPath, 'utf-8');
+      const updatedLedger = JSON.parse(updatedLedgerRaw);
+      expect(updatedLedger.budget.evaluationCount).toBe(2);
+      expect(updatedLedger.budget.seenRecipeIds).toHaveLength(1);
+      expect(updatedLedger.registeredRecipes).toHaveLength(1);
+      expect(updatedLedger.registeredRecipes[0].candidateRecipeId).toBe(recipe.candidateRecipeId);
+      expect(updatedLedger.attempts).toHaveLength(2);
+      expect(updatedLedger.attempts[0].status).toBe('FAILED');
+      expect(updatedLedger.attempts[1].status).toBe('REGISTERED');
+      expect(updatedLedger.attempts[1].attemptNumber).toBe(2);
+      expect(updatedLedger.attempts[1].candidateRecipeId).toBe(recipe.candidateRecipeId);
+      expect(updatedLedger.budget.seenRecipeFingerprints).toHaveLength(1);
+      expect(updatedLedger.budget.seenComplexityRanks).toHaveLength(1);
     });
   });
 });
