@@ -1059,4 +1059,81 @@ describe('Phase 8V-D3-C-E4-B4-I1C MLB inner development candidate execution', ()
     const result = prepareMLBInnerDevelopmentCandidateExecution(input);
     expect(result.ok).toBe(true);
   });
+
+  it('copies exact optimizerDiagnostics from fitter metadata without rounding or recomputation', () => {
+    const preparationInput = createPreparationInput();
+    const preparationResult = prepareMLBInnerDevelopmentCandidateExecution(preparationInput);
+    expect(preparationResult.ok).toBe(true);
+    if (!preparationResult.ok) return;
+
+    const prepared = preparationResult.value;
+    const predictionsByFold = new Map<string, readonly MLBInnerCandidatePredictionRecord[]>();
+    const expectedDiagnosticsByFold = new Map<string, { converged: boolean; iterationsCompleted: number; finalTrainingObjective: number }>();
+
+    for (const fold of prepared.folds.folds) {
+      predictionsByFold.set(
+        fold.foldId,
+        createPredictions(fold.innerValidationRows, () => 0.5, fold.foldId),
+      );
+      expectedDiagnosticsByFold.set(fold.foldId, {
+        converged: fold.foldId === 'FOLD_1' || fold.foldId === 'FOLD_3',
+        iterationsCompleted: fold.foldId === 'FOLD_1' ? 1000 : 785,
+        finalTrainingObjective: fold.foldId === 'FOLD_1' ? 0.67123456789 : 0.66987654321,
+      });
+    }
+
+    const fakeFitter: MLBInnerDevelopmentCandidateFoldFitter = (input) => {
+      const expected = expectedDiagnosticsByFold.get(input.foldId);
+      if (!expected) {
+        return {
+          ok: false,
+          issues: [{ code: 'MODEL_FIT_FAILURE', path: '$.folds', message: `No diagnostics for fold ${input.foldId}` }],
+          lowLevelFitCount: 0,
+        };
+      }
+      const predictions = predictionsByFold.get(input.foldId);
+      if (!predictions) {
+        return {
+          ok: false,
+          issues: [{ code: 'MODEL_FIT_FAILURE', path: '$.validationRows', message: `No predictions for fold ${input.foldId}` }],
+          lowLevelFitCount: 0,
+        };
+      }
+      return {
+        ok: true,
+        value: {
+          foldId: input.foldId,
+          candidateRecipeId: input.candidateRecipeId,
+          predictions,
+          modelMetadata: {
+            converged: expected.converged,
+            iterationsCompleted: expected.iterationsCompleted,
+            finalTrainingObjective: expected.finalTrainingObjective,
+            featureIds: ['p_1', 'p_2'],
+            trainingRowCount: input.trainRows.length,
+          },
+          lowLevelFitCount: 1,
+        },
+      };
+    };
+
+    const executionResult = executeMLBInnerDevelopmentCandidate({
+      preparedExecution: prepared,
+      foldFitter: fakeFitter,
+    });
+
+    expect(executionResult.ok).toBe(true);
+    if (!executionResult.ok) return;
+
+    expect(executionResult.value.foldResults).toHaveLength(4);
+    for (const foldResult of executionResult.value.foldResults) {
+      const expected = expectedDiagnosticsByFold.get(foldResult.foldId);
+      expect(expected).toBeDefined();
+      if (!expected) continue;
+      expect(foldResult.optimizerDiagnostics).toBeDefined();
+      expect(foldResult.optimizerDiagnostics!.converged).toBe(expected.converged);
+      expect(foldResult.optimizerDiagnostics!.iterationsCompleted).toBe(expected.iterationsCompleted);
+      expect(foldResult.optimizerDiagnostics!.finalTrainingObjective).toBe(expected.finalTrainingObjective);
+    }
+  });
 });

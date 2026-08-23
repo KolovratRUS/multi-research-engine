@@ -7,6 +7,7 @@ import {
   MLB_INNER_DEVELOPMENT_CYCLE_ID,
   type MLBInnerCandidateRecipe,
   computeMLBInnerCandidateRecipeFingerprint,
+  type MLBInnerFoldMetricResult,
 } from '@/prediction/mlb/mlb-train-only-inner-development-evaluator';
 import {
   MLB_INNER_DEVELOPMENT_CAMPAIGN_ANCHOR_CONTRACT_VERSION,
@@ -951,6 +952,189 @@ describe('mlb-inner-development-campaign-execution', () => {
       );
       expect(attempt?.status).toBe('RUNNING');
       expect(inspection.ledger.attempts).toHaveLength(1);
+    });
+
+    it('preserves optimizerDiagnostics through terminal round-trip', async () => {
+      await setupReadyCampaign(tempRoot);
+      const registrationInput = makeRegistrationInput();
+      const registrationResult = await registerMLBInnerDevelopmentCampaignCandidate(tempRoot, registrationInput);
+      expect(registrationResult.ok).toBe(true);
+      if (!registrationResult.ok) {
+        throw new Error('Registration failed');
+      }
+
+      const provenance = makeExecutionProvenance();
+      const claimInput: MLBInnerDevelopmentAttemptClaimInput = {
+        repositoryRoot: tempRoot,
+        candidateRecipeId: registrationInput.candidateRecipe.candidateRecipeId,
+        attemptNumber: registrationResult.value.attemptNumber,
+        executionProvenance: provenance,
+      };
+      const claimResult = await claimMLBInnerDevelopmentAttemptForExecution(claimInput);
+      expect(claimResult.ok).toBe(true);
+      if (!claimResult.ok) {
+        throw new Error('Claim failed');
+      }
+
+      const diagnosticFoldResults = [
+        {
+          contractVersion: 'mlb-inner-fold-metric-result-v1',
+          foldId: 'FOLD_1',
+          candidateRecipeId: registrationInput.candidateRecipe.candidateRecipeId,
+          rowCount: 301,
+          targetHomeWinCount: 160,
+          targetAwayWinCount: 141,
+          candidateLogLoss: 0.5,
+          candidateBrierScore: 0.25,
+          candidateRocAuc: 0.9,
+          p50LogLoss: 0.55,
+          p50BrierScore: 0.28,
+          p50RocAuc: 0.88,
+          foldTrainPriorLogLoss: 0.6,
+          foldTrainPriorBrierScore: 0.3,
+          foldTrainPriorRocAuc: 0.85,
+          foldTrainPriorProbability: 0.5,
+          optimizerDiagnostics: {
+            converged: false,
+            iterationsCompleted: 1000,
+            finalTrainingObjective: 0.67123456789,
+          },
+        },
+        {
+          contractVersion: 'mlb-inner-fold-metric-result-v1',
+          foldId: 'FOLD_2',
+          candidateRecipeId: registrationInput.candidateRecipe.candidateRecipeId,
+          rowCount: 301,
+          targetHomeWinCount: 160,
+          targetAwayWinCount: 141,
+          candidateLogLoss: 0.48,
+          candidateBrierScore: 0.24,
+          candidateRocAuc: 0.92,
+          p50LogLoss: 0.53,
+          p50BrierScore: 0.27,
+          p50RocAuc: 0.9,
+          foldTrainPriorLogLoss: 0.58,
+          foldTrainPriorBrierScore: 0.29,
+          foldTrainPriorRocAuc: 0.87,
+          foldTrainPriorProbability: 0.5,
+          optimizerDiagnostics: {
+            converged: true,
+            iterationsCompleted: 785,
+            finalTrainingObjective: 0.66987654321,
+          },
+        },
+        {
+          contractVersion: 'mlb-inner-fold-metric-result-v1',
+          foldId: 'FOLD_3',
+          candidateRecipeId: registrationInput.candidateRecipe.candidateRecipeId,
+          rowCount: 301,
+          targetHomeWinCount: 160,
+          targetAwayWinCount: 141,
+          candidateLogLoss: 0.49,
+          candidateBrierScore: 0.26,
+          candidateRocAuc: 0.91,
+          p50LogLoss: 0.54,
+          p50BrierScore: 0.275,
+          p50RocAuc: 0.89,
+          foldTrainPriorLogLoss: 0.59,
+          foldTrainPriorBrierScore: 0.295,
+          foldTrainPriorRocAuc: 0.86,
+          foldTrainPriorProbability: 0.5,
+          optimizerDiagnostics: {
+            converged: true,
+            iterationsCompleted: 620,
+            finalTrainingObjective: 0.67011111111,
+          },
+        },
+        {
+          contractVersion: 'mlb-inner-fold-metric-result-v1',
+          foldId: 'FOLD_4',
+          candidateRecipeId: registrationInput.candidateRecipe.candidateRecipeId,
+          rowCount: 301,
+          targetHomeWinCount: 160,
+          targetAwayWinCount: 141,
+          candidateLogLoss: 0.51,
+          candidateBrierScore: 0.27,
+          candidateRocAuc: 0.89,
+          p50LogLoss: 0.56,
+          p50BrierScore: 0.285,
+          p50RocAuc: 0.87,
+          foldTrainPriorLogLoss: 0.61,
+          foldTrainPriorBrierScore: 0.305,
+          foldTrainPriorRocAuc: 0.84,
+          foldTrainPriorProbability: 0.5,
+          optimizerDiagnostics: {
+            converged: false,
+            iterationsCompleted: 1000,
+            finalTrainingObjective: 0.67222222222,
+          },
+        },
+      ] as const satisfies readonly MLBInnerFoldMetricResult[];
+
+      const successResult = makeSuccessExecutionResult({
+        lowLevelFitCount: 4,
+        foldResults: diagnosticFoldResults,
+        gate: { eligibility: 'INNER_ELIGIBLE', reasons: [] },
+      });
+
+      const finalizeInput: MLBInnerDevelopmentAttemptFinalizeInput = {
+        repositoryRoot: tempRoot,
+        candidateRecipeId: registrationInput.candidateRecipe.candidateRecipeId,
+        attemptNumber: registrationResult.value.attemptNumber,
+        executionResult: successResult,
+      };
+
+      const finalizeResult = await finalizeMLBInnerDevelopmentAttemptTerminal(finalizeInput);
+      expect(finalizeResult.ok).toBe(true);
+      if (!finalizeResult.ok) {
+        throw new Error('Finalize failed');
+      }
+      expect(finalizeResult.state).toBe('COMPLETED_INNER_ELIGIBLE');
+
+      const inspection = await inspectMLBInnerDevelopmentCampaignStateAssumingLockHeld(tempRoot);
+      expect(inspection.ok).toBe(true);
+      if (!inspection.ok) {
+        throw new Error('Inspection failed');
+      }
+
+      const attempt = inspection.ledger.attempts.find(
+        a => a.candidateRecipeId === registrationInput.candidateRecipe.candidateRecipeId && a.attemptNumber === registrationResult.value.attemptNumber,
+      );
+      expect(attempt?.status).toBe('COMPLETED_INNER_ELIGIBLE');
+      if (!attempt || !('terminalExecution' in attempt) || !attempt.terminalExecution || attempt.terminalExecution.kind !== 'SUCCESS') {
+        throw new Error('terminalExecution missing');
+      }
+
+      const terminalExecution = attempt.terminalExecution;
+      expect(terminalExecution.foldResults).toHaveLength(4);
+      for (const foldResult of terminalExecution.foldResults) {
+        expect(foldResult.optimizerDiagnostics).toBeDefined();
+        if (foldResult.foldId === 'FOLD_1') {
+          expect(foldResult.optimizerDiagnostics).toEqual({
+            converged: false,
+            iterationsCompleted: 1000,
+            finalTrainingObjective: 0.67123456789,
+          });
+        } else if (foldResult.foldId === 'FOLD_2') {
+          expect(foldResult.optimizerDiagnostics).toEqual({
+            converged: true,
+            iterationsCompleted: 785,
+            finalTrainingObjective: 0.66987654321,
+          });
+        } else if (foldResult.foldId === 'FOLD_3') {
+          expect(foldResult.optimizerDiagnostics).toEqual({
+            converged: true,
+            iterationsCompleted: 620,
+            finalTrainingObjective: 0.67011111111,
+          });
+        } else if (foldResult.foldId === 'FOLD_4') {
+          expect(foldResult.optimizerDiagnostics).toEqual({
+            converged: false,
+            iterationsCompleted: 1000,
+            finalTrainingObjective: 0.67222222222,
+          });
+        }
+      }
     });
   });
 });

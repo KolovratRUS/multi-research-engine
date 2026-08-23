@@ -502,7 +502,14 @@ export function executeMLBInnerDevelopmentCandidate(
       };
     }
 
-    foldResults.push(metricOutcome.value);
+    foldResults.push({
+      ...metricOutcome.value,
+      optimizerDiagnostics: {
+        converged: fitSuccess.modelMetadata.converged,
+        iterationsCompleted: fitSuccess.modelMetadata.iterationsCompleted,
+        finalTrainingObjective: fitSuccess.modelMetadata.finalTrainingObjective,
+      },
+    });
   }
 
   if (foldResults.length !== 4) {

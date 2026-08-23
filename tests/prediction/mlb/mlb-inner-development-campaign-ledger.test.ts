@@ -1827,5 +1827,156 @@ describe('mlb-inner-development-campaign-ledger', () => {
       const result = validateMLBInnerDevelopmentCampaignLedger(ledger);
       expect(result.ok).toBe(true);
     });
+
+    it('accepts legacy terminal success without optimizerDiagnostics', () => {
+      const { budget, fingerprintByRecipeId } = buildBudgetAndFingerprints(1, ['recipe-1']);
+      const fp = fingerprintByRecipeId.get('recipe-1')!;
+      const registered = [makeRegisteredRecipe('recipe-1', 1, '2026-04-01T00:00:00.000Z', fp)];
+      const terminal = makeFourFoldSuccess('recipe-1');
+      const attempt = makeEligibleAttempt(1, 'recipe-1', fp, 1, '2026-04-01T01:00:00.000Z', makeValidProvenance(), terminal, canonicalFoldIds);
+      const ledger = makeLedger(budget, registered, [attempt], '2026-04-01T00:00:00.000Z', '2026-04-01T01:00:00.000Z');
+      const result = validateMLBInnerDevelopmentCampaignLedger(ledger);
+      expect(result.ok).toBe(true);
+    });
+
+    it('rejects malformed optimizerDiagnostics with non-boolean converged', () => {
+      const terminal = makeFourFoldSuccess('recipe-1');
+      const invalidFold = {
+        ...terminal.foldResults[0],
+        optimizerDiagnostics: { converged: 'true', iterationsCompleted: 1000, finalTrainingObjective: 0.5 },
+      };
+      const invalidTerminal = {
+        ...terminal,
+        foldResults: [invalidFold as unknown as MLBInnerFoldMetricResult, ...terminal.foldResults.slice(1)],
+      };
+      const { budget, fingerprintByRecipeId } = buildBudgetAndFingerprints(1, ['recipe-1']);
+      const fp = fingerprintByRecipeId.get('recipe-1')!;
+      const registered = [makeRegisteredRecipe('recipe-1', 1, '2026-04-01T00:00:00.000Z', fp)];
+      const attempt = makeEligibleAttempt(1, 'recipe-1', fp, 1, '2026-04-01T01:00:00.000Z', makeValidProvenance(), invalidTerminal as unknown as MLBInnerDevelopmentAttemptTerminalSuccess, canonicalFoldIds);
+      const ledger = makeLedger(budget, registered, [attempt], '2026-04-01T00:00:00.000Z', '2026-04-01T01:00:00.000Z');
+      const result = validateMLBInnerDevelopmentCampaignLedger(ledger);
+      expect(result.ok).toBe(false);
+      expect(issues(result).some(i => i.code === 'INVALID_BOOLEAN')).toBe(true);
+    });
+
+    it('rejects malformed optimizerDiagnostics with zero iterationsCompleted', () => {
+      const terminal = makeFourFoldSuccess('recipe-1');
+      const invalidFold = {
+        ...terminal.foldResults[0],
+        optimizerDiagnostics: { converged: true, iterationsCompleted: 0, finalTrainingObjective: 0.5 },
+      };
+      const invalidTerminal = {
+        ...terminal,
+        foldResults: [invalidFold as unknown as MLBInnerFoldMetricResult, ...terminal.foldResults.slice(1)],
+      };
+      const { budget, fingerprintByRecipeId } = buildBudgetAndFingerprints(1, ['recipe-1']);
+      const fp = fingerprintByRecipeId.get('recipe-1')!;
+      const registered = [makeRegisteredRecipe('recipe-1', 1, '2026-04-01T00:00:00.000Z', fp)];
+      const attempt = makeEligibleAttempt(1, 'recipe-1', fp, 1, '2026-04-01T01:00:00.000Z', makeValidProvenance(), invalidTerminal as unknown as MLBInnerDevelopmentAttemptTerminalSuccess, canonicalFoldIds);
+      const ledger = makeLedger(budget, registered, [attempt], '2026-04-01T00:00:00.000Z', '2026-04-01T01:00:00.000Z');
+      const result = validateMLBInnerDevelopmentCampaignLedger(ledger);
+      expect(result.ok).toBe(false);
+      expect(issues(result).some(i => i.code === 'INVALID_INTEGER')).toBe(true);
+    });
+
+    it('rejects malformed optimizerDiagnostics with non-integer iterationsCompleted', () => {
+      const terminal = makeFourFoldSuccess('recipe-1');
+      const invalidFold = {
+        ...terminal.foldResults[0],
+        optimizerDiagnostics: { converged: true, iterationsCompleted: 1.5, finalTrainingObjective: 0.5 },
+      };
+      const invalidTerminal = {
+        ...terminal,
+        foldResults: [invalidFold as unknown as MLBInnerFoldMetricResult, ...terminal.foldResults.slice(1)],
+      };
+      const { budget, fingerprintByRecipeId } = buildBudgetAndFingerprints(1, ['recipe-1']);
+      const fp = fingerprintByRecipeId.get('recipe-1')!;
+      const registered = [makeRegisteredRecipe('recipe-1', 1, '2026-04-01T00:00:00.000Z', fp)];
+      const attempt = makeEligibleAttempt(1, 'recipe-1', fp, 1, '2026-04-01T01:00:00.000Z', makeValidProvenance(), invalidTerminal as unknown as MLBInnerDevelopmentAttemptTerminalSuccess, canonicalFoldIds);
+      const ledger = makeLedger(budget, registered, [attempt], '2026-04-01T00:00:00.000Z', '2026-04-01T01:00:00.000Z');
+      const result = validateMLBInnerDevelopmentCampaignLedger(ledger);
+      expect(result.ok).toBe(false);
+      expect(issues(result).some(i => i.code === 'INVALID_INTEGER')).toBe(true);
+    });
+
+    it('rejects malformed optimizerDiagnostics missing converged', () => {
+      const terminal = makeFourFoldSuccess('recipe-1');
+      const invalidFold = {
+        ...terminal.foldResults[0],
+        optimizerDiagnostics: { iterationsCompleted: 1000, finalTrainingObjective: 0.5 },
+      };
+      const invalidTerminal = {
+        ...terminal,
+        foldResults: [invalidFold as unknown as MLBInnerFoldMetricResult, ...terminal.foldResults.slice(1)],
+      };
+      const { budget, fingerprintByRecipeId } = buildBudgetAndFingerprints(1, ['recipe-1']);
+      const fp = fingerprintByRecipeId.get('recipe-1')!;
+      const registered = [makeRegisteredRecipe('recipe-1', 1, '2026-04-01T00:00:00.000Z', fp)];
+      const attempt = makeEligibleAttempt(1, 'recipe-1', fp, 1, '2026-04-01T01:00:00.000Z', makeValidProvenance(), invalidTerminal as unknown as MLBInnerDevelopmentAttemptTerminalSuccess, canonicalFoldIds);
+      const ledger = makeLedger(budget, registered, [attempt], '2026-04-01T00:00:00.000Z', '2026-04-01T01:00:00.000Z');
+      const result = validateMLBInnerDevelopmentCampaignLedger(ledger);
+      expect(result.ok).toBe(false);
+      expect(issues(result).some(i => i.code === 'INVALID_BOOLEAN')).toBe(true);
+    });
+
+    it('rejects malformed optimizerDiagnostics missing iterationsCompleted', () => {
+      const terminal = makeFourFoldSuccess('recipe-1');
+      const invalidFold = {
+        ...terminal.foldResults[0],
+        optimizerDiagnostics: { converged: true, finalTrainingObjective: 0.5 },
+      };
+      const invalidTerminal = {
+        ...terminal,
+        foldResults: [invalidFold as unknown as MLBInnerFoldMetricResult, ...terminal.foldResults.slice(1)],
+      };
+      const { budget, fingerprintByRecipeId } = buildBudgetAndFingerprints(1, ['recipe-1']);
+      const fp = fingerprintByRecipeId.get('recipe-1')!;
+      const registered = [makeRegisteredRecipe('recipe-1', 1, '2026-04-01T00:00:00.000Z', fp)];
+      const attempt = makeEligibleAttempt(1, 'recipe-1', fp, 1, '2026-04-01T01:00:00.000Z', makeValidProvenance(), invalidTerminal as unknown as MLBInnerDevelopmentAttemptTerminalSuccess, canonicalFoldIds);
+      const ledger = makeLedger(budget, registered, [attempt], '2026-04-01T00:00:00.000Z', '2026-04-01T01:00:00.000Z');
+      const result = validateMLBInnerDevelopmentCampaignLedger(ledger);
+      expect(result.ok).toBe(false);
+      expect(issues(result).some(i => i.code === 'INVALID_INTEGER')).toBe(true);
+    });
+
+    it('rejects malformed optimizerDiagnostics missing finalTrainingObjective', () => {
+      const terminal = makeFourFoldSuccess('recipe-1');
+      const invalidFold = {
+        ...terminal.foldResults[0],
+        optimizerDiagnostics: { converged: true, iterationsCompleted: 1000 },
+      };
+      const invalidTerminal = {
+        ...terminal,
+        foldResults: [invalidFold as unknown as MLBInnerFoldMetricResult, ...terminal.foldResults.slice(1)],
+      };
+      const { budget, fingerprintByRecipeId } = buildBudgetAndFingerprints(1, ['recipe-1']);
+      const fp = fingerprintByRecipeId.get('recipe-1')!;
+      const registered = [makeRegisteredRecipe('recipe-1', 1, '2026-04-01T00:00:00.000Z', fp)];
+      const attempt = makeEligibleAttempt(1, 'recipe-1', fp, 1, '2026-04-01T01:00:00.000Z', makeValidProvenance(), invalidTerminal as unknown as MLBInnerDevelopmentAttemptTerminalSuccess, canonicalFoldIds);
+      const ledger = makeLedger(budget, registered, [attempt], '2026-04-01T00:00:00.000Z', '2026-04-01T01:00:00.000Z');
+      const result = validateMLBInnerDevelopmentCampaignLedger(ledger);
+      expect(result.ok).toBe(false);
+      expect(issues(result).some(i => i.code === 'NONFINITE_METRIC')).toBe(true);
+    });
+
+    it('rejects malformed optimizerDiagnostics with non-finite finalTrainingObjective', () => {
+      const terminal = makeFourFoldSuccess('recipe-1');
+      const invalidFold = {
+        ...terminal.foldResults[0],
+        optimizerDiagnostics: { converged: true, iterationsCompleted: 1000, finalTrainingObjective: NaN },
+      };
+      const invalidTerminal = {
+        ...terminal,
+        foldResults: [invalidFold as unknown as MLBInnerFoldMetricResult, ...terminal.foldResults.slice(1)],
+      };
+      const { budget, fingerprintByRecipeId } = buildBudgetAndFingerprints(1, ['recipe-1']);
+      const fp = fingerprintByRecipeId.get('recipe-1')!;
+      const registered = [makeRegisteredRecipe('recipe-1', 1, '2026-04-01T00:00:00.000Z', fp)];
+      const attempt = makeEligibleAttempt(1, 'recipe-1', fp, 1, '2026-04-01T01:00:00.000Z', makeValidProvenance(), invalidTerminal as unknown as MLBInnerDevelopmentAttemptTerminalSuccess, canonicalFoldIds);
+      const ledger = makeLedger(budget, registered, [attempt], '2026-04-01T00:00:00.000Z', '2026-04-01T01:00:00.000Z');
+      const result = validateMLBInnerDevelopmentCampaignLedger(ledger);
+      expect(result.ok).toBe(false);
+      expect(issues(result).some(i => i.code === 'NONFINITE_METRIC')).toBe(true);
+    });
   });
 });

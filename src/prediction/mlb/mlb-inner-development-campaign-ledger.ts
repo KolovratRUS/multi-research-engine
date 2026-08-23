@@ -232,8 +232,10 @@ export type MLBInnerDevelopmentCampaignLedgerIssue = Readonly<{
     | 'NONFINITE_METRIC'
     | 'INVALID_FOLD_SET'
     | 'MIXED_CANDIDATE_RECIPE_ID'
+    | 'MIXED_FOLD_ID'
     | 'CLASS_COUNT_MISMATCH'
-    | 'IDENTITY_MISMATCH';
+    | 'IDENTITY_MISMATCH'
+    | 'INVALID_BOOLEAN';
   path: string;
   message: string;
 }>;
@@ -1669,6 +1671,46 @@ function validateAttemptRecord(
           return null as never;
         }
 
+        const optimizerDiagnostics = ownDataProperty(rawFold, 'optimizerDiagnostics', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].optimizerDiagnostics`, issues);
+        let parsedOptimizerDiagnostics: { converged: boolean; iterationsCompleted: number; finalTrainingObjective: number } | undefined;
+        switch (optimizerDiagnostics.kind) {
+          case 'accessor': {
+            return null as never;
+          }
+          case 'missing': {
+            break;
+          }
+          case 'data': {
+            const rawDiagnostics = (optimizerDiagnostics as { kind: 'data'; value: unknown }).value;
+            if (!isPlainObject(rawDiagnostics)) {
+              pushIssue(issues, 'INVALID_TERMINAL_EXECUTION', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].optimizerDiagnostics`, 'optimizerDiagnostics must be a plain object');
+              return null as never;
+            }
+            if (!rejectSymbolProperties(rawDiagnostics as Record<string, unknown>, `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].optimizerDiagnostics`, issues)) {
+              return null as never;
+            }
+            const diagnosticsRecord = rawDiagnostics as Record<string, unknown>;
+            if (typeof diagnosticsRecord.converged !== 'boolean') {
+              pushIssue(issues, 'INVALID_BOOLEAN', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].optimizerDiagnostics.converged`, 'converged must be a boolean');
+              return null as never;
+            }
+            if (typeof diagnosticsRecord.iterationsCompleted !== 'number' || !Number.isInteger(diagnosticsRecord.iterationsCompleted) || diagnosticsRecord.iterationsCompleted <= 0) {
+              pushIssue(issues, 'INVALID_INTEGER', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].optimizerDiagnostics.iterationsCompleted`, 'iterationsCompleted must be a positive integer');
+              return null as never;
+            }
+            if (typeof diagnosticsRecord.finalTrainingObjective !== 'number' || !Number.isFinite(diagnosticsRecord.finalTrainingObjective)) {
+              pushIssue(issues, 'NONFINITE_METRIC', `$.attempts[${index}].terminalExecution.foldResults[${foldIndex}].optimizerDiagnostics.finalTrainingObjective`, 'finalTrainingObjective must be a finite number');
+              return null as never;
+            }
+            parsedOptimizerDiagnostics = {
+              converged: diagnosticsRecord.converged as boolean,
+              iterationsCompleted: diagnosticsRecord.iterationsCompleted as number,
+              finalTrainingObjective: diagnosticsRecord.finalTrainingObjective as number,
+            };
+            break;
+          }
+        }
+
         return {
           contractVersion: contractVersion.value as 'mlb-inner-fold-metric-result-v1',
           foldId: foldId.value as string,
@@ -1686,6 +1728,7 @@ function validateAttemptRecord(
           foldTrainPriorBrierScore: foldTrainPriorBrierScore.value as number,
           foldTrainPriorRocAuc: foldTrainPriorRocAuc.value as number,
           foldTrainPriorProbability: foldTrainPriorProbability.value as number,
+          ...(parsedOptimizerDiagnostics !== undefined ? { optimizerDiagnostics: parsedOptimizerDiagnostics } : {}),
         };
       }),
       aggregate: aggregate.value as MLBInnerAggregateResult,
@@ -2239,6 +2282,7 @@ const FOLD_RESULT_KNOWN_FIELDS = new Set([
   'foldTrainPriorBrierScore',
   'foldTrainPriorRocAuc',
   'foldTrainPriorProbability',
+  'optimizerDiagnostics',
 ]);
 
 const AGGREGATE_KNOWN_FIELDS = new Set([

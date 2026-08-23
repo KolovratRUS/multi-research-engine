@@ -164,6 +164,12 @@ type MLBInnerDevelopmentReferenceProvenance = Readonly<{
   datasetId: string;
 }>;
 
+export type MLBInnerFoldOptimizerDiagnostics = Readonly<{
+  converged: boolean;
+  iterationsCompleted: number;
+  finalTrainingObjective: number;
+}>;
+
 export type MLBInnerFoldMetricResult = Readonly<{
   contractVersion: 'mlb-inner-fold-metric-result-v1';
   foldId: string;
@@ -181,6 +187,7 @@ export type MLBInnerFoldMetricResult = Readonly<{
   foldTrainPriorBrierScore: number;
   foldTrainPriorRocAuc: number;
   foldTrainPriorProbability: number;
+  optimizerDiagnostics?: MLBInnerFoldOptimizerDiagnostics;
 }>;
 
 export type MLBInnerFoldMetricResultIssue = Readonly<{
@@ -216,7 +223,8 @@ export type MLBInnerFoldMetricResultIssue = Readonly<{
     | 'PROVENANCE_MISMATCH'
     | 'MIXED_CANDIDATE_RECIPE_ID'
     | 'MIXED_FOLD_ID'
-    | 'CLASS_DEGENERATE';
+    | 'CLASS_DEGENERATE'
+    | 'INVALID_BOOLEAN';
   path: string;
   message: string;
 }>;
@@ -1917,6 +1925,7 @@ export function evaluateMLBInnerFoldMetrics(
   predictions: readonly MLBInnerCandidatePredictionRecord[],
   reference: MLBInnerDevelopmentReferenceFacts,
   context: MLBInnerDevelopmentReferenceProvenance,
+  optimizerDiagnostics?: MLBInnerFoldOptimizerDiagnostics,
 ): Readonly<{ ok: true; value: MLBInnerFoldMetricResult } | { ok: false; issues: readonly MLBInnerFoldMetricResultIssue[] }> {
   const issues: MLBInnerFoldMetricResultIssue[] = [];
 
@@ -1971,6 +1980,25 @@ export function evaluateMLBInnerFoldMetrics(
   }
   if (reference.foldTrainPrior.probability !== expectedPrior) {
     pushIssue(issues, 'PRIOR_MISMATCH', '$.reference.foldTrainPrior.probability', `Reference foldTrainPrior probability ${reference.foldTrainPrior.probability} does not match fold prior ${expectedPrior}`);
+  }
+
+  if (optimizerDiagnostics !== undefined) {
+    if (!isPlainObject(optimizerDiagnostics)) {
+      pushIssue(issues, 'NOT_PLAIN_OBJECT', '$.optimizerDiagnostics', 'optimizerDiagnostics must be a plain object');
+      return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+    }
+    if (typeof optimizerDiagnostics.converged !== 'boolean') {
+      pushIssue(issues, 'INVALID_BOOLEAN', '$.optimizerDiagnostics.converged', 'converged must be a boolean');
+    }
+    if (typeof optimizerDiagnostics.iterationsCompleted !== 'number' || !Number.isInteger(optimizerDiagnostics.iterationsCompleted) || optimizerDiagnostics.iterationsCompleted <= 0) {
+      pushIssue(issues, 'INVALID_INTEGER', '$.optimizerDiagnostics.iterationsCompleted', 'iterationsCompleted must be a positive integer');
+    }
+    if (typeof optimizerDiagnostics.finalTrainingObjective !== 'number' || !Number.isFinite(optimizerDiagnostics.finalTrainingObjective)) {
+      pushIssue(issues, 'NONFINITE_METRIC', '$.optimizerDiagnostics.finalTrainingObjective', 'finalTrainingObjective must be a finite number');
+    }
+    if (issues.length > 0) {
+      return { ok: false, issues: sortIssues(issues) as readonly MLBInnerFoldMetricResultIssue[] };
+    }
   }
 
   if (issues.length > 0) {
@@ -2127,6 +2155,7 @@ export function evaluateMLBInnerFoldMetrics(
     foldTrainPriorBrierScore: priorBrierScore,
     foldTrainPriorRocAuc: priorRocAuc,
     foldTrainPriorProbability: expectedPrior,
+    ...(optimizerDiagnostics !== undefined ? { optimizerDiagnostics } : {}),
   };
 
   return { ok: true, value: result };
