@@ -16,7 +16,7 @@ import type {
   PitcherRecentStart,
 } from '../types';
 import { DEFAULT_FRESHNESS_CONFIG } from '../types';
-import { ResearchDataError } from '../errors';
+import { ResearchDataError, ResearchDataValidationError } from '../errors';
 import type { MLBResearchDataProvider } from '../types';
 
 export const STADIUM_REGISTRY: Record<number, MLBVenue> = {
@@ -317,7 +317,10 @@ function mapGameStatus(coded: string): MLBScheduleGame['status'] {
     case 'C':
       return 'CANCELLED';
     default:
-      return 'UPCOMING';
+      throw new ResearchDataValidationError({
+        message: `Unsupported MLB schedule status: ${coded}`,
+        source: 'normalizeSchedule',
+      });
   }
 }
 
