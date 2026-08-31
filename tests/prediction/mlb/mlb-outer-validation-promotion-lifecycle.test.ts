@@ -436,15 +436,27 @@ describe('transitionMLBOuterValidationPromotionToTrainModelReady', () => {
 });
 
 describe('transitionMLBOuterValidationPromotionToPreValidationFailed', () => {
-  it('accepts each valid failureKind', async () => {
-    for (const failureKind of ['PRECONDITION_FAILURE', 'TRAIN_SOURCE_INTEGRITY_FAILURE', 'TRAIN_FIT_THROW', 'TRAIN_NONCONVERGENCE', 'MODEL_VALIDATION_FAILURE', 'MODEL_PERSISTENCE_FAILURE']) {
+  const PRE_VALIDATION_FAILURE_KINDS: readonly MLBOuterValidationPromotionPreHoldoutFailureKind[] = [
+    'PRECONDITION_FAILURE',
+    'TRAIN_SOURCE_INTEGRITY_FAILURE',
+    'TRAIN_FIT_THROW',
+    'TRAIN_NONCONVERGENCE',
+    'MODEL_VALIDATION_FAILURE',
+    'MODEL_PERSISTENCE_FAILURE',
+  ];
+
+  it.each(PRE_VALIDATION_FAILURE_KINDS)(
+    'accepts valid failureKind %s',
+    async (failureKind) => {
       const root = await createTempRoot();
       try {
         const genesis = await performMLBOuterValidationPromotionGenesis(root, validGenesisInput());
         expect(genesis.ok).toBe(true);
-        if (!genesis.ok) return;
+        if (!genesis.ok) {
+          throw new Error(`Genesis failed for ${failureKind}: unexpected rejection`);
+        }
 
-        const result = await transitionMLBOuterValidationPromotionToPreValidationFailed(root, failureKind as MLBOuterValidationPromotionPreHoldoutFailureKind, 'msg');
+        const result = await transitionMLBOuterValidationPromotionToPreValidationFailed(root, failureKind, 'msg');
         expect(result.ok).toBe(true);
         if (result.ok) {
           expect(result.ledger.status).toBe('PRE_VALIDATION_FAILED');
@@ -453,8 +465,8 @@ describe('transitionMLBOuterValidationPromotionToPreValidationFailed', () => {
       } finally {
         await fs.rm(root, { recursive: true, force: true });
       }
-    }
-  });
+    },
+  );
 
   it('populates occurredAt timestamp', async () => {
     const root = await createTempRoot();
