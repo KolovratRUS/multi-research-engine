@@ -762,5 +762,61 @@ describe('mlb-prospective-holdout-activation-plan', () => {
     expect(validationTarget).toBe(67);
     expect(testTarget).toBe(69);
   });
+
+  it('32. public plan surface matches runtime 25-key schema', () => {
+    const validationGames = makeGames(67, '2026-09-01');
+    const testGames = makeGames(69, '2026-09-02', 12, 1000);
+    const input: MLBProspectiveHoldoutActivationPlanInput = {
+      activationId: 'plan-schema-proof',
+      planningReferenceAt: '2026-09-01T00:00:00Z',
+      scheduleGames: [...validationGames, ...testGames],
+    };
+    const result = plan(input);
+    const p = expectSuccess(result);
+
+    const expectedPlanKeys = [
+      'planContractVersion',
+      'boundarySelectionPolicyId',
+      'activationId',
+      'planningReferenceAt',
+      'validationBoundaryOfficialDate',
+      'activationDeadlineAt',
+      'inputGameCount',
+      'prospectivelyEligibleGameCount',
+      'validationSideAvailableCount',
+      'testSideAvailableCount',
+      'validationTargetCount',
+      'testTargetCount',
+      'stableOrderPolicy',
+      'validationSideDateRule',
+      'testSideDateRule',
+      'noSmallerN',
+      'resultIndependentSelection',
+      'candidateRecipeId',
+      'candidateFingerprint',
+      'scheduleUniverseFingerprint',
+      'activationPayload',
+      'firstValidationGamePk',
+      'firstTestSideGamePk',
+      'contractVersion',
+      'planFingerprint',
+    ];
+
+    expect(Object.getOwnPropertyNames(p)).toEqual(expectedPlanKeys);
+    expect(Object.getOwnPropertyNames(p)).toHaveLength(25);
+
+    const activationPlan: MLBProspectiveHoldoutActivationPlan = p;
+    expect(activationPlan.planContractVersion).toBe(MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_PLAN_CONTRACT_VERSION);
+    expect(activationPlan.stableOrderPolicy).toBe(MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STABLE_ORDER_POLICY);
+    expect(activationPlan.validationSideDateRule).toBe(MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_VALIDATION_SIDE_DATE_RULE);
+    expect(activationPlan.testSideDateRule).toBe(MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_SIDE_DATE_RULE);
+    expect(activationPlan.noSmallerN).toBe(true);
+    expect(activationPlan.resultIndependentSelection).toBe(true);
+    expect(activationPlan.candidateRecipeId).toBe(MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_ID);
+    expect(activationPlan.candidateFingerprint).toBe(MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_FINGERPRINT);
+    expect(activationPlan.planContractVersion).toBe(activationPlan.contractVersion);
+
+    expect(Object.getOwnPropertyNames(activationPlan.activationPayload)).toHaveLength(23);
+  });
 });
 

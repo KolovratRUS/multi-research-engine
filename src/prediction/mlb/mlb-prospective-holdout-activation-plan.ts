@@ -63,7 +63,7 @@ export type MLBProspectiveHoldoutActivationPlanIssue = Readonly<{
 }>;
 
 export type MLBProspectiveHoldoutActivationPlan = Readonly<{
-  contractVersion: typeof MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_PLAN_CONTRACT_VERSION;
+  planContractVersion: typeof MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_PLAN_CONTRACT_VERSION;
   boundarySelectionPolicyId: typeof MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_PLAN_BOUNDARY_SELECTION_POLICY_ID;
   activationId: string;
   planningReferenceAt: string;
@@ -75,11 +75,19 @@ export type MLBProspectiveHoldoutActivationPlan = Readonly<{
   testSideAvailableCount: number;
   validationTargetCount: 67;
   testTargetCount: 69;
+  stableOrderPolicy: typeof MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STABLE_ORDER_POLICY;
+  validationSideDateRule: typeof MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_VALIDATION_SIDE_DATE_RULE;
+  testSideDateRule: typeof MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_SIDE_DATE_RULE;
+  noSmallerN: true;
+  resultIndependentSelection: true;
+  candidateRecipeId: typeof MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_ID;
+  candidateFingerprint: typeof MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_FINGERPRINT;
   scheduleUniverseFingerprint: string;
   activationPayload: MLBProspectiveHoldoutActivation;
-  planFingerprint: string;
   firstValidationGamePk: number | null;
   firstTestSideGamePk: number | null;
+  contractVersion: typeof MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_PLAN_CONTRACT_VERSION;
+  planFingerprint: string;
 }>;
 
 export type MLBProspectiveHoldoutActivationPlanSuccess = Readonly<{

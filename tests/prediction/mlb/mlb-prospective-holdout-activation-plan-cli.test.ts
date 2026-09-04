@@ -21,6 +21,7 @@ import {
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_VALIDATION_SIDE_DATE_RULE,
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_SIDE_DATE_RULE,
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_AUTHORIZATION_RULE,
+  type MLBProspectiveHoldoutActivation,
 } from '@/prediction/mlb/mlb-prospective-holdout-activation-contract';
 import {
   MLB_PROSPECTIVE_HOLDOUT_PROTOCOL_ID,
@@ -195,9 +196,37 @@ function createIO(): { io: PlanCLIIO; stdout: Mock<(message: string) => void>; s
   };
 }
 
-function buildMockPlan(overrides: Partial<MLBProspectiveHoldoutActivationPlan> = {}): MLBProspectiveHoldoutActivationPlan {
+function buildMockActivationPayload(): MLBProspectiveHoldoutActivation {
   return {
-    contractVersion: 'mlb-prospective-holdout-activation-plan-v1',
+    contractVersion: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_CONTRACT_VERSION,
+    protocolId: MLB_PROSPECTIVE_HOLDOUT_PROTOCOL_ID,
+    activationId: 'act-1',
+    candidateRecipeId: MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_ID,
+    candidateFingerprint: MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_FINGERPRINT,
+    featureManifestId: 'mlb-real-pregame-winner-feature-manifest-v1',
+    featurePolicyId: 'mlb-real-pregame-winner-feature-policy-v1',
+    preprocessingPolicyId: 'raw-finite-feature-values-with-default-missing-v1',
+    captureContractVersion: MLB_PROSPECTIVE_T360_CAPTURE_CONTRACT_VERSION,
+    compatibilityLayerId: MLB_V1_CANDIDATE_003_T360_CAPTURE_COMPATIBILITY_V1,
+    evidenceArtifactContractVersion: MLB_PROSPECTIVE_PREGAME_EVIDENCE_ARTIFACT_CONTRACT_VERSION,
+    evidenceStoreVersion: MLB_PROSPECTIVE_PREGAME_EVIDENCE_STORE_VERSION,
+    validationBoundaryOfficialDate: '2026-09-01',
+    validationTargetCount: 67,
+    testTargetCount: 69,
+    stableOrderPolicy: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STABLE_ORDER_POLICY,
+    validationSideDateRule: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_VALIDATION_SIDE_DATE_RULE,
+    testSideDateRule: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_SIDE_DATE_RULE,
+    noSmallerN: true,
+    resultIndependentSelection: true,
+    testAuthorizationRule: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_AUTHORIZATION_RULE,
+    gameIdentityBindingContractVersion: MLB_PROSPECTIVE_HOLDOUT_GAME_IDENTITY_BINDING_CONTRACT_VERSION,
+    gameIdentityBindingStoreVersion: MLB_PROSPECTIVE_HOLDOUT_GAME_IDENTITY_BINDING_STORE_VERSION,
+  };
+}
+
+function buildMockPlan(overrides: Partial<MLBProspectiveHoldoutActivationPlan> = {}): MLBProspectiveHoldoutActivationPlan {
+  const base: MLBProspectiveHoldoutActivationPlan = {
+    planContractVersion: 'mlb-prospective-holdout-activation-plan-v1',
     boundarySelectionPolicyId: 'earliest-official-date-supporting-frozen-target-counts-v1',
     activationId: 'act-1',
     planningReferenceAt: DEFAULT_NOW,
@@ -209,13 +238,21 @@ function buildMockPlan(overrides: Partial<MLBProspectiveHoldoutActivationPlan> =
     testSideAvailableCount: 69,
     validationTargetCount: 67,
     testTargetCount: 69,
+    stableOrderPolicy: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STABLE_ORDER_POLICY,
+    validationSideDateRule: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_VALIDATION_SIDE_DATE_RULE,
+    testSideDateRule: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_SIDE_DATE_RULE,
+    noSmallerN: true,
+    resultIndependentSelection: true,
+    candidateRecipeId: MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_ID,
+    candidateFingerprint: MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_FINGERPRINT,
     scheduleUniverseFingerprint: 'fp',
-    activationPayload: {} as any,
-    planFingerprint: 'pfp',
+    activationPayload: buildMockActivationPayload(),
     firstValidationGamePk: 1,
     firstTestSideGamePk: 1000,
-    ...overrides,
+    contractVersion: 'mlb-prospective-holdout-activation-plan-v1',
+    planFingerprint: 'pfp',
   };
+  return Object.assign(base, overrides);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1413,6 +1450,68 @@ describe('mlb-prospective-holdout-activation-plan host', () => {
     expect(error).toHaveProperty('kind');
     expect(Array.isArray(error.issues)).toBe(true);
     expect(error.issues.length).toBeGreaterThan(0);
+  });
+
+  // 52. CLI stdout contains full 25-key public plan schema
+  it('52. successful CLI stdout contains full 25-key public plan schema', async () => {
+    const fixture = createMockDependencies();
+    fixture.provider.mockImplementation(async (date: string) => {
+      if (date === '2026-09-01') {
+        return buildScheduleResult(makeGamesForDate(67, '2026-09-01'));
+      }
+      if (date === '2026-09-02') {
+        return buildScheduleResult(makeGamesForDate(69, '2026-09-02', 1000));
+      }
+      return buildScheduleResult([]);
+    });
+    const expectedPlan = buildMockPlan();
+    mockPlan.mockReturnValue({ ok: true, plan: expectedPlan });
+
+    const { io, stdout } = createIO();
+    const code = await runMLBProspectiveHoldoutActivationPlanCLI(['node', 'script', 'act-1'], io, fixture.deps);
+
+    expect(code).toBe(0);
+    const planJson = stdout.mock.calls[0]![0];
+    const planObj = JSON.parse(planJson);
+    const planKeys = Object.getOwnPropertyNames(planObj);
+    expect(planKeys).toEqual([
+      'planContractVersion',
+      'boundarySelectionPolicyId',
+      'activationId',
+      'planningReferenceAt',
+      'validationBoundaryOfficialDate',
+      'activationDeadlineAt',
+      'inputGameCount',
+      'prospectivelyEligibleGameCount',
+      'validationSideAvailableCount',
+      'testSideAvailableCount',
+      'validationTargetCount',
+      'testTargetCount',
+      'stableOrderPolicy',
+      'validationSideDateRule',
+      'testSideDateRule',
+      'noSmallerN',
+      'resultIndependentSelection',
+      'candidateRecipeId',
+      'candidateFingerprint',
+      'scheduleUniverseFingerprint',
+      'activationPayload',
+      'firstValidationGamePk',
+      'firstTestSideGamePk',
+      'contractVersion',
+      'planFingerprint',
+    ]);
+    expect(planKeys).toHaveLength(25);
+    expect(planObj.planContractVersion).toBe('mlb-prospective-holdout-activation-plan-v1');
+    expect(planObj.contractVersion).toBe('mlb-prospective-holdout-activation-plan-v1');
+    expect(planObj.stableOrderPolicy).toBe('scheduledStartAt_ASC_gamePk_ASC');
+    expect(planObj.validationSideDateRule).toBe('OFFICIAL_DATE_LTE_BOUNDARY');
+    expect(planObj.testSideDateRule).toBe('OFFICIAL_DATE_GT_BOUNDARY');
+    expect(planObj.noSmallerN).toBe(true);
+    expect(planObj.resultIndependentSelection).toBe(true);
+    expect(planObj.candidateRecipeId).toBe('mlb-v1-inner-candidate-003');
+    expect(planObj.candidateFingerprint).toBe('ce35df51cdf38ed9bf91aa2fb78871443f259c963d8c2700e8b6fe5d960a95bc');
+    expect(Object.getOwnPropertyNames(planObj.activationPayload)).toHaveLength(23);
   });
 });
 
