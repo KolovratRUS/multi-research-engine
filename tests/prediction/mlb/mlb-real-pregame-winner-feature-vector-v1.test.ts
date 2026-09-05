@@ -395,4 +395,27 @@ describe('mlb-real-pregame-winner-feature-vector-v1', () => {
     );
     expect(source).not.toMatch(/odds|moneyline|spread|implied probability|edge|value|CLV|stake|bankroll|ROI/);
   });
+
+  it('extraction fails with FEATURE_TYPE_MISMATCH and FEATURE_SOURCE_INVALID for native provider shapes', () => {
+    const snapshot = buildValidSnapshot({
+      sections: [
+        buildBattingSection('away'),
+        buildBullpenSection('away', { recentWorkload: null }),
+        buildStarterSection('away', { availability: 'AVAILABLE' }),
+        buildGameContextSection(),
+        buildBattingSection('home'),
+        buildBullpenSection('home', { recentWorkload: null }),
+        buildStarterSection('home', { availability: 'AVAILABLE' }),
+      ],
+    });
+
+    const result = extractMLBRealPregameWinnerFeatureVectorV1(snapshot);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+
+    const typeMismatches = result.issues.filter((issue) => issue.code === 'FEATURE_TYPE_MISMATCH');
+    const sourceInvalids = result.issues.filter((issue) => issue.code === 'FEATURE_SOURCE_INVALID');
+    expect(typeMismatches).toHaveLength(2);
+    expect(sourceInvalids).toHaveLength(4);
+  });
 });

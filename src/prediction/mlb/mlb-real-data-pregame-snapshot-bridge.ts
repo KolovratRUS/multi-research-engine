@@ -315,7 +315,6 @@ function deriveSections(
             personId: homePitcher.personId,
             fullName: homePitcher.fullName,
             teamId: homePitcher.teamId,
-            availability: homePitcher.availability,
             status: homePitcher.status,
             fetchedAt: homePitcher.fetchedAt.toISOString(),
             warnings: homePitcher.warnings,
@@ -341,7 +340,6 @@ function deriveSections(
             personId: awayPitcher.personId,
             fullName: awayPitcher.fullName,
             teamId: awayPitcher.teamId,
-            availability: awayPitcher.availability,
             status: awayPitcher.status,
             fetchedAt: awayPitcher.fetchedAt.toISOString(),
             warnings: awayPitcher.warnings,
@@ -412,7 +410,9 @@ function deriveSections(
             completeness: homeBullpen.completeness,
             warnings: homeBullpen.warnings,
             seasonStats: homeBullpen.seasonStats,
-            recentWorkload: homeBullpen.recentWorkload,
+            ...(homeBullpen.recentWorkload !== null
+              ? { recentWorkload: homeBullpen.recentWorkload }
+              : {}),
             confirmedRelieverAvailability: homeBullpen.confirmedRelieverAvailability,
           }
         : {},
@@ -435,7 +435,9 @@ function deriveSections(
             completeness: awayBullpen.completeness,
             warnings: awayBullpen.warnings,
             seasonStats: awayBullpen.seasonStats,
-            recentWorkload: awayBullpen.recentWorkload,
+            ...(awayBullpen.recentWorkload !== null
+              ? { recentWorkload: awayBullpen.recentWorkload }
+              : {}),
             confirmedRelieverAvailability: awayBullpen.confirmedRelieverAvailability,
           }
         : {},

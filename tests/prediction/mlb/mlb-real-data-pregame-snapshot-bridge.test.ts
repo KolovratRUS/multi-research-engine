@@ -7,6 +7,13 @@ import {
   validateMLBCanonicalPregameSnapshot,
   MLB_CANONICAL_PREGAME_SNAPSHOT_CONTRACT_VERSION,
 } from '@/prediction/mlb/mlb-pregame-snapshot-contract';
+import {
+  MLB_REAL_PREGAME_WINNER_FEATURE_MANIFEST_V1,
+} from '@/prediction/mlb/mlb-real-pregame-winner-feature-manifest-v1';
+import {
+  extractMLBLeakageSafeFeatureVector,
+} from '@/prediction/mlb/mlb-feature-vector-contract';
+import { applyCandidate003ProspectiveFeatureCompatibility } from '@/prediction/mlb/mlb-candidate-003-prospective-feature-compatibility';
 
 function buildScheduleGame(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -860,5 +867,128 @@ describe('mlb-real-data-pregame-snapshot-bridge', () => {
     if (result1.ok && result2.ok) {
       expect(result2.value).toEqual(result1.value);
     }
+  });
+
+  it('extracts 14 features with zeroed missing/default values for native string availability and null recentWorkload', () => {
+    const input = buildBridgeInput({
+      researchSnapshot: buildResearchSnapshot({
+        probablePitchers: {
+          home: {
+            availability: 'AVAILABLE',
+            personId: 1001,
+            fullName: 'Gerrit Cole',
+            teamId: 110,
+            status: 'CONFIRMED',
+            fetchedAt: new Date('2026-07-15T09:00:00Z'),
+            warnings: [],
+          },
+          away: {
+            availability: 'UNAVAILABLE',
+            personId: 1002,
+            fullName: 'Chris Sale',
+            teamId: 111,
+            status: 'CONFIRMED',
+            fetchedAt: new Date('2026-07-15T09:00:00Z'),
+            warnings: [],
+          },
+        },
+        bullpen: {
+          home: {
+            teamId: 110,
+            teamName: 'New York Yankees',
+            completeness: 100,
+            warnings: [],
+            seasonStats: { era: 3.5 },
+            recentWorkload: null,
+            confirmedRelieverAvailability: {},
+          },
+          away: {
+            teamId: 111,
+            teamName: 'Boston Red Sox',
+            completeness: 100,
+            warnings: [],
+            seasonStats: { era: 4.0 },
+            recentWorkload: null,
+            confirmedRelieverAvailability: {},
+          },
+        },
+      }),
+    });
+
+    const result = buildMLBRealDataPregameSnapshot(input);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const extraction = extractMLBLeakageSafeFeatureVector(
+      MLB_REAL_PREGAME_WINNER_FEATURE_MANIFEST_V1,
+      result.value,
+    );
+
+    expect(extraction.ok).toBe(true);
+    if (!extraction.ok) return;
+
+    const values = extraction.value.values;
+    expect(values).toHaveLength(14);
+
+    const featureMap = new Map(values.map((v) => [v.featureId, v]));
+    expect(featureMap.get('awayBullpenExtraInningGames')).toEqual({ featureId: 'awayBullpenExtraInningGames', value: 0, wasMissing: true });
+    expect(featureMap.get('awayBullpenGamesInPrevious3Days')).toEqual({ featureId: 'awayBullpenGamesInPrevious3Days', value: 0, wasMissing: true });
+    expect(featureMap.get('awayStarterAvailable')).toEqual({ featureId: 'awayStarterAvailable', value: 0, wasMissing: true });
+    expect(featureMap.get('homeBullpenExtraInningGames')).toEqual({ featureId: 'homeBullpenExtraInningGames', value: 0, wasMissing: true });
+    expect(featureMap.get('homeBullpenGamesInPrevious3Days')).toEqual({ featureId: 'homeBullpenGamesInPrevious3Days', value: 0, wasMissing: true });
+    expect(featureMap.get('homeStarterAvailable')).toEqual({ featureId: 'homeStarterAvailable', value: 0, wasMissing: true });
+
+    const compatibleResult = applyCandidate003ProspectiveFeatureCompatibility(extraction.value);
+    expect(compatibleResult.ok).toBe(true);
+    if (!compatibleResult.ok) return;
+    const compatibleMap = new Map(compatibleResult.value.values.map((v) => [v.featureId, v]));
+    expect(compatibleMap.get('awayStarterAvailable')).toEqual({ featureId: 'awayStarterAvailable', value: 0, wasMissing: true });
+    expect(compatibleMap.get('homeStarterAvailable')).toEqual({ featureId: 'homeStarterAvailable', value: 0, wasMissing: true });
+  });
+
+  it('preserves valid non-null bullpen recentWorkload through the bridge', () => {
+    const input = buildBridgeInput({
+      researchSnapshot: buildResearchSnapshot({
+        bullpen: {
+          home: {
+            teamId: 110,
+            teamName: 'New York Yankees',
+            completeness: 100,
+            warnings: [],
+            seasonStats: { era: 3.5 },
+            recentWorkload: { extraInningGames: 2, gamesInPrevious3Days: 1 },
+            confirmedRelieverAvailability: {},
+          },
+          away: {
+            teamId: 111,
+            teamName: 'Boston Red Sox',
+            completeness: 100,
+            warnings: [],
+            seasonStats: { era: 4.0 },
+            recentWorkload: { extraInningGames: 3, gamesInPrevious3Days: 2 },
+            confirmedRelieverAvailability: {},
+          },
+        },
+      }),
+    });
+
+    const result = buildMLBRealDataPregameSnapshot(input);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const extraction = extractMLBLeakageSafeFeatureVector(
+      MLB_REAL_PREGAME_WINNER_FEATURE_MANIFEST_V1,
+      result.value,
+    );
+
+    expect(extraction.ok).toBe(true);
+    if (!extraction.ok) return;
+
+    const values = extraction.value.values;
+    const featureMap = new Map(values.map((v) => [v.featureId, v]));
+    expect(featureMap.get('homeBullpenExtraInningGames')).toEqual({ featureId: 'homeBullpenExtraInningGames', value: 2, wasMissing: false });
+    expect(featureMap.get('homeBullpenGamesInPrevious3Days')).toEqual({ featureId: 'homeBullpenGamesInPrevious3Days', value: 1, wasMissing: false });
+    expect(featureMap.get('awayBullpenExtraInningGames')).toEqual({ featureId: 'awayBullpenExtraInningGames', value: 3, wasMissing: false });
+    expect(featureMap.get('awayBullpenGamesInPrevious3Days')).toEqual({ featureId: 'awayBullpenGamesInPrevious3Days', value: 2, wasMissing: false });
   });
 });

@@ -8,6 +8,10 @@ import {
   type MLBProspectiveHoldoutCaptureClock,
   type MLBProspectiveHoldoutCaptureSnapshotBuilder,
 } from '@/prediction/mlb/mlb-prospective-holdout-capture-orchestrator';
+import {
+  buildMLBRealDataPregameSnapshot,
+  type MLBRealDataPregameSnapshotBridgeInput,
+} from '@/prediction/mlb/mlb-real-data-pregame-snapshot-bridge';
 
 import {
   MLB_PROSPECTIVE_HOLDOUT_PROTOCOL_ID,
@@ -2198,6 +2202,322 @@ describe('mlb-prospective-holdout-capture-orchestrator: concurrency races', () =
       expect(discovery.candidates).toHaveLength(1);
       expect(discovery.rescheduleConflicts).toHaveLength(0);
       expect(discovery.temporaryDebris).toHaveLength(0);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Stage G: bridge defect regression                                          */
+/* -------------------------------------------------------------------------- */
+
+describe('mlb-prospective-holdout-capture-orchestrator: bridge defect regression', () => {
+  it('31. native provider shapes (string availability, null recentWorkload) → INTEGRITY_FAILURE → builder 1 → no H → no binding', async () => {
+    resetBuilderCount();
+    const root = await createTempRoot('mlb-capture-bridge-defect-');
+    try {
+      const activation = buildValidActivation();
+      const persistedActivation = await persistSyntheticActivation(root, activation, () => '2026-08-15T05:00:00Z');
+
+      const game = buildScheduleGame();
+      const clock = createConstantClock('2026-08-15T05:59:59.999Z');
+
+      const invalidSnapshotOverrides = {
+        sections: [
+          {
+            sectionId: 'section-away-batting',
+            kind: 'TEAM_SEASON_CONTEXT',
+            entity: { scope: 'AWAY_TEAM', entityId: 'away-1' },
+            status: 'AVAILABLE',
+            asOfAt: FROZEN_SOURCE_TS,
+            sourceRefIds: ['src-official'],
+            payload: {
+              seasonStats: { winRate: 0.5, runsScoredPerGame: 4.2, runsAllowedPerGame: 3.8 },
+            },
+          },
+          {
+            sectionId: 'section-away-bullpen',
+            kind: 'BULLPEN_CONTEXT',
+            entity: { scope: 'AWAY_TEAM', entityId: 'away-1' },
+            status: 'AVAILABLE',
+            asOfAt: FROZEN_SOURCE_TS,
+            sourceRefIds: ['src-official'],
+            payload: {
+              recentWorkload: null,
+            },
+          },
+          {
+            sectionId: 'section-away-starter',
+            kind: 'STARTING_PITCHER_CONTEXT',
+            entity: { scope: 'AWAY_STARTER', entityId: 'p-2' },
+            status: 'AVAILABLE',
+            asOfAt: FROZEN_SOURCE_TS,
+            sourceRefIds: ['src-official'],
+            payload: {
+              availability: 'AVAILABLE',
+            },
+          },
+          {
+            sectionId: 'section-game-context',
+            kind: 'GAME_CONTEXT',
+            entity: { scope: 'GAME', entityId: null },
+            status: 'AVAILABLE',
+            asOfAt: FROZEN_SOURCE_TS,
+            sourceRefIds: ['src-official'],
+            payload: { doubleHeaderGameNumber: 1, scheduledInnings: 9 },
+          },
+          {
+            sectionId: 'section-home-batting',
+            kind: 'TEAM_SEASON_CONTEXT',
+            entity: { scope: 'HOME_TEAM', entityId: 'home-1' },
+            status: 'AVAILABLE',
+            asOfAt: FROZEN_SOURCE_TS,
+            sourceRefIds: ['src-official'],
+            payload: {
+              seasonStats: { winRate: 0.5, runsScoredPerGame: 4.2, runsAllowedPerGame: 3.8 },
+            },
+          },
+          {
+            sectionId: 'section-home-bullpen',
+            kind: 'BULLPEN_CONTEXT',
+            entity: { scope: 'HOME_TEAM', entityId: 'home-1' },
+            status: 'AVAILABLE',
+            asOfAt: FROZEN_SOURCE_TS,
+            sourceRefIds: ['src-official'],
+            payload: {
+              recentWorkload: null,
+            },
+          },
+          {
+            sectionId: 'section-home-starter',
+            kind: 'STARTING_PITCHER_CONTEXT',
+            entity: { scope: 'HOME_STARTER', entityId: 'p-1' },
+            status: 'AVAILABLE',
+            asOfAt: FROZEN_SOURCE_TS,
+            sourceRefIds: ['src-official'],
+            payload: {
+              availability: 'AVAILABLE',
+            },
+          },
+        ],
+        startingPitchers: {
+          home: { state: 'PROBABLE', pitcherId: 'p-1', announcedAt: FROZEN_SOURCE_TS, sourceRefIds: ['src-official'] },
+          away: { state: 'PROBABLE', pitcherId: 'p-2', announcedAt: FROZEN_SOURCE_TS, sourceRefIds: ['src-official'] },
+        },
+        dataCompleteness: 'COMPLETE',
+        warnings: [buildWarning()],
+      };
+
+      const builder = (): MLBCanonicalPregameSnapshot => {
+        builderCallCount++;
+        const raw = buildValidSnapshot({
+          ...invalidSnapshotOverrides,
+          game: {
+            gameId: String(game.gamePk),
+            scheduledStartAt: game.startTimeUtc.toISOString(),
+            officialDate: game.officialDate,
+          },
+        });
+        const validation = validateMLBCanonicalPregameSnapshot(raw);
+        if (!validation.ok) {
+          throw new Error('Invalid snapshot fixture: ' + JSON.stringify(validation.issues));
+        }
+        return validation.value;
+      };
+
+      const result = await runProspectiveHoldoutCaptureOrchestrator({
+        repositoryRoot: root,
+        scheduleGame: game,
+        clock,
+        snapshotBuilder: builder,
+      });
+
+      expect(result.kind).toBe('INTEGRITY_FAILURE');
+      expect(builderCallCount).toBe(1);
+      if (result.kind !== 'INTEGRITY_FAILURE') {
+        throw new Error(`Expected INTEGRITY_FAILURE, received ${result.kind}`);
+      }
+      const issueCodes = (result.issues as string[]).map((issue) => issue.split(' ')[0]);
+      expect(issueCodes).toContain('FEATURE_TYPE_MISMATCH:');
+      expect(issueCodes).toContain('FEATURE_SOURCE_INVALID:');
+      expect(issueCodes.filter((code) => code === 'FEATURE_TYPE_MISMATCH:').length).toBe(2);
+      expect(issueCodes.filter((code) => code === 'FEATURE_SOURCE_INVALID:').length).toBe(4);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('32. bridge-adapted provider shapes → CAPTURED_AND_BOUND → builder 1 → 1 H → 1 binding', async () => {
+    resetBuilderCount();
+    const root = await createTempRoot('mlb-capture-bridge-positive-');
+    try {
+      const activation = buildValidActivation();
+      const persistedActivation = await persistSyntheticActivation(root, activation, () => '2026-08-15T05:00:00Z');
+
+      const game = buildScheduleGame({ gameType: 'R' });
+      const clock = createConstantClock('2026-08-15T05:59:59.999Z');
+
+      const researchSnapshot: MLBRealDataPregameSnapshotBridgeInput['researchSnapshot'] = {
+        event: {
+          id: 'event-1',
+          externalId: String(game.gamePk),
+          sport: 'mlb',
+          league: 'MLB',
+          leagueSlug: 'mlb',
+          homeTeam: game.homeTeamName,
+          awayTeam: game.awayTeamName,
+          homeTeamSlug: 'home',
+          awayTeamSlug: 'away',
+          startTimeUtc: game.startTimeUtc,
+          status: 'UPCOMING',
+          homeScore: undefined,
+          awayScore: undefined,
+          createdAt: new Date('2026-08-15T04:00:00Z'),
+          updatedAt: new Date('2026-08-15T04:00:00Z'),
+        },
+        probablePitchers: {
+          home: {
+            availability: 'AVAILABLE',
+            personId: 1001,
+            fullName: 'Home Pitcher',
+            teamId: game.homeTeamId,
+            status: 'CONFIRMED',
+            fetchedAt: new Date('2026-08-15T05:00:00Z'),
+            warnings: [],
+          },
+          away: {
+            availability: 'AVAILABLE',
+            personId: 1002,
+            fullName: 'Away Pitcher',
+            teamId: game.awayTeamId,
+            status: 'CONFIRMED',
+            fetchedAt: new Date('2026-08-15T05:00:00Z'),
+            warnings: [],
+          },
+        },
+        pitcherStats: { home: null, away: null },
+        teamBatting: { home: null, away: null },
+        bullpen: {
+          home: {
+            teamId: game.homeTeamId,
+            teamName: game.homeTeamName,
+            completeness: 100,
+            warnings: [],
+            seasonStats: {
+              gamesPlayed: 1,
+              gamesStarted: 0,
+              inningsPitched: '0.0',
+              era: '0.00',
+              whip: '0.00',
+              strikeOuts: 0,
+              baseOnBalls: 0,
+              homeRuns: 0,
+              hits: 0,
+              earnedRuns: 0,
+              gamesPitched: 1,
+              saves: 0,
+              saveOpportunities: 0,
+              holds: 0,
+              blownSaves: 0,
+              strikeoutsPer9Inn: '0.0',
+              walksPer9Inn: '0.0',
+              hitsPer9Inn: '0.0',
+              homeRunsPer9: '0.0',
+            },
+            recentWorkload: null,
+            confirmedRelieverAvailability: 'KNOWN',
+            provenance: {
+              source: 'mlb-stats-api:schedule',
+              fetchedAt: new Date('2026-08-15T05:00:00Z'),
+              sourceTimestamp: new Date('2026-08-15T05:00:00Z'),
+              isLive: false,
+              warnings: [],
+            },
+          },
+          away: {
+            teamId: game.awayTeamId,
+            teamName: game.awayTeamName,
+            completeness: 100,
+            warnings: [],
+            seasonStats: {
+              gamesPlayed: 1,
+              gamesStarted: 0,
+              inningsPitched: '0.0',
+              era: '0.00',
+              whip: '0.00',
+              strikeOuts: 0,
+              baseOnBalls: 0,
+              homeRuns: 0,
+              hits: 0,
+              earnedRuns: 0,
+              gamesPitched: 1,
+              saves: 0,
+              saveOpportunities: 0,
+              holds: 0,
+              blownSaves: 0,
+              strikeoutsPer9Inn: '0.0',
+              walksPer9Inn: '0.0',
+              hitsPer9Inn: '0.0',
+              homeRunsPer9: '0.0',
+            },
+            recentWorkload: null,
+            confirmedRelieverAvailability: 'KNOWN',
+            provenance: {
+              source: 'mlb-stats-api:schedule',
+              fetchedAt: new Date('2026-08-15T05:00:00Z'),
+              sourceTimestamp: new Date('2026-08-15T05:00:00Z'),
+              isLive: false,
+              warnings: [],
+            },
+          },
+        },
+        venue: null,
+        weather: null,
+        completeness: 100,
+        warnings: [],
+        provenance: [
+          {
+            source: 'mlb-stats-api:schedule',
+            fetchedAt: new Date('2026-08-15T05:00:00Z'),
+            sourceTimestamp: new Date('2026-08-15T05:00:00Z'),
+            isLive: false,
+            warnings: [],
+          },
+        ],
+        generatedAt: new Date('2026-08-15T05:00:00Z'),
+      };
+
+      const builder = (game: MLBScheduleGame): MLBCanonicalPregameSnapshot => {
+        builderCallCount++;
+        const result = buildMLBRealDataPregameSnapshot({
+          scheduleGame: game,
+          researchSnapshot,
+        });
+        if (!result.ok) {
+          throw new Error('Bridge failed: ' + JSON.stringify(result.issues));
+        }
+        return result.value;
+      };
+
+      const result = await runProspectiveHoldoutCaptureOrchestrator({
+        repositoryRoot: root,
+        scheduleGame: game,
+        clock,
+        snapshotBuilder: builder,
+      });
+
+      expect(result.kind).toBe('CAPTURED_AND_BOUND');
+      expect(builderCallCount).toBe(1);
+
+      const evidencePaths = resolveMLBProspectivePregameEvidenceStorePaths(root);
+      const bindingPaths = resolveMLBProspectiveHoldoutGameIdentityBindingStorePaths(root);
+      const evidenceCount = (await fs.readdir(evidencePaths.evidenceDirectory).catch(() => []))
+        .filter((entry) => entry.endsWith('.json')).length;
+      const bindingCount = (await fs.readdir(bindingPaths.bindingDirectory).catch(() => []))
+        .filter((entry) => entry.endsWith('.json')).length;
+      expect(evidenceCount).toBe(1);
+      expect(bindingCount).toBe(1);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
