@@ -2,6 +2,7 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { MLBResearchDataAdapter } from '@/lib/research-data/mlb/provider';
+import { MLBStatsApiClient } from '@/lib/research-data/mlb/stats-api-client';
 import type { MLBScheduleGame } from '@/lib/research-data/types';
 import {
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_PLAN_CONTRACT_VERSION,
@@ -451,7 +452,9 @@ export async function runMLBProspectiveHoldoutActivationPlanCLI(
   const stdout = io?.stdout ?? ((message: string) => process.stdout.write(`${message}\n`));
   const stderr = io?.stderr ?? ((message: string) => process.stderr.write(`${message}\n`));
 
-  const provider = deps?.provider ?? new MLBResearchDataAdapter();
+  const provider = deps?.provider ?? new MLBResearchDataAdapter({
+    client: new MLBStatsApiClient({ quiet: true }),
+  });
   const now = deps?.now ?? (() => new Date());
   const plan = deps?.plan ?? planMLBProspectiveHoldoutActivation;
 

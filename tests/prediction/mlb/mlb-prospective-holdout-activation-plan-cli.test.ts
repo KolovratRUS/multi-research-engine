@@ -1513,6 +1513,49 @@ describe('mlb-prospective-holdout-activation-plan host', () => {
     expect(planObj.candidateFingerprint).toBe('ce35df51cdf38ed9bf91aa2fb78871443f259c963d8c2700e8b6fe5d960a95bc');
     expect(Object.getOwnPropertyNames(planObj.activationPayload)).toHaveLength(23);
   });
+
+  // 53. successful CLI stdout is JSON plan + newline with no client diagnostics
+  it('53. successful CLI stdout is JSON plan + newline with no client diagnostics', async () => {
+    const fixture = createMockDependencies();
+    fixture.provider.mockImplementation(async (date: string) => {
+      if (date === '2026-09-01') {
+        return buildScheduleResult(makeGamesForDate(67, '2026-09-01'));
+      }
+      if (date === '2026-09-02') {
+        return buildScheduleResult(makeGamesForDate(69, '2026-09-02', 1000));
+      }
+      return buildScheduleResult([]);
+    });
+    const expectedPlan = buildMockPlan();
+    mockPlan.mockReturnValue({ ok: true, plan: expectedPlan });
+
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdoutChunks.push(String(chunk));
+      return true;
+    });
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+      stderrChunks.push(String(chunk));
+      return true;
+    });
+
+    const code = await runMLBProspectiveHoldoutActivationPlanCLI(['node', 'script', 'act-1'], undefined, fixture.deps);
+
+    expect(code).toBe(0);
+    expect(stdoutChunks).toHaveLength(1);
+    const written = stdoutChunks[0]!;
+    expect(written.startsWith('{')).toBe(true);
+    const withoutNewline = written.endsWith('\n') ? written.slice(0, -1) : written;
+    expect(() => JSON.parse(withoutNewline)).not.toThrow();
+    const parsed = JSON.parse(withoutNewline);
+    expect(Object.keys(parsed)).toHaveLength(25);
+    expect(Object.keys((parsed as Record<string, unknown>).activationPayload as Record<string, unknown>)).toHaveLength(23);
+    expect(written).not.toContain('[mlb-client]');
+    expect(stderrChunks).toHaveLength(0);
+
+    vi.restoreAllMocks();
+  });
 });
 
 /* -------------------------------------------------------------------------- */

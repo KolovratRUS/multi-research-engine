@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   ScheduleResponseSchema,
   ScheduleGameSchema,
@@ -8,6 +8,7 @@ import {
   TeamStatsResponseSchema,
   VenueResponseSchema,
   resolveMLBConfig,
+  MLBStatsApiClient,
 } from '@/lib/research-data/mlb/stats-api-client';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -142,5 +143,61 @@ describe('MLB client environment configuration', () => {
   it('throws for non-positive timeout', () => {
     process.env.RESEARCH_HTTP_TIMEOUT_MS = '-1';
     expect(() => resolveMLBConfig()).toThrow('Invalid RESEARCH_HTTP_TIMEOUT_MS');
+  });
+});
+
+describe('MLB client quiet logging behavior', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'fetch', { value: originalFetch, writable: true, configurable: true });
+  });
+
+  it('suppresses [mlb-client] diagnostics when quiet is true', async () => {
+    Object.defineProperty(globalThis, 'fetch', {
+      value: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ venues: [{ id: 1, name: 'Quiet Stadium' }] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      writable: true,
+      configurable: true,
+    });
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const client = new MLBStatsApiClient({ quiet: true });
+    const result = await client.fetchVenue(1);
+
+    expect(result.id).toBe(1);
+    expect(consoleSpy).not.toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
+  });
+
+  it('retains logging behavior when quiet is omitted', async () => {
+    Object.defineProperty(globalThis, 'fetch', {
+      value: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ venues: [{ id: 2, name: 'Loud Stadium' }] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      writable: true,
+      configurable: true,
+    });
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const client = new MLBStatsApiClient();
+    const result = await client.fetchVenue(2);
+
+    expect(result.id).toBe(2);
+    expect(consoleSpy).toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
   });
 });

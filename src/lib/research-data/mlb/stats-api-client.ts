@@ -99,6 +99,7 @@ function logDev(message: string, payload?: unknown): void {
 export interface MLBClientConfig {
   baseUrl?: string;
   timeoutMs?: number;
+  quiet?: boolean;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -121,10 +122,19 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 export class MLBStatsApiClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
+  private readonly quiet: boolean;
 
   constructor(config: MLBClientConfig = {}) {
     this.baseUrl = config.baseUrl ?? MLB_API_BASE;
     this.timeoutMs = config.timeoutMs ?? 20_000;
+    this.quiet = config.quiet ?? false;
+  }
+
+  private log(message: string, payload?: unknown): void {
+    if (this.quiet) {
+      return;
+    }
+    logDev(message, payload);
   }
 
   private async request<T>(endpoint: string): Promise<T> {
@@ -132,7 +142,7 @@ export class MLBStatsApiClient {
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        logDev(`Fetching ${endpoint}`);
+        this.log(`Fetching ${endpoint}`);
 
         const response = await withTimeout(
           fetch(url, {
@@ -154,7 +164,7 @@ export class MLBStatsApiClient {
 
           if (retryable && attempt < MAX_RETRIES - 1) {
             const backoff = BASE_DELAY_MS * 2 ** attempt;
-            logDev(`Retrying ${endpoint} after ${backoff}ms (attempt ${attempt + 1})`);
+            this.log(`Retrying ${endpoint} after ${backoff}ms (attempt ${attempt + 1})`);
             await delay(backoff);
             continue;
           }
@@ -166,7 +176,7 @@ export class MLBStatsApiClient {
         const parsed = safeParseJson(text);
 
         if (process.env.NODE_ENV !== 'production') {
-          logDev(`Fetched ${endpoint}`, {
+          this.log(`Fetched ${endpoint}`, {
             sizeBytes: text.length,
             topLevelKeys: parsed && typeof parsed === 'object' && !Array.isArray(parsed)
               ? Object.keys(parsed as Record<string, unknown>).slice(0, 10)
