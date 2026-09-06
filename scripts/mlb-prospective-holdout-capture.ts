@@ -140,8 +140,17 @@ export async function runProspectiveHoldoutCapture(
     throw new ScheduleDuplicateError(gamePk);
   }
 
-  const scheduleGame = matches[0];
+  return runProspectiveHoldoutCaptureForScheduleGame(matches[0], deps);
+}
 
+/* -------------------------------------------------------------------------- */
+/*  Shared capture application seam                                           */
+/* -------------------------------------------------------------------------- */
+
+export async function runProspectiveHoldoutCaptureForScheduleGame(
+  scheduleGame: MLBScheduleGame,
+  deps: MLBProspectiveHoldoutCaptureDependencies,
+): Promise<MLBProspectiveHoldoutCaptureOrchestratorResult> {
   const researchSnapshot = await deps.provider.buildGameSnapshot(scheduleGame, {
     season: scheduleGame.startTimeUtc.getUTCFullYear(),
     includeWeather: false,

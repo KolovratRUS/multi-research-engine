@@ -58,6 +58,7 @@ vi.mock('@/prediction/mlb/mlb-real-data-pregame-snapshot-bridge', () => ({
 
 import {
   runMLBProspectiveHoldoutCaptureCLI,
+  runProspectiveHoldoutCaptureForScheduleGame,
   type MLBProspectiveHoldoutCaptureDependencies,
   type CaptureCLIIO,
 } from '../../../scripts/mlb-prospective-holdout-capture';
@@ -924,6 +925,165 @@ describe('mlb-prospective-holdout-capture-cli', () => {
         process.env.MLB_CAPTURE_NOW = original;
       }
     }
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Shared capture seam tests                                                 */
+/* -------------------------------------------------------------------------- */
+
+describe('mlb-prospective-holdout-capture shared seam', () => {
+  const UTC_MIDNIGHT_TRUSTED_NOW = '2026-09-06T18:45:00.000Z';
+  const UTC_MIDNIGHT_SCHEDULE_GAME = buildScheduleGame({
+    gamePk: 999,
+    officialDate: '2026-09-07',
+    startTimeUtc: new Date('2026-09-07T01:00:00.000Z'),
+  });
+
+  it('E. shared helper itself does not call fetchSchedule', async () => {
+    const fixture = createMockDependencies();
+    fixture.provider.fetchSchedule.mockResolvedValue(buildScheduleResult([]));
+    fixture.provider.buildGameSnapshot.mockResolvedValue(buildResearchSnapshot());
+    fixture.orchestrator.mockResolvedValue({
+      kind: 'CAPTURED_AND_BOUND',
+      activationId: 'a1',
+      protocolId: 'p1',
+      gamePk: 999,
+      gameId: '999',
+      evidenceArtifactId: 'e1',
+      bindingId: 'b1',
+      scientificCutoffAt: '2026-09-06T19:00:00.000Z',
+      actualDataCutoffAt: '2026-09-06T19:00:00.000Z',
+      persistedAt: '2026-09-06T19:00:00.000Z',
+    });
+
+    const result = await runProspectiveHoldoutCaptureForScheduleGame(UTC_MIDNIGHT_SCHEDULE_GAME, {
+      ...fixture.deps,
+      now: () => new Date(UTC_MIDNIGHT_TRUSTED_NOW),
+    });
+
+    expect(fixture.provider.fetchSchedule).not.toHaveBeenCalled();
+    expect(fixture.provider.buildGameSnapshot).toHaveBeenCalledTimes(1);
+    expect(fixture.orchestrator).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      kind: 'CAPTURED_AND_BOUND',
+      activationId: 'a1',
+      protocolId: 'p1',
+      gamePk: 999,
+      gameId: '999',
+      evidenceArtifactId: 'e1',
+      bindingId: 'b1',
+      scientificCutoffAt: '2026-09-06T19:00:00.000Z',
+      actualDataCutoffAt: '2026-09-06T19:00:00.000Z',
+      persistedAt: '2026-09-06T19:00:00.000Z',
+    });
+  });
+
+  it('UTC midnight shared seam resolves tomorrow-UTC scheduleGame without K2 lookup', async () => {
+    const fixture = createMockDependencies();
+    fixture.provider.fetchSchedule.mockResolvedValue(buildScheduleResult([]));
+    fixture.provider.buildGameSnapshot.mockResolvedValue(buildResearchSnapshot());
+    const capturedResult: MLBProspectiveHoldoutCaptureOrchestratorResult = {
+      kind: 'CAPTURED_AND_BOUND',
+      activationId: 'a1',
+      protocolId: 'p1',
+      gamePk: 999,
+      gameId: '999',
+      evidenceArtifactId: 'e1',
+      bindingId: 'b1',
+      scientificCutoffAt: '2026-09-06T19:00:00.000Z',
+      actualDataCutoffAt: '2026-09-06T19:00:00.000Z',
+      persistedAt: '2026-09-06T19:00:00.000Z',
+    };
+    fixture.orchestrator.mockResolvedValue(capturedResult);
+
+    const result = await runProspectiveHoldoutCaptureForScheduleGame(UTC_MIDNIGHT_SCHEDULE_GAME, {
+      ...fixture.deps,
+      now: () => new Date(UTC_MIDNIGHT_TRUSTED_NOW),
+    });
+
+    expect(fixture.provider.fetchSchedule).not.toHaveBeenCalled();
+    expect(fixture.provider.buildGameSnapshot).toHaveBeenCalledTimes(1);
+    expect(fixture.provider.buildGameSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ gamePk: 999, officialDate: '2026-09-07' }),
+      expect.objectContaining({ season: 2026, includeWeather: false }),
+    );
+    expect(fixture.orchestrator).toHaveBeenCalledTimes(1);
+    const orchestratorInput = fixture.orchestrator.mock.calls[0]![0];
+    expect(orchestratorInput.scheduleGame.gamePk).toBe(999);
+    expect(orchestratorInput.scheduleGame.officialDate).toBe('2026-09-07');
+    expect(result).toEqual(capturedResult);
+  });
+
+  it('F. provider snapshot failure propagates from shared helper', async () => {
+    const fixture = createMockDependencies();
+    fixture.provider.fetchSchedule.mockResolvedValue(buildScheduleResult([]));
+    fixture.provider.buildGameSnapshot.mockRejectedValue(new Error('snapshot network failure'));
+    fixture.orchestrator.mockResolvedValue({
+      kind: 'CAPTURED_AND_BOUND',
+      activationId: 'a1',
+      protocolId: 'p1',
+      gamePk: 999,
+      gameId: '999',
+      evidenceArtifactId: 'e1',
+      bindingId: 'b1',
+      scientificCutoffAt: '2026-09-06T19:00:00.000Z',
+      actualDataCutoffAt: '2026-09-06T19:00:00.000Z',
+      persistedAt: '2026-09-06T19:00:00.000Z',
+    });
+
+    await expect(
+      runProspectiveHoldoutCaptureForScheduleGame(UTC_MIDNIGHT_SCHEDULE_GAME, {
+        ...fixture.deps,
+        now: () => new Date(UTC_MIDNIGHT_TRUSTED_NOW),
+      }),
+    ).rejects.toThrow('snapshot network failure');
+
+    expect(fixture.orchestrator).not.toHaveBeenCalled();
+  });
+
+  it('G. bridge failure still throws rather than weakening validation', async () => {
+    const fixture = createMockDependencies();
+    fixture.provider.fetchSchedule.mockResolvedValue(buildScheduleResult([]));
+    fixture.provider.buildGameSnapshot.mockResolvedValue(buildResearchSnapshot());
+    fixture.orchestrator.mockResolvedValue({
+      kind: 'CAPTURED_AND_BOUND',
+      activationId: 'a1',
+      protocolId: 'p1',
+      gamePk: 999,
+      gameId: '999',
+      evidenceArtifactId: 'e1',
+      bindingId: 'b1',
+      scientificCutoffAt: '2026-09-06T19:00:00.000Z',
+      actualDataCutoffAt: '2026-09-06T19:00:00.000Z',
+      persistedAt: '2026-09-06T19:00:00.000Z',
+    });
+
+    const bridgeModule = await import(
+      '@/prediction/mlb/mlb-real-data-pregame-snapshot-bridge'
+    );
+    const originalBuild = bridgeModule.buildMLBRealDataPregameSnapshot;
+    const bridgeFailure: MLBRealDataPregameSnapshotBridgeResult = {
+      ok: false,
+      issues: [
+        { code: 'INVALID_STRING', path: '$.test', message: 'forced bridge failure' },
+      ],
+    };
+    vi.spyOn(
+      bridgeModule,
+      'buildMLBRealDataPregameSnapshot',
+    ).mockReturnValue(bridgeFailure);
+
+    await expect(
+      runProspectiveHoldoutCaptureForScheduleGame(UTC_MIDNIGHT_SCHEDULE_GAME, {
+        ...fixture.deps,
+        now: () => new Date(UTC_MIDNIGHT_TRUSTED_NOW),
+      }),
+    ).rejects.toThrow('Snapshot bridge failed: INVALID_STRING');
+
+    expect(fixture.orchestrator).not.toHaveBeenCalled();
+
+    bridgeModule.buildMLBRealDataPregameSnapshot = originalBuild;
   });
 });
 
