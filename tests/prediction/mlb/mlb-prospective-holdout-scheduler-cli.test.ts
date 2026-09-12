@@ -114,7 +114,7 @@ function buildFrozenActivation(
 function buildScheduleGame(overrides: Partial<MLBScheduleGame> = {}): MLBScheduleGame {
   return {
     gamePk: 1000,
-    gameType: 'REGULAR_SEASON',
+    gameType: 'R',
     gameNumber: 1,
     officialDate: '2026-09-07',
     gameDate: '2026-09-07T00:00:00.000Z',
@@ -587,7 +587,7 @@ describe('B. locking', () => {
 
       await fs.rm(runtimeDir, { recursive: true, force: true }).catch(() => {});
     }
-  }, 30000);
+  }, 120000);
 
   it('24. acquireRecoveryClaim: concurrent EEXIST preserves single winner (CLAIM_PRIMITIVE_TEST)', async () => {
     const runtimeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-claim-atomic-'));

@@ -15,7 +15,7 @@ const BASE_ACTIVATION = {
 function buildScheduleGame(overrides: Partial<MLBScheduleGame> = {}): MLBScheduleGame {
   const base: MLBScheduleGame = {
     gamePk: 100,
-    gameType: 'REGULAR_SEASON',
+    gameType: 'R',
     gameNumber: 1,
     officialDate: '2026-09-07',
     gameDate: '2026-09-07T01:00:00.000Z',
@@ -221,6 +221,72 @@ describe('mlb-prospective-holdout-scheduler-core candidate filtering', () => {
     expect(decision.kind).toBe('DISPATCH_NOW');
     if (decision.kind === 'DISPATCH_NOW') {
       expect(decision.game.gamePk).toBe(300);
+    }
+  });
+
+  it('33. raw regular-season gameType R reaches active dispatch window', () => {
+    const scheduleGame = buildScheduleGame({
+      gameType: 'R',
+      officialDate: '2026-09-07',
+      status: 'UPCOMING',
+      startTimeUtc: new Date('2026-09-07T01:00:00.000Z'),
+    });
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 1,
+      trustedNow: new Date('2026-09-06T18:45:00.000Z'),
+      scheduleCandidates: [scheduleGame],
+    }));
+    expect(decision.kind).toBe('DISPATCH_NOW');
+    if (decision.kind === 'DISPATCH_NOW') {
+      expect(decision.game.gamePk).toBe(100);
+    }
+  });
+
+  it('34. raw non-regular gameType F yields no dispatch candidate', () => {
+    // The internal candidate classification INELIGIBLE_SCHEDULE_STATE is NOT
+    // exposed on the public decision; the observable contract is that a lone F
+    // candidate leaves no dispatchable / wait target.
+    const scheduleGame = buildScheduleGame({
+      gameType: 'F',
+      officialDate: '2026-09-07',
+      status: 'UPCOMING',
+      startTimeUtc: new Date('2026-09-07T01:00:00.000Z'),
+    });
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 1,
+      trustedNow: new Date('2026-09-06T18:45:00.000Z'),
+      scheduleCandidates: [scheduleGame],
+    }));
+    expect(decision.kind).toBe('VALIDATION_TARGET_UNREACHABLE');
+  });
+
+  it('35. non-regular F excluded alongside valid R; R dispatched, F never selected', () => {
+    // Direct internal classification is not exposed; prove behaviorally that an
+    // otherwise-dispatchable F candidate can never be selected while a valid R
+    // candidate of identical timing reaches DISPATCH_NOW.
+    const fGame = buildScheduleGame({
+      gamePk: 200,
+      gameType: 'F',
+      officialDate: '2026-09-07',
+      status: 'UPCOMING',
+      startTimeUtc: new Date('2026-09-07T01:00:00.000Z'),
+    });
+    const rGame = buildScheduleGame({
+      gamePk: 100,
+      gameType: 'R',
+      officialDate: '2026-09-07',
+      status: 'UPCOMING',
+      startTimeUtc: new Date('2026-09-07T01:00:00.000Z'),
+    });
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 1,
+      trustedNow: new Date('2026-09-06T18:45:00.000Z'),
+      scheduleCandidates: [fGame, rGame],
+    }));
+    expect(decision.kind).toBe('DISPATCH_NOW');
+    if (decision.kind === 'DISPATCH_NOW') {
+      expect(decision.game.gamePk).toBe(100);
+      expect(decision.game.gameType).toBe('R');
     }
   });
 });

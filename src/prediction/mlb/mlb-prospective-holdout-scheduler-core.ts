@@ -204,7 +204,7 @@ export function planProspectiveHoldoutValidationDispatch(
     }
 
     // Regular season requirement
-    if (game.gameType !== 'REGULAR_SEASON') {
+    if (game.gameType !== 'R') {
       processed.push({
         game,
         classification: {
