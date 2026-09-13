@@ -12,8 +12,12 @@ import {
   releaseRecoveryClaim,
   readRecoveryClaimMetadata,
   classifyPidKillError,
+  parseArguments,
+  selectMLBProspectiveHoldoutActivation,
+  isSelectableActivation,
   runMLBProspectiveHoldoutScheduler,
   runMLBProspectiveHoldoutSchedulerCLI,
+  type MLBProspectiveHoldoutActivationSelection,
   type MLBProspectiveHoldoutSchedulerDependencies,
   type MLBProspectiveHoldoutSchedulerEvent,
   type MLBProspectiveHoldoutSchedulerRunResult,
@@ -39,6 +43,7 @@ import {
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_AUTHORIZATION_RULE,
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STORE_VERSION,
   type MLBProspectiveHoldoutActivationPersisted,
+  type MLBProspectiveHoldoutActivationReceipt,
   validateMLBProspectiveHoldoutActivationPersisted,
 } from '@/prediction/mlb/mlb-prospective-holdout-activation-contract';
 import {
@@ -60,6 +65,11 @@ import {
 import type { MLBProspectiveHoldoutCaptureOrchestratorResult } from '@/prediction/mlb/mlb-prospective-holdout-capture-orchestrator';
 import type { MLBProspectiveHoldoutCaptureDependencies } from '../../../scripts/mlb-prospective-holdout-capture';
 import type { MLBGameResearchSnapshot, MLBScheduleGame, MLBScheduleResult } from '@/lib/research-data/types';
+import type {
+  MLBProspectiveHoldoutActivationStoreInventory,
+  MLBProspectiveHoldoutActivationInventoryEntry,
+  MLBProspectiveHoldoutActivationStoreInventoryResult,
+} from '@/prediction/mlb/mlb-prospective-holdout-activation-store';
 
 /* -------------------------------------------------------------------------- */
 /*  Fixtures                                                                  */
@@ -2763,5 +2773,328 @@ describe('AC. activation forwarding seam', () => {
     const result = await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
     expect(captureCalls).toBe(0);
     expect(result.kind).toBe('DRY_RUN_COMPLETE');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  AD. PARSER SELECTOR CONTRACT                                              */
+/* -------------------------------------------------------------------------- */
+
+describe('AD. parser selector contract', () => {
+  it('96. A. equals-form selector accepted', () => {
+    const result = parseArguments(['--activationId=successor-B']);
+    expect(result.dryRun).toBe(false);
+    expect(result.activationId).toBe('successor-B');
+  });
+
+  it('97. B. dry-run then selector accepted', () => {
+    const result = parseArguments(['--dry-run', '--activationId=successor-B']);
+    expect(result.dryRun).toBe(true);
+    expect(result.activationId).toBe('successor-B');
+  });
+
+  it('98. C. selector then dry-run accepted', () => {
+    const result = parseArguments(['--activationId=successor-B', '--dry-run']);
+    expect(result.dryRun).toBe(true);
+    expect(result.activationId).toBe('successor-B');
+  });
+
+  it('99. D. duplicate selector rejected', () => {
+    expect(() => parseArguments(['--activationId=successor-B', '--activationId=other'])).toThrow();
+  });
+
+  it('100. E. empty selector rejected', () => {
+    expect(() => parseArguments(['--activationId='])).toThrow();
+  });
+
+  it('101. F. bare --activationId rejected', () => {
+    expect(() => parseArguments(['--activationId'])).toThrow();
+  });
+
+  it('102. G. space-separated --activationId successor-B rejected', () => {
+    expect(() => parseArguments(['--activationId', 'successor-B'])).toThrow();
+  });
+
+  it('103. H. unknown flag remains rejected', () => {
+    expect(() => parseArguments(['--unknown-flag'])).toThrow();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  AE. PURE SELECTION                                                        */
+/* -------------------------------------------------------------------------- */
+
+function buildMockInventoryEntry(
+  activationId: string,
+  activationOverrides: Partial<MLBProspectiveHoldoutActivationPersisted> = {},
+): MLBProspectiveHoldoutActivationInventoryEntry {
+  const activation = buildFrozenActivation({ activationId, ...activationOverrides });
+  return {
+    activationId,
+    activation,
+    receipt: {
+      storeVersion: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STORE_VERSION,
+      contractVersion: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_CONTRACT_VERSION,
+      activationId,
+      relativePath: `activations/${activationId}.json`,
+      sha256: '0'.repeat(64),
+      byteLength: 100,
+      persistedAt: '2026-09-01T00:00:00Z',
+    },
+    filePath: `/repo/activations/${activationId}.json`,
+    fileName: `${activationId}.json`,
+  };
+}
+
+describe('AE. pure selection', () => {
+  const legacyEntry = buildMockInventoryEntry('activation-legacy-A');
+  const successorEntry = buildMockInventoryEntry('activation-successor-B');
+
+  it('104. I. legacy-only + undefined => SELECTED_LEGACY', () => {
+    const inventory: MLBProspectiveHoldoutActivationStoreInventory = {
+      legacy: legacyEntry,
+      byId: [],
+    };
+    const result = selectMLBProspectiveHoldoutActivation({ ok: true, inventory }, undefined);
+    expect(result.kind).toBe('SELECTED_LEGACY');
+    if (result.kind === 'SELECTED_LEGACY') {
+      expect(result.activation).toBe(legacyEntry.activation);
+    }
+  });
+
+  it('105. J. legacy + successor + undefined => AMBIGUOUS_SELECTION', () => {
+    const inventory: MLBProspectiveHoldoutActivationStoreInventory = {
+      legacy: legacyEntry,
+      byId: [successorEntry],
+    };
+    const result = selectMLBProspectiveHoldoutActivation({ ok: true, inventory }, undefined);
+    expect(result.kind).toBe('AMBIGUOUS_SELECTION');
+  });
+
+  it('106. K. by-id only + undefined => fail closed (does NOT auto-select)', () => {
+    const inventory: MLBProspectiveHoldoutActivationStoreInventory = {
+      legacy: null,
+      byId: [successorEntry],
+    };
+    const result = selectMLBProspectiveHoldoutActivation({ ok: true, inventory }, undefined);
+    expect(isSelectableActivation(result)).toBe(false);
+    expect(result.kind).toBe('AMBIGUOUS_SELECTION');
+  });
+
+  it('107. L. empty + undefined => fail closed', () => {
+    const inventory: MLBProspectiveHoldoutActivationStoreInventory = {
+      legacy: null,
+      byId: [],
+    };
+    const result = selectMLBProspectiveHoldoutActivation({ ok: true, inventory }, undefined);
+    expect(isSelectableActivation(result)).toBe(false);
+    expect(result.kind).toBe('AMBIGUOUS_SELECTION');
+  });
+
+  it('108. M. explicit legacy => SELECTED_LEGACY', () => {
+    const inventory: MLBProspectiveHoldoutActivationStoreInventory = {
+      legacy: legacyEntry,
+      byId: [],
+    };
+    const result = selectMLBProspectiveHoldoutActivation({ ok: true, inventory }, 'activation-legacy-A');
+    expect(result.kind).toBe('SELECTED_LEGACY');
+    if (result.kind === 'SELECTED_LEGACY') {
+      expect(result.activation).toBe(legacyEntry.activation);
+    }
+  });
+
+  it('109. N. explicit successor => SELECTED_BY_ID', () => {
+    const inventory: MLBProspectiveHoldoutActivationStoreInventory = {
+      legacy: legacyEntry,
+      byId: [successorEntry],
+    };
+    const result = selectMLBProspectiveHoldoutActivation({ ok: true, inventory }, 'activation-successor-B');
+    expect(result.kind).toBe('SELECTED_BY_ID');
+    if (result.kind === 'SELECTED_BY_ID') {
+      expect(result.activation).toBe(successorEntry.activation);
+    }
+  });
+
+  it('110. O. explicit missing => ACTIVATION_NOT_FOUND', () => {
+    const inventory: MLBProspectiveHoldoutActivationStoreInventory = {
+      legacy: legacyEntry,
+      byId: [successorEntry],
+    };
+    const result = selectMLBProspectiveHoldoutActivation({ ok: true, inventory }, 'activation-missing');
+    expect(result.kind).toBe('ACTIVATION_NOT_FOUND');
+  });
+
+  it('111. P. failed inventory => ACTIVATION_STORE_INVALID', () => {
+    const corruptResult: MLBProspectiveHoldoutActivationStoreInventoryResult = {
+      ok: false,
+      issues: [{
+        code: 'STORE_MALFORMED_JSON',
+        path: '/test/corrupt.json',
+        message: 'malformed JSON in activation file',
+      }],
+    };
+    const result = selectMLBProspectiveHoldoutActivation(corruptResult, undefined);
+    expect(result.kind).toBe('ACTIVATION_STORE_INVALID');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  AF. SELECTOR PERSISTENCE                                                  */
+/* -------------------------------------------------------------------------- */
+
+describe('AF. selector persistence', () => {
+  it('112. selector preserved through multiple state refresh calls', async () => {
+    const recordedSelectorValues: (string | undefined)[] = [];
+    let stateLoads = 0;
+    const scheduleGame = buildScheduleGame();
+    const deps = buildDeps({
+      now: buildClock(new Date('2026-09-07T01:50:00.000Z')),
+      loadScientificState: async (_root: string, activationId?: string) => {
+        recordedSelectorValues.push(activationId);
+        stateLoads++;
+        if (stateLoads === 1) {
+          return buildStateLoaderResult(
+            { activationId: 'activation-successor-B' },
+            { validationCapturedCount: 1 },
+          );
+        }
+        return buildStateLoaderResult(
+          { activationId: 'activation-successor-B' },
+          { validationCapturedCount: 67 },
+        );
+      },
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]),
+      captureApplication: async () => CAPTURED_RESULT,
+    });
+    await runMLBProspectiveHoldoutScheduler({ dryRun: false, activationId: 'activation-successor-B' }, deps);
+    expect(recordedSelectorValues.length).toBeGreaterThanOrEqual(2);
+    for (const val of recordedSelectorValues) {
+      expect(val).toBe('activation-successor-B');
+    }
+    expect(recordedSelectorValues).toEqual([
+      'activation-successor-B',
+      'activation-successor-B',
+    ]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  AG. SELECTED-ACTIVATION RUNTIME TESTS                                     */
+/* -------------------------------------------------------------------------- */
+
+describe('AG. selected-activation runtime', () => {
+  it('113. Q. selected successor activation used for planning', async () => {
+    const fetchedDates: string[] = [];
+    const scheduleGame = buildScheduleGame({
+      startTimeUtc: new Date('2026-09-07T08:00:00.000Z'),
+    });
+    const planningActivation = buildFrozenActivation({
+      activationId: 'activation-successor-B',
+      validationBoundaryOfficialDate: '2026-09-08',
+    });
+    const deps = buildDeps({
+      now: buildClock(new Date('2026-09-06T00:00:00.000Z')),
+      loadScientificState: async () => ({
+        ok: true,
+        activation: planningActivation,
+        validationCapturedCount: 1,
+        testCapturedCount: 0,
+        anomalyCount: 0,
+        completedGamePks: [],
+      }),
+      fetchSchedule: async (date: string) => {
+        fetchedDates.push(date);
+        return date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]);
+      },
+    });
+    const result = await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
+    expect(result.kind).toBe('DRY_RUN_COMPLETE');
+    // The successor's boundary date '2026-09-08' must appear in the fetch schedule window,
+    // proving state.activation.validationBoundaryOfficialDate drives fetchScheduleWindow.
+    expect(fetchedDates).toContain('2026-09-08');
+  });
+
+  it('114. R. successor validationBoundaryOfficialDate and validationTargetCount are the planning values', async () => {
+    // Use invalid target count (68 instead of 67) to prove the planner enforces it.
+    const badCountActivation = {
+      ...buildFrozenActivation({ activationId: 'activation-successor-B' }),
+      validationTargetCount: 68,
+    } as unknown as MLBProspectiveHoldoutActivationPersisted;
+    const deps = buildDeps({
+      now: buildClock(new Date('2026-09-06T00:00:00.000Z')),
+      loadScientificState: async () => ({
+        ok: true,
+        activation: badCountActivation,
+        validationCapturedCount: 1,
+        testCapturedCount: 0,
+        anomalyCount: 0,
+        completedGamePks: [],
+      }),
+      fetchSchedule: async () => buildScheduleResult([buildScheduleGame()]),
+    });
+    const result = await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
+    expect(result.kind).toBe('STOPPED_FAIL_CLOSED');
+    if (result.kind === 'STOPPED_FAIL_CLOSED') {
+      expect(result.reason).toContain('validationTargetCount is not 67');
+    }
+  });
+
+  it('115. U. legacy-only + no selector remains backward compatible', async () => {
+    const recordedSelectorValues: (string | undefined)[] = [];
+    const deps = buildDeps({
+      now: buildClock(new Date('2026-09-06T00:00:00.000Z')),
+      loadScientificState: async (_root: string, activationId?: string) => {
+        recordedSelectorValues.push(activationId);
+        return buildStateLoaderResult();
+      },
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([buildScheduleGame()]) : buildScheduleResult([]),
+    });
+    const result = await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
+    expect(result.kind).toBe('DRY_RUN_COMPLETE');
+    // No selector provided: backward-compatible undefined is forwarded.
+    expect(recordedSelectorValues[0]).toBeUndefined();
+  });
+
+  it('116. V. ambiguous/no-selection fails before captureApplication', async () => {
+    let captureCalls = 0;
+    const scheduleGame = buildScheduleGame();
+    const deps = buildDeps({
+      now: buildClock(new Date('2026-09-07T01:50:00.000Z')),
+      loadScientificState: async () => ({
+        ok: false,
+        reason: 'activation selection failed: AMBIGUOUS_SELECTION: explicit --activationId required when multiple or by-id activations are present',
+      }),
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]),
+      captureApplication: async () => {
+        captureCalls++;
+        return CAPTURED_RESULT;
+      },
+    });
+    const result = await runMLBProspectiveHoldoutScheduler({ dryRun: false }, deps);
+    expect(result.kind).toBe('STOPPED_FAIL_CLOSED');
+    expect(captureCalls).toBe(0);
+  });
+
+  it('117. W. ambiguous/no-selection fails before fetchSchedule', async () => {
+    let fetchCalls = 0;
+    const scheduleGame = buildScheduleGame();
+    const deps = buildDeps({
+      now: buildClock(new Date('2026-09-07T01:50:00.000Z')),
+      loadScientificState: async () => ({
+        ok: false,
+        reason: 'activation selection failed: AMBIGUOUS_SELECTION: explicit --activationId required when multiple or by-id activations are present',
+      }),
+      fetchSchedule: async (date: string) => {
+        fetchCalls++;
+        return date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]);
+      },
+      captureApplication: async () => CAPTURED_RESULT,
+    });
+    const result = await runMLBProspectiveHoldoutScheduler({ dryRun: false }, deps);
+    expect(result.kind).toBe('STOPPED_FAIL_CLOSED');
+    expect(fetchCalls).toBe(0);
   });
 });

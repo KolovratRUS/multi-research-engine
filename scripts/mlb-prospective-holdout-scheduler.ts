@@ -21,7 +21,8 @@ import {
   type MLBProspectiveHoldoutCaptureDependencies,
 } from './mlb-prospective-holdout-capture';
 import {
-  readMLBProspectiveHoldoutActivation,
+  inspectMLBProspectiveHoldoutActivationStore,
+  type MLBProspectiveHoldoutActivationStoreInventoryResult,
 } from '@/prediction/mlb/mlb-prospective-holdout-activation-store';
 import {
   discoverMLBProspectiveHoldoutArtifacts,
@@ -76,6 +77,7 @@ export interface MLBProspectiveHoldoutSchedulerDependencies {
   readonly sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
   readonly loadScientificState: (
     repositoryRoot: string,
+    activationId?: string,
   ) => Promise<MLBProspectiveHoldoutSchedulerStateLoaderResult>;
   readonly fetchSchedule: (date: string) => Promise<MLBScheduleResult>;
   readonly provider: {
@@ -127,6 +129,76 @@ export type MLBProspectiveHoldoutSchedulerEvent = Readonly<{
 export interface SchedulerCLIIO {
   readonly stdout: (message: string) => void;
   readonly stderr: (message: string) => void;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Activation selection (scheduler-owned policy; store owns filesystem)        */
+/* -------------------------------------------------------------------------- */
+
+export type MLBProspectiveHoldoutActivationSelection =
+  | { readonly kind: 'SELECTED_LEGACY'; readonly activation: MLBProspectiveHoldoutActivationPersisted }
+  | { readonly kind: 'SELECTED_BY_ID'; readonly activation: MLBProspectiveHoldoutActivationPersisted }
+  | { readonly kind: 'AMBIGUOUS_SELECTION'; readonly reason: string }
+  | { readonly kind: 'ACTIVATION_NOT_FOUND'; readonly reason: string }
+  | { readonly kind: 'ACTIVATION_STORE_INVALID'; readonly reason: string };
+
+export function selectMLBProspectiveHoldoutActivation(
+  inventoryResult: MLBProspectiveHoldoutActivationStoreInventoryResult,
+  activationId?: string,
+): MLBProspectiveHoldoutActivationSelection {
+  if (!inventoryResult.ok) {
+    return {
+      kind: 'ACTIVATION_STORE_INVALID',
+      reason: `activation store inventory invalid: ${inventoryResult.issues.map((i) => i.message).join(', ')}`,
+    };
+  }
+
+  const { legacy, byId } = inventoryResult.inventory;
+
+  if (activationId !== undefined) {
+    // Explicit selector: must match an existing record exactly.
+    // Case 5: selector == legacy activationId => SELECTED_LEGACY
+    if (legacy !== null && legacy.activationId === activationId) {
+      return { kind: 'SELECTED_LEGACY', activation: legacy.activation };
+    }
+    // Case 6: selector matches a valid by-id activation => SELECTED_BY_ID
+    const match = byId.find((e) => e.activationId === activationId);
+    if (match !== undefined) {
+      return { kind: 'SELECTED_BY_ID', activation: match.activation };
+    }
+    // Case 7 & F: requested activation missing => ACTIVATION_NOT_FOUND.
+    // Never fall back to legacy for an explicitly requested missing successor ID.
+    return {
+      kind: 'ACTIVATION_NOT_FOUND',
+      reason: `requested activationId '${activationId}' not found in activation store`,
+    };
+  }
+
+  // No selector provided.
+  // Case 1: exactly one valid campaign (legacy only) => SELECTED_LEGACY
+  if (legacy !== null && byId.length === 0) {
+    return { kind: 'SELECTED_LEGACY', activation: legacy.activation };
+  }
+  // Case 2 & 3: a by-id record present without explicit selector => fail closed
+  if (legacy !== null || byId.length > 0) {
+    return {
+      kind: 'AMBIGUOUS_SELECTION',
+      reason: 'explicit --activationId required when multiple or by-id activations are present',
+    };
+  }
+  // Case 4: empty store without selector => fail closed
+  return {
+    kind: 'AMBIGUOUS_SELECTION',
+    reason: 'no activation record found in store; explicit --activationId required',
+  };
+}
+
+export function isSelectableActivation(
+  selection: MLBProspectiveHoldoutActivationSelection,
+): selection is
+  | { readonly kind: 'SELECTED_LEGACY'; readonly activation: MLBProspectiveHoldoutActivationPersisted }
+  | { readonly kind: 'SELECTED_BY_ID'; readonly activation: MLBProspectiveHoldoutActivationPersisted } {
+  return selection.kind === 'SELECTED_LEGACY' || selection.kind === 'SELECTED_BY_ID';
 }
 
 /* -------------------------------------------------------------------------- */
@@ -327,18 +399,20 @@ function addUTCDays(dateStr: string, days: number): string {
 
 async function loadScientificStateImpl(
   repositoryRoot: string,
+  activationId?: string,
 ): Promise<MLBProspectiveHoldoutSchedulerStateLoaderResult> {
-  const activationResult = await readMLBProspectiveHoldoutActivation(repositoryRoot);
-  if (!activationResult.ok) {
+  const inventoryResult = await inspectMLBProspectiveHoldoutActivationStore(repositoryRoot);
+  const selection = selectMLBProspectiveHoldoutActivation(inventoryResult, activationId);
+  if (!isSelectableActivation(selection)) {
     return {
       ok: false,
-      reason: `activation unavailable: ${activationResult.issues.map(i => i.code).join(', ')}`,
+      reason: `activation selection failed: ${selection.reason}`,
     };
   }
-
+  const activation = selection.activation;
   const discoveryResult = await discoverMLBProspectiveHoldoutArtifacts(
     repositoryRoot,
-    activationResult.value,
+    activation,
   );
   if (!discoveryResult.ok) {
     return {
@@ -346,26 +420,22 @@ async function loadScientificStateImpl(
       reason: `discovery failure: ${discoveryResult.issues.map(i => i.code).join(', ')}`,
     };
   }
-
   const report = buildMLBProspectiveHoldoutProgressReport({
-    activation: activationResult.value,
+    activation,
     discovery: discoveryResult,
   });
-
   if ('kind' in report) {
     return { ok: false, reason: `progress report error: ${report.kind}` };
   }
-
   const anomalyCount =
     report.anomalies.orphanEvidenceCount +
     report.anomalies.foreignEvidenceCount +
     report.anomalies.foreignBindingCount +
     report.anomalies.temporaryDebrisCount +
     report.anomalies.unknownFilesCount;
-
   return {
     ok: true,
-    activation: activationResult.value,
+    activation,
     validationCapturedCount: report.validationCapturedCount,
     testCapturedCount: report.testCapturedCount,
     anomalyCount,
@@ -740,7 +810,7 @@ function createDefaultDependencies(
           );
         }
       }),
-    loadScientificState: (root: string) => loadScientificStateImpl(root),
+    loadScientificState: (root: string, activationId?: string) => loadScientificStateImpl(root, activationId),
     fetchSchedule: (date: string) => provider.fetchSchedule(date),
     provider: {
       buildGameSnapshot: (game, options) => provider.buildGameSnapshot(game, options),
@@ -768,7 +838,7 @@ function createDefaultDependencies(
 /* -------------------------------------------------------------------------- */
 
 export async function runMLBProspectiveHoldoutScheduler(
-  options: { readonly dryRun: boolean },
+  options: { readonly dryRun: boolean; readonly activationId?: string },
   deps: MLBProspectiveHoldoutSchedulerDependencies,
 ): Promise<MLBProspectiveHoldoutSchedulerRunResult> {
   const repositoryRoot = deps.repositoryRoot ?? deriveRepositoryRoot();
@@ -808,7 +878,7 @@ export async function runMLBProspectiveHoldoutScheduler(
 
     // Dry-run: single planning cycle only
     if (options.dryRun) {
-      const state = await deps.loadScientificState(repositoryRoot);
+      const state = await deps.loadScientificState(repositoryRoot, options.activationId);
       if (!isValidState(state)) {
         emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: state.reason ?? 'invalid startup state' }, deps.now);
         return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: state.reason ?? 'invalid startup state' };
@@ -881,7 +951,7 @@ export async function runMLBProspectiveHoldoutScheduler(
         break;
       }
 
-      const state = await deps.loadScientificState(repositoryRoot);
+      const state = await deps.loadScientificState(repositoryRoot, options.activationId);
       if (!isValidState(state)) {
         emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: state.reason ?? 'invalid startup state' }, deps.now);
         return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: state.reason ?? 'invalid startup state' };
@@ -1093,7 +1163,7 @@ export async function runMLBProspectiveHoldoutScheduler(
               break;
             }
 
-            const retryState = await deps.loadScientificState(repositoryRoot);
+            const retryState = await deps.loadScientificState(repositoryRoot, options.activationId);
             if (!isValidState(retryState)) {
               break;
             }
@@ -1229,16 +1299,27 @@ export async function runMLBProspectiveHoldoutScheduler(
 /*  CLI argument parsing                                                     */
 /* -------------------------------------------------------------------------- */
 
-function parseArguments(argv: string[]): { readonly dryRun: boolean } {
+export function parseArguments(argv: string[]): { readonly dryRun: boolean; readonly activationId?: string } {
   let dryRun = false;
-  for (const arg of argv) {
+  let activationId: string | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
     if (arg === '--dry-run') {
       dryRun = true;
+    } else if (arg.startsWith('--activationId=')) {
+      const value = arg.slice('--activationId='.length);
+      if (value === '' || value !== value.trim()) {
+        throw new Error('--activationId requires a non-empty trimmed value');
+      }
+      if (activationId !== undefined) {
+        throw new Error('Multiple --activationId values are not allowed');
+      }
+      activationId = value;
     } else if (arg.startsWith('-')) {
       throw new Error(`Unsupported flag: ${arg}`);
     }
   }
-  return { dryRun };
+  return { dryRun, activationId };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1253,7 +1334,7 @@ export async function runMLBProspectiveHoldoutSchedulerCLI(
   const stdout = io?.stdout ?? ((message: string) => process.stdout.write(`${message}\n`));
   const stderr = io?.stderr ?? ((message: string) => process.stderr.write(`${message}\n`));
 
-  let options: { readonly dryRun: boolean };
+  let options: { readonly dryRun: boolean; readonly activationId?: string };
   try {
     options = parseArguments(argv.slice(2));
   } catch (error) {

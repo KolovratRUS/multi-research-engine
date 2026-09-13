@@ -13,6 +13,8 @@ import {
   writeMLBProspectiveHoldoutActivationById,
   readMLBProspectiveHoldoutActivationById,
   resolveMLBProspectiveHoldoutActivationByIdPaths,
+  inspectMLBProspectiveHoldoutActivationStore,
+  type MLBProspectiveHoldoutActivationStoreInventoryResult,
 } from '@/prediction/mlb/mlb-prospective-holdout-activation-store';
 import {
   type MLBProspectiveHoldoutActivation,
@@ -586,6 +588,309 @@ describe('mlb-prospective-holdout-activation-store', () => {
         expect(secondLegacyWrite.ok).toBe(false);
         if (!secondLegacyWrite.ok) {
           expect(secondLegacyWrite.issues.some((i) => i.code === 'ACTIVATION_ALREADY_EXISTS')).toBe(true);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+  });
+
+  /* -------------------------------------------------------------------------- */
+  /*  Store inventory (read-only)                                               */
+  /* -------------------------------------------------------------------------- */
+
+  const LEGACY_FILENAME = `${MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_CONTRACT_VERSION}.json`;
+
+  function computeByIdFilename(activationId: string): string {
+    const hash = crypto.createHash('sha256').update(activationId, 'utf-8').digest('hex');
+    return `${hash}.json`;
+  }
+
+  function activationDir(root: string): string {
+    return path.join(root, MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STORE_DIRECTORY);
+  }
+
+  function buildPersistedActivationJson(
+    overrides: Record<string, unknown> = {},
+  ): string {
+    const activation = buildValidActivation(overrides);
+    return JSON.stringify({ ...activation, persistedAt: '2026-09-01T00:00:00Z' });
+  }
+
+  async function writeRawFile(root: string, fileName: string, content: string): Promise<void> {
+    const dir = activationDir(root);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, fileName), content, 'utf-8');
+  }
+
+  describe('inspectMLBProspectiveHoldoutActivationStore', () => {
+    it('A. empty activation directory (missing or empty) returns zero records', async () => {
+      const root = await createTempRoot();
+      try {
+        const resultMissing = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(resultMissing.ok).toBe(true);
+        if (resultMissing.ok) {
+          expect(resultMissing.inventory.legacy).toBeNull();
+          expect(resultMissing.inventory.byId.length).toBe(0);
+        }
+
+        await fs.mkdir(activationDir(root), { recursive: true });
+        const resultEmpty = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(resultEmpty.ok).toBe(true);
+        if (resultEmpty.ok) {
+          expect(resultEmpty.inventory.legacy).toBeNull();
+          expect(resultEmpty.inventory.byId.length).toBe(0);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('B. legacy canonical only returns legacy=1 byId=0', async () => {
+      const root = await createTempRoot();
+      try {
+        const clock = () => '2026-09-01T00:00:00Z';
+        const activation = buildValidActivation({ activationId: 'legacy-B' });
+        const writeResult = await writeMLBProspectiveHoldoutActivation(root, activation, clock);
+        expect(writeResult.ok).toBe(true);
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.inventory.legacy).not.toBeNull();
+          expect(result.inventory.legacy?.activationId).toBe('legacy-B');
+          expect(result.inventory.legacy?.fileName).toBe(LEGACY_FILENAME);
+          expect(result.inventory.byId.length).toBe(0);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('C. legacy + one valid by-id returns legacy=1 byId=1', async () => {
+      const root = await createTempRoot();
+      try {
+        const clock = () => '2026-09-01T00:00:00Z';
+        const legacyActivation = buildValidActivation({ activationId: 'legacy-C' });
+        await writeMLBProspectiveHoldoutActivation(root, legacyActivation, clock);
+        const byIdActivation = buildValidActivation({ activationId: 'by-id-C' });
+        await writeMLBProspectiveHoldoutActivationById(root, 'by-id-C', byIdActivation, clock);
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.inventory.legacy).not.toBeNull();
+          expect(result.inventory.legacy?.activationId).toBe('legacy-C');
+          expect(result.inventory.byId.length).toBe(1);
+          expect(result.inventory.byId[0].activationId).toBe('by-id-C');
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('D. two valid by-id records returned distinctly', async () => {
+      const root = await createTempRoot();
+      try {
+        const clock = () => '2026-09-01T00:00:00Z';
+        const a = buildValidActivation({ activationId: 'by-id-D-a' });
+        const b = buildValidActivation({ activationId: 'by-id-D-b' });
+        await writeMLBProspectiveHoldoutActivationById(root, 'by-id-D-a', a, clock);
+        await writeMLBProspectiveHoldoutActivationById(root, 'by-id-D-b', b, clock);
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.inventory.legacy).toBeNull();
+          expect(result.inventory.byId.length).toBe(2);
+          const ids = result.inventory.byId.map((e) => e.activationId).sort();
+          expect(ids).toEqual(['by-id-D-a', 'by-id-D-b']);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('E. store-owned atomic temp file ignored as non-committed', async () => {
+      const root = await createTempRoot();
+      try {
+        const clock = () => '2026-09-01T00:00:00Z';
+        const activation = buildValidActivation({ activationId: 'temp-E' });
+        await writeMLBProspectiveHoldoutActivationById(root, 'temp-E', activation, clock);
+
+        const byIdFileName = computeByIdFilename('temp-E');
+        const tempToken = crypto.randomUUID().replace(/-/g, '');
+        const tempFileName = `${byIdFileName}.tmp-${tempToken}`;
+        await writeRawFile(root, tempFileName, 'temporary incomplete data');
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.inventory.legacy).toBeNull();
+          expect(result.inventory.byId.length).toBe(1);
+          expect(result.inventory.byId[0].activationId).toBe('temp-E');
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('F. arbitrary unexpected non-temp file fails closed', async () => {
+      const root = await createTempRoot();
+      try {
+        await writeRawFile(root, 'garbage.txt', 'unexpected debris');
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.issues.some((i) => i.code === 'STORE_UNEXPECTED_FILE')).toBe(true);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('G. unexpected arbitrary .json file fails closed', async () => {
+      const root = await createTempRoot();
+      try {
+        await writeRawFile(root, 'unknown.json', '{}');
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.issues.some((i) => i.code === 'STORE_UNEXPECTED_FILE')).toBe(true);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('H. malformed JSON under 64-hex by-id-looking filename fails closed', async () => {
+      const root = await createTempRoot();
+      try {
+        const byIdFileName = computeByIdFilename('malformed-h-id');
+        await writeRawFile(root, byIdFileName, '{"broken json');
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.issues.some((i) => i.code === 'STORE_MALFORMED_JSON')).toBe(true);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('I. contract-invalid JSON under by-id-looking filename fails closed', async () => {
+      const root = await createTempRoot();
+      try {
+        const byIdFileName = computeByIdFilename('contract-invalid-i');
+        await writeRawFile(root, byIdFileName, JSON.stringify({ activationId: 'some-id' }));
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.issues.some((i) => i.code === 'STORE_CONTRACT_INVALID')).toBe(true);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('J. valid persisted activation under wrong hash filename fails closed', async () => {
+      const root = await createTempRoot();
+      try {
+        const sourceJson = buildPersistedActivationJson({ activationId: 'wrong-hash-source' });
+        const targetFileName = computeByIdFilename('wrong-hash-target');
+        await writeRawFile(root, targetFileName, sourceJson);
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.issues.some((i) => i.code === 'STORE_WRONG_HASH_FILENAME')).toBe(true);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('K. correct hash filename with matching activationId is valid', async () => {
+      const root = await createTempRoot();
+      try {
+        const clock = () => '2026-09-01T00:00:00Z';
+        const activation = buildValidActivation({ activationId: 'correct-k' });
+        await writeMLBProspectiveHoldoutActivationById(root, 'correct-k', activation, clock);
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.inventory.legacy).toBeNull();
+          expect(result.inventory.byId.length).toBe(1);
+          expect(result.inventory.byId[0].activationId).toBe('correct-k');
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('L. legacy + by-id carrying same activationId fails closed on duplicate', async () => {
+      const root = await createTempRoot();
+      try {
+        const clock = () => '2026-09-01T00:00:00Z';
+        const legacyActivation = buildValidActivation({ activationId: 'dup-L' });
+        await writeMLBProspectiveHoldoutActivation(root, legacyActivation, clock);
+        const byIdActivation = buildValidActivation({ activationId: 'dup-L' });
+        await writeMLBProspectiveHoldoutActivationById(root, 'dup-L', byIdActivation, clock);
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.issues.some((i) => i.code === 'STORE_DUPLICATE_ACTIVATION_IDENTITY')).toBe(true);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('M. distinct by-id A and B cannot alias same filename', async () => {
+      const root = await createTempRoot();
+      try {
+        const clock = () => '2026-09-01T00:00:00Z';
+        const a = buildValidActivation({ activationId: 'alias-M-a' });
+        const b = buildValidActivation({ activationId: 'alias-M-b' });
+        await writeMLBProspectiveHoldoutActivationById(root, 'alias-M-a', a, clock);
+        await writeMLBProspectiveHoldoutActivationById(root, 'alias-M-b', b, clock);
+
+        const filenameA = computeByIdFilename('alias-M-a');
+        const filenameB = computeByIdFilename('alias-M-b');
+        expect(filenameA).not.toBe(filenameB);
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.inventory.byId.length).toBe(2);
+          const ids = result.inventory.byId.map((e) => e.activationId).sort();
+          expect(ids).toEqual(['alias-M-a', 'alias-M-b']);
+        }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it('N. legacy canonical file never treated as by-id', async () => {
+      const root = await createTempRoot();
+      try {
+        const clock = () => '2026-09-01T00:00:00Z';
+        const activation = buildValidActivation({ activationId: 'legacy-N' });
+        await writeMLBProspectiveHoldoutActivation(root, activation, clock);
+
+        const result = await inspectMLBProspectiveHoldoutActivationStore(root);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.inventory.legacy).not.toBeNull();
+          expect(result.inventory.legacy?.activationId).toBe('legacy-N');
+          expect(result.inventory.legacy?.fileName).not.toMatch(/^[a-f0-9]{64}\.json$/);
+          expect(result.inventory.byId.length).toBe(0);
         }
       } finally {
         await fs.rm(root, { recursive: true, force: true });

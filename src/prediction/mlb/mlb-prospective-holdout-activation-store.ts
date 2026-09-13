@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { promises as fs, type Dirent } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
@@ -199,6 +199,223 @@ export async function readMLBProspectiveHoldoutActivationById(
   }
 
   return readResult;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Store inventory (read-only)                                               */
+/* -------------------------------------------------------------------------- */
+
+export type MLBProspectiveHoldoutActivationInventoryEntry = Readonly<{
+  activationId: string;
+  activation: MLBProspectiveHoldoutActivationPersisted;
+  receipt: MLBProspectiveHoldoutActivationReceipt;
+  filePath: string;
+  fileName: string;
+}>;
+
+export type MLBProspectiveHoldoutActivationStoreInventory = Readonly<{
+  legacy: MLBProspectiveHoldoutActivationInventoryEntry | null;
+  byId: readonly MLBProspectiveHoldoutActivationInventoryEntry[];
+}>;
+
+export type MLBProspectiveHoldoutActivationStoreInventoryIssue = Readonly<{
+  code:
+    | 'STORE_DIRECTORY_IO_ERROR'
+    | 'STORE_UNEXPECTED_FILE'
+    | 'STORE_MALFORMED_JSON'
+    | 'STORE_CONTRACT_INVALID'
+    | 'STORE_WRONG_HASH_FILENAME'
+    | 'STORE_DUPLICATE_ACTIVATION_IDENTITY';
+  path: string;
+  message: string;
+}>;
+
+export type MLBProspectiveHoldoutActivationStoreInventoryResult =
+  | { readonly ok: true; readonly inventory: MLBProspectiveHoldoutActivationStoreInventory }
+  | { readonly ok: false; readonly issues: readonly MLBProspectiveHoldoutActivationStoreInventoryIssue[] };
+
+const LEGACY_ACTIVATION_FILENAME =
+  `${MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_CONTRACT_VERSION}.json`;
+const BY_ID_FILENAME_PATTERN = /^[a-f0-9]{64}\.json$/;
+const STORE_TEMP_FILE_SUFFIX_PATTERN = /\.tmp-([a-f0-9]{32})$/;
+
+function isStoreTempFileName(fileName: string): boolean {
+  const match = STORE_TEMP_FILE_SUFFIX_PATTERN.exec(fileName);
+  if (match === null || match.index === undefined) return false;
+  const baseName = fileName.slice(0, match.index);
+  return baseName === LEGACY_ACTIVATION_FILENAME || BY_ID_FILENAME_PATTERN.test(baseName);
+}
+
+function mapReadIssueToInventoryIssue(
+  issue: MLBProspectiveHoldoutActivationStoreReadIssue,
+  filePath: string,
+): MLBProspectiveHoldoutActivationStoreInventoryIssue {
+  let code: MLBProspectiveHoldoutActivationStoreInventoryIssue['code'];
+  switch (issue.code) {
+    case 'ACTIVATION_IO_ERROR':
+      code = 'STORE_DIRECTORY_IO_ERROR';
+      break;
+    case 'ACTIVATION_JSON_INVALID':
+      code = 'STORE_MALFORMED_JSON';
+      break;
+    case 'ACTIVATION_CONTRACT_INVALID':
+      code = 'STORE_CONTRACT_INVALID';
+      break;
+    case 'ACTIVATION_MISSING':
+    case 'ACTIVATION_IDENTITY_MISMATCH':
+    default:
+      code = 'STORE_UNEXPECTED_FILE';
+      break;
+  }
+  return { code, path: filePath, message: issue.message };
+}
+
+export async function inspectMLBProspectiveHoldoutActivationStore(
+  repositoryRoot: string,
+): Promise<MLBProspectiveHoldoutActivationStoreInventoryResult> {
+  let paths: MLBProspectiveHoldoutActivationStorePaths;
+  try {
+    paths = resolveMLBProspectiveHoldoutActivationStorePaths(repositoryRoot);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown path derivation error';
+    return {
+      ok: false,
+      issues: [
+        { code: 'STORE_DIRECTORY_IO_ERROR', path: repositoryRoot, message },
+      ],
+    };
+  }
+
+  let dirEntries: Dirent[];
+  try {
+    dirEntries = await fs.readdir(paths.activationDirectory, { withFileTypes: true });
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === 'ENOENT') {
+      return { ok: true, inventory: { legacy: null, byId: [] } };
+    }
+    return {
+      ok: false,
+      issues: [
+        {
+          code: 'STORE_DIRECTORY_IO_ERROR',
+          path: paths.activationDirectory,
+          message: err.message ?? 'Unknown IO error',
+        },
+      ],
+    };
+  }
+
+  const issues: MLBProspectiveHoldoutActivationStoreInventoryIssue[] = [];
+  let legacyEntry: MLBProspectiveHoldoutActivationInventoryEntry | null = null;
+  const byIdEntries: MLBProspectiveHoldoutActivationInventoryEntry[] = [];
+  const seenActivationIds = new Set<string>();
+
+  for (const dirent of dirEntries) {
+    const fileName = dirent.name;
+    const filePath = path.join(paths.activationDirectory, fileName);
+
+    if (!dirent.isFile()) {
+      issues.push({
+        code: 'STORE_UNEXPECTED_FILE',
+        path: filePath,
+        message: `Unexpected directory or non-regular file in activation directory: ${fileName}`,
+      });
+      continue;
+    }
+
+    if (isStoreTempFileName(fileName)) {
+      continue;
+    }
+
+    const filePaths: MLBProspectiveHoldoutActivationStorePaths = {
+      repositoryRoot: paths.repositoryRoot,
+      activationDirectory: paths.activationDirectory,
+      activationPath: filePath,
+      tempActivationPath: '',
+    };
+
+    if (fileName === LEGACY_ACTIVATION_FILENAME) {
+      const readResult = await readActivationFromPaths(filePaths);
+      if (!readResult.ok) {
+        for (const issue of readResult.issues) {
+          issues.push(mapReadIssueToInventoryIssue(issue, filePath));
+        }
+        continue;
+      }
+      if (seenActivationIds.has(readResult.value.activationId)) {
+        issues.push({
+          code: 'STORE_DUPLICATE_ACTIVATION_IDENTITY',
+          path: filePath,
+          message: `Duplicate activation identity: ${readResult.value.activationId}`,
+        });
+        continue;
+      }
+      seenActivationIds.add(readResult.value.activationId);
+      legacyEntry = {
+        activationId: readResult.value.activationId,
+        activation: readResult.value,
+        receipt: readResult.receipt,
+        filePath,
+        fileName,
+      };
+      continue;
+    }
+
+    if (BY_ID_FILENAME_PATTERN.test(fileName)) {
+      const readResult = await readActivationFromPaths(filePaths);
+      if (!readResult.ok) {
+        for (const issue of readResult.issues) {
+          issues.push(mapReadIssueToInventoryIssue(issue, filePath));
+        }
+        continue;
+      }
+      const expectedFilename = activationIdToFilename(readResult.value.activationId);
+      if (fileName !== expectedFilename) {
+        issues.push({
+          code: 'STORE_WRONG_HASH_FILENAME',
+          path: filePath,
+          message: `Filename ${fileName} does not match expected SHA-256 filename ${expectedFilename} for activationId ${readResult.value.activationId}`,
+        });
+        continue;
+      }
+      if (seenActivationIds.has(readResult.value.activationId)) {
+        issues.push({
+          code: 'STORE_DUPLICATE_ACTIVATION_IDENTITY',
+          path: filePath,
+          message: `Duplicate activation identity: ${readResult.value.activationId}`,
+        });
+        continue;
+      }
+      seenActivationIds.add(readResult.value.activationId);
+      byIdEntries.push({
+        activationId: readResult.value.activationId,
+        activation: readResult.value,
+        receipt: readResult.receipt,
+        filePath,
+        fileName,
+      });
+      continue;
+    }
+
+    issues.push({
+      code: 'STORE_UNEXPECTED_FILE',
+      path: filePath,
+      message: `Unexpected file in activation directory: ${fileName}`,
+    });
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues: Object.freeze(issues) };
+  }
+
+  return {
+    ok: true,
+    inventory: {
+      legacy: legacyEntry,
+      byId: Object.freeze(byIdEntries),
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
