@@ -66,6 +66,31 @@ import type {
   MLBProspectiveHoldoutCaptureOrchestratorInput,
   MLBProspectiveHoldoutCaptureOrchestratorResult,
 } from '@/prediction/mlb/mlb-prospective-holdout-capture-orchestrator';
+import {
+  MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_CONTRACT_VERSION,
+  MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STABLE_ORDER_POLICY,
+  MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_VALIDATION_SIDE_DATE_RULE,
+  MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_SIDE_DATE_RULE,
+  MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_AUTHORIZATION_RULE,
+  type MLBProspectiveHoldoutActivationPersisted,
+} from '@/prediction/mlb/mlb-prospective-holdout-activation-contract';
+import { MLB_PROSPECTIVE_HOLDOUT_PROTOCOL_ID } from '@/prediction/mlb/mlb-prospective-holdout-protocol-contract';
+import {
+  MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_ID,
+  MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_FINGERPRINT,
+} from '@/prediction/mlb/mlb-inner-development-third-real-candidate-recipe';
+import {
+  MLB_PROSPECTIVE_T360_CAPTURE_CONTRACT_VERSION,
+  MLB_V1_CANDIDATE_003_T360_CAPTURE_COMPATIBILITY_V1,
+} from '@/prediction/mlb/mlb-prospective-t360-capture-contract';
+import {
+  MLB_PROSPECTIVE_PREGAME_EVIDENCE_ARTIFACT_CONTRACT_VERSION,
+  MLB_PROSPECTIVE_PREGAME_EVIDENCE_STORE_VERSION,
+} from '@/prediction/mlb/mlb-prospective-pregame-evidence-artifact-contract';
+import {
+  MLB_PROSPECTIVE_HOLDOUT_GAME_IDENTITY_BINDING_CONTRACT_VERSION,
+  MLB_PROSPECTIVE_HOLDOUT_GAME_IDENTITY_BINDING_STORE_VERSION,
+} from '@/prediction/mlb/mlb-prospective-holdout-game-identity-binding-contract';
 
 /* -------------------------------------------------------------------------- */
 /*  Fixtures                                                                  */
@@ -163,6 +188,38 @@ function buildResearchSnapshot(overrides: Partial<MLBGameResearchSnapshot> = {})
     generatedAt: new Date('2026-08-15T10:00:00Z'),
   };
   return { ...base, ...overrides };
+}
+
+function buildFrozenActivation(
+  overrides: Partial<MLBProspectiveHoldoutActivationPersisted> = {},
+): MLBProspectiveHoldoutActivationPersisted {
+  const base: MLBProspectiveHoldoutActivationPersisted = {
+    contractVersion: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_CONTRACT_VERSION,
+    protocolId: MLB_PROSPECTIVE_HOLDOUT_PROTOCOL_ID,
+    activationId: 'activation-900001',
+    candidateRecipeId: MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_ID,
+    candidateFingerprint: MLB_INNER_DEVELOPMENT_THIRD_REAL_CANDIDATE_RECIPE_FINGERPRINT,
+    featureManifestId: 'mlb-real-pregame-winner-feature-manifest-v1',
+    featurePolicyId: 'mlb-real-pregame-winner-feature-policy-v1',
+    preprocessingPolicyId: 'raw-finite-feature-values-with-default-missing-v1',
+    captureContractVersion: MLB_PROSPECTIVE_T360_CAPTURE_CONTRACT_VERSION,
+    compatibilityLayerId: MLB_V1_CANDIDATE_003_T360_CAPTURE_COMPATIBILITY_V1,
+    evidenceArtifactContractVersion: MLB_PROSPECTIVE_PREGAME_EVIDENCE_ARTIFACT_CONTRACT_VERSION,
+    evidenceStoreVersion: MLB_PROSPECTIVE_PREGAME_EVIDENCE_STORE_VERSION,
+    validationBoundaryOfficialDate: DEFAULT_TODAY,
+    validationTargetCount: 67,
+    testTargetCount: 69,
+    stableOrderPolicy: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STABLE_ORDER_POLICY,
+    validationSideDateRule: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_VALIDATION_SIDE_DATE_RULE,
+    testSideDateRule: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_SIDE_DATE_RULE,
+    noSmallerN: true,
+    resultIndependentSelection: true,
+    testAuthorizationRule: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_AUTHORIZATION_RULE,
+    gameIdentityBindingContractVersion: MLB_PROSPECTIVE_HOLDOUT_GAME_IDENTITY_BINDING_CONTRACT_VERSION,
+    gameIdentityBindingStoreVersion: MLB_PROSPECTIVE_HOLDOUT_GAME_IDENTITY_BINDING_STORE_VERSION,
+    persistedAt: '2026-08-15T05:00:00.000Z',
+  };
+  return { ...base, ...overrides } as MLBProspectiveHoldoutActivationPersisted;
 }
 
 type TestDependencies = {
@@ -1084,6 +1141,95 @@ describe('mlb-prospective-holdout-capture shared seam', () => {
     expect(fixture.orchestrator).not.toHaveBeenCalled();
 
     bridgeModule.buildMLBRealDataPregameSnapshot = originalBuild;
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Activated capture seam                                                     */
+/* -------------------------------------------------------------------------- */
+
+describe('mlb-prospective-holdout-capture-cli: activation forwarding seam', () => {
+  function buildCapturedResult(overrides: Partial<MLBProspectiveHoldoutCaptureOrchestratorResult> = {}) {
+    return {
+      kind: 'CAPTURED_AND_BOUND' as const,
+      activationId: 'activation-900001',
+      protocolId: 'mlb-prospective-holdout-v1',
+      gamePk: 123,
+      gameId: '123',
+      evidenceArtifactId: 'evidence-1',
+      bindingId: 'binding-1',
+      scientificCutoffAt: '2026-08-15T13:00:00.000Z',
+      actualDataCutoffAt: '2026-08-15T13:00:00.000Z',
+      persistedAt: '2026-08-15T13:00:00.000Z',
+      ...overrides,
+    } as MLBProspectiveHoldoutCaptureOrchestratorResult;
+  }
+
+  it('deps.activation is forwarded to orchestrator as exact object reference', async () => {
+    const testActivation = buildFrozenActivation({ activationId: 'activation-successor-B' });
+    const fixture = createMockDependencies({ activation: testActivation });
+    fixture.provider.buildGameSnapshot.mockResolvedValue(buildResearchSnapshot());
+    fixture.orchestrator.mockResolvedValue(buildCapturedResult({ activationId: 'activation-successor-B' }));
+
+    await runProspectiveHoldoutCaptureForScheduleGame(buildScheduleGame(), fixture.deps);
+
+    expect(fixture.orchestrator).toHaveBeenCalledTimes(1);
+    const input = fixture.orchestrator.mock.calls[0]![0];
+    // Exact reference equality — proves K2 forwards the same object, no copy/reload
+    expect(input.activation).toBe(testActivation);
+    expect(input.activation?.activationId).toBe('activation-successor-B');
+    // No fetchSchedule in the shared seam
+    expect(fixture.provider.fetchSchedule).not.toHaveBeenCalled();
+  });
+
+  it('absent deps.activation remains absent in orchestrator input', async () => {
+    const fixture = createMockDependencies();
+    fixture.provider.buildGameSnapshot.mockResolvedValue(buildResearchSnapshot());
+    fixture.orchestrator.mockResolvedValue(
+      buildCapturedResult({ activationId: 'activation-900001' }),
+    );
+
+    // Confirm no activation was injected
+    expect(fixture.deps.activation).toBeUndefined();
+
+    await runProspectiveHoldoutCaptureForScheduleGame(buildScheduleGame(), fixture.deps);
+
+    expect(fixture.orchestrator).toHaveBeenCalledTimes(1);
+    const input = fixture.orchestrator.mock.calls[0]![0];
+    expect(input.activation).toBeUndefined();
+  });
+
+  it('no activation store selection occurs in K2 source', async () => {
+    const fs = await import('node:fs');
+    const scriptPath = new URL('../../../scripts/mlb-prospective-holdout-capture.ts', import.meta.url).pathname;
+    const scriptContent = await fs.promises.readFile(scriptPath, 'utf-8');
+    // K2 must not read the activation store — activation flows only via deps
+    expect(scriptContent).not.toContain('readMLBProspectiveHoldoutActivation');
+    expect(scriptContent).not.toContain('activation-store');
+    expect(scriptContent).not.toContain('writeMLBProspectiveHoldoutActivation');
+    // K2 forwards deps.activation directly to orchestrator input
+    expect(scriptContent).toContain('activation: deps.activation');
+  });
+
+  it('manual CLI parser remains unchanged — --gamePk flag still parsed', async () => {
+    const { io, stderr } = createIO();
+    const fixture = createMockDependencies();
+    fixture.provider.fetchSchedule.mockResolvedValue(buildScheduleResult([]));
+    const code = await runMLBProspectiveHoldoutCaptureCLI(
+      ['node', 'script', '--gamePk=999'],
+      io,
+      fixture.deps,
+    );
+    // A well-formed --gamePk=999 flag must not produce a parse error.
+    expect(stderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('Unsupported flag'),
+    );
+    expect(stderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('is required'),
+    );
+    // With empty schedule, the capture proceeds (proving parsing succeeded) and
+    // fails at schedule-not-found — not at parse time. No real network involved.
+    expect(fixture.provider.fetchSchedule).toHaveBeenCalled();
   });
 });
 

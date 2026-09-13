@@ -56,6 +56,7 @@ import {
 } from './mlb-prospective-holdout-activation-store';
 import {
   MLBProspectiveHoldoutActivationPersisted,
+  validateMLBProspectiveHoldoutActivationPersisted,
 } from './mlb-prospective-holdout-activation-contract';
 import {
   discoverMLBProspectiveHoldoutArtifacts,
@@ -174,6 +175,7 @@ export type MLBProspectiveHoldoutCaptureOrchestratorInput = Readonly<{
   scheduleGame: MLBScheduleGame;
   clock: MLBProspectiveHoldoutCaptureClock;
   snapshotBuilder: MLBProspectiveHoldoutCaptureSnapshotBuilder;
+  activation?: MLBProspectiveHoldoutActivationPersisted;
 }>;
 
 /* -------------------------------------------------------------------------- */
@@ -237,15 +239,27 @@ export async function runProspectiveHoldoutCaptureOrchestrator(
   const currentOfficialDate = scheduleGame.officialDate;
   const currentScheduledStartAt = scheduleGame.startTimeUtc.toISOString();
 
-  // 2. Read activation from store
-  const activationResult = await readMLBProspectiveHoldoutActivation(repositoryRoot);
-  if (!activationResult.ok) {
-    return {
-      kind: 'ACTIVATION_UNAVAILABLE',
-      issues: activationResult.issues.map(mapIssue),
-    };
+  // 2. Resolve activation: injected (validated) takes priority over legacy store read
+  let activation: MLBProspectiveHoldoutActivationPersisted;
+  if (input.activation !== undefined) {
+    const injectedResult = validateMLBProspectiveHoldoutActivationPersisted(input.activation);
+    if (!injectedResult.ok) {
+      return {
+        kind: 'ACTIVATION_UNAVAILABLE',
+        issues: injectedResult.issues.map(mapIssue),
+      };
+    }
+    activation = injectedResult.value;
+  } else {
+    const activationResult = await readMLBProspectiveHoldoutActivation(repositoryRoot);
+    if (!activationResult.ok) {
+      return {
+        kind: 'ACTIVATION_UNAVAILABLE',
+        issues: activationResult.issues.map(mapIssue),
+      };
+    }
+    activation = activationResult.value;
   }
-  const activation = activationResult.value;
 
   // 3. Compute scientific cutoff
   const cutoffResult = computeScientificCutoffAt(currentScheduledStartAt);

@@ -58,6 +58,7 @@ import {
   MLB_PROSPECTIVE_HOLDOUT_GAME_IDENTITY_BINDING_STORE_VERSION,
 } from '@/prediction/mlb/mlb-prospective-holdout-game-identity-binding-contract';
 import type { MLBProspectiveHoldoutCaptureOrchestratorResult } from '@/prediction/mlb/mlb-prospective-holdout-capture-orchestrator';
+import type { MLBProspectiveHoldoutCaptureDependencies } from '../../../scripts/mlb-prospective-holdout-capture';
 import type { MLBGameResearchSnapshot, MLBScheduleGame, MLBScheduleResult } from '@/lib/research-data/types';
 
 /* -------------------------------------------------------------------------- */
@@ -2688,5 +2689,79 @@ describe('AB. static firewall and hygiene', () => {
   it('93. default capture application is runProspectiveHoldoutCaptureForScheduleGame', async () => {
     const src = await fs.readFile(schedulerSourcePath, 'utf-8');
     expect(src).toContain('captureApplication: runProspectiveHoldoutCaptureForScheduleGame');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  AC. ACTIVATION FORWARDING SEAM                                            */
+/* -------------------------------------------------------------------------- */
+
+describe('AC. activation forwarding seam', () => {
+  it('94. planning state activation forwarded as exact object to captureApplication deps.activation', async () => {
+    // T-375: exactly target-dispatch time — triggers DISPATCH_NOW.
+    const startTime = new Date('2026-09-07T08:00:00.000Z');
+    const now = new Date(startTime.getTime() - 375 * 60 * 1000);
+    const scheduleGame = buildScheduleGame({ startTimeUtc: startTime });
+    const planningActivation = buildFrozenActivation({
+      activationId: 'activation-successor-B',
+    });
+    let capturedDeps: MLBProspectiveHoldoutCaptureDependencies | undefined;
+    let captureCalls = 0;
+    const deps = buildDeps({
+      now: buildClock(now),
+      loadScientificState: async () => ({
+        ok: true,
+        activation: planningActivation,
+        validationCapturedCount: 1,
+        testCapturedCount: 0,
+        anomalyCount: 0,
+        completedGamePks: [],
+      }),
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]),
+      captureApplication: async (_game, captureDeps) => {
+        captureCalls++;
+        capturedDeps = captureDeps;
+        return CAPTURED_RESULT;
+      },
+    });
+    await runMLBProspectiveHoldoutScheduler({ dryRun: false }, deps);
+    expect(captureCalls).toBe(1);
+    expect(capturedDeps).toBeDefined();
+    if (capturedDeps) {
+      // Exact object reference — proves no copy/reload between planning state and capture application
+      expect(capturedDeps.activation).toBe(planningActivation);
+      expect(capturedDeps.activation?.activationId).toBe('activation-successor-B');
+    }
+  });
+
+  it('95. dry-run makes zero captureApplication calls with successor activation', async () => {
+    const startTime = new Date('2026-09-07T08:00:00.000Z');
+    const now = new Date(startTime.getTime() - 375 * 60 * 1000);
+    const scheduleGame = buildScheduleGame({ startTimeUtc: startTime });
+    const planningActivation = buildFrozenActivation({
+      activationId: 'activation-successor-B',
+    });
+    let captureCalls = 0;
+    const deps = buildDeps({
+      now: buildClock(now),
+      loadScientificState: async () => ({
+        ok: true,
+        activation: planningActivation,
+        validationCapturedCount: 1,
+        testCapturedCount: 0,
+        anomalyCount: 0,
+        completedGamePks: [],
+      }),
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]),
+      captureApplication: async () => {
+        captureCalls++;
+        return CAPTURED_RESULT;
+      },
+    });
+    const result = await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
+    expect(captureCalls).toBe(0);
+    expect(result.kind).toBe('DRY_RUN_COMPLETE');
   });
 });

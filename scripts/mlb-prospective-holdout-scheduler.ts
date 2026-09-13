@@ -486,6 +486,7 @@ function isValidState(
 function buildCaptureDeps(
   repositoryRoot: string,
   deps: MLBProspectiveHoldoutSchedulerDependencies,
+  activation: MLBProspectiveHoldoutActivationPersisted,
 ): MLBProspectiveHoldoutCaptureDependencies {
   return {
     repositoryRoot,
@@ -494,6 +495,7 @@ function buildCaptureDeps(
       buildGameSnapshot: deps.provider.buildGameSnapshot,
     },
     orchestrator: runProspectiveHoldoutCaptureOrchestrator,
+    activation,
     now: deps.now,
   };
 }
@@ -1068,7 +1070,7 @@ export async function runMLBProspectiveHoldoutScheduler(
           try {
             captureResult = await deps.captureApplication(
               freshGame,
-              buildCaptureDeps(repositoryRoot, deps),
+              buildCaptureDeps(repositoryRoot, deps, state.activation),
             );
             lastError = undefined;
             break;

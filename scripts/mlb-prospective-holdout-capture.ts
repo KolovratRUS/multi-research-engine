@@ -10,6 +10,7 @@ import {
   runProspectiveHoldoutCaptureOrchestrator,
   type MLBProspectiveHoldoutCaptureOrchestratorResult,
 } from '@/prediction/mlb/mlb-prospective-holdout-capture-orchestrator';
+import type { MLBProspectiveHoldoutActivationPersisted } from '@/prediction/mlb/mlb-prospective-holdout-activation-contract';
 import { buildMLBRealDataPregameSnapshot } from '@/prediction/mlb/mlb-real-data-pregame-snapshot-bridge';
 
 /* -------------------------------------------------------------------------- */
@@ -55,6 +56,7 @@ export interface MLBProspectiveHoldoutCaptureDependencies {
     ): Promise<MLBGameResearchSnapshot>;
   };
   readonly orchestrator: typeof runProspectiveHoldoutCaptureOrchestrator;
+  readonly activation?: MLBProspectiveHoldoutActivationPersisted;
   readonly now: () => Date;
 }
 
@@ -178,6 +180,7 @@ export async function runProspectiveHoldoutCaptureForScheduleGame(
     scheduleGame,
     clock,
     snapshotBuilder,
+    activation: deps.activation,
   });
 }
 

@@ -2523,3 +2523,307 @@ describe('mlb-prospective-holdout-capture-orchestrator: bridge defect regression
     }
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*  Stage Z: injected activation seam                                          */
+/* -------------------------------------------------------------------------- */
+
+describe('mlb-prospective-holdout-capture-orchestrator: injected activation seam', () => {
+  it('A. no injected activation → legacy fallback still works', async () => {
+    const root = await createTempRoot('mlb-capture-orchestrator-legacy-');
+    try {
+      const legacyActivation = buildValidActivation({
+        activationId: 'activation-legacy-A',
+      });
+      const persistedLegacy = await persistSyntheticActivation(
+        root,
+        legacyActivation,
+        () => '2026-08-15T05:00:00Z',
+      );
+
+      const game = buildScheduleGame();
+      const clock = createConstantClock('2026-08-15T05:59:59.999Z');
+      const builder = createSnapshotBuilder();
+      resetBuilderCount();
+
+      const result = await runProspectiveHoldoutCaptureOrchestrator({
+        repositoryRoot: root,
+        scheduleGame: game,
+        clock,
+        snapshotBuilder: builder,
+      });
+
+      expect(result.kind).toBe('CAPTURED_AND_BOUND');
+      expect(builderCallCount).toBe(1);
+      if (result.kind !== 'CAPTURED_AND_BOUND') {
+        throw new Error('Expected CAPTURED_AND_BOUND');
+      }
+      expect(result.activationId).toBe(persistedLegacy.activationId);
+
+      const evidenceRead = await readProspectivePregameEvidence(root, result.evidenceArtifactId);
+      expect(evidenceRead.ok).toBe(true);
+      if (evidenceRead.ok) {
+        expect(evidenceRead.value.activationId).toBe('activation-legacy-A');
+      }
+
+      const bindingRead = await readProspectiveHoldoutGameIdentityBinding(root, result.bindingId);
+      expect(bindingRead.ok).toBe(true);
+      if (bindingRead.ok) {
+        expect(bindingRead.value.activationId).toBe('activation-legacy-A');
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('B-D-E-F. injected successor-B while legacy-A persisted → successor-B used everywhere', async () => {
+    const root = await createTempRoot('mlb-capture-orchestrator-injected-');
+    try {
+      // Write legacy-A to the activation store
+      const legacyActivation = buildValidActivation({
+        activationId: 'activation-legacy-A',
+      });
+      await persistSyntheticActivation(root, legacyActivation, () => '2026-08-15T05:00:00Z');
+
+      // Inject successor-B (planning activation, not read from store)
+      const successorB = buildValidPersistedActivation({
+        activationId: 'activation-successor-B',
+      });
+
+      const game = buildScheduleGame();
+      const clock = createConstantClock('2026-08-15T05:59:59.999Z');
+      const builder = createSnapshotBuilder();
+      resetBuilderCount();
+
+      const result = await runProspectiveHoldoutCaptureOrchestrator({
+        repositoryRoot: root,
+        scheduleGame: game,
+        clock,
+        snapshotBuilder: builder,
+        activation: successorB,
+      });
+
+      expect(result.kind).toBe('CAPTURED_AND_BOUND');
+      expect(builderCallCount).toBe(1);
+      if (result.kind !== 'CAPTURED_AND_BOUND') {
+        throw new Error('Expected CAPTURED_AND_BOUND');
+      }
+
+      // PLANNING_ACTIVATION_ID = successor-B (result-level)
+      expect(result.activationId).toBe('activation-successor-B');
+
+      // F. protocol/candidate lineage from successor-B
+      expect(result.protocolId).toBe(successorB.protocolId);
+
+      // D. persisted evidence activationId = successor-B
+      const evidenceRead = await readProspectivePregameEvidence(root, result.evidenceArtifactId);
+      expect(evidenceRead.ok).toBe(true);
+      if (evidenceRead.ok) {
+        expect(evidenceRead.value.activationId).toBe('activation-successor-B');
+        expect(evidenceRead.value.protocolId).toBe(successorB.protocolId);
+      }
+
+      // E. persisted binding activationId = successor-B
+      const bindingRead = await readProspectiveHoldoutGameIdentityBinding(root, result.bindingId);
+      expect(bindingRead.ok).toBe(true);
+      if (bindingRead.ok) {
+        expect(bindingRead.value.activationId).toBe('activation-successor-B');
+        expect(bindingRead.value.protocolId).toBe(successorB.protocolId);
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('C. injected successor-B with NO legacy activation file → capture does not fail', async () => {
+    const root = await createTempRoot('mlb-capture-orchestrator-no-legacy-');
+    try {
+      const successorB = buildValidPersistedActivation({
+        activationId: 'activation-successor-B',
+      });
+
+      const game = buildScheduleGame();
+      const clock = createConstantClock('2026-08-15T05:59:59.999Z');
+      const builder = createSnapshotBuilder();
+      resetBuilderCount();
+
+      const result = await runProspectiveHoldoutCaptureOrchestrator({
+        repositoryRoot: root,
+        scheduleGame: game,
+        clock,
+        snapshotBuilder: builder,
+        activation: successorB,
+      });
+
+      expect(result.kind).toBe('CAPTURED_AND_BOUND');
+      expect(builderCallCount).toBe(1);
+      if (result.kind !== 'CAPTURED_AND_BOUND') {
+        throw new Error('Expected CAPTURED_AND_BOUND');
+      }
+      expect(result.activationId).toBe('activation-successor-B');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('G. malformed injected activation → ACTIVATION_UNAVAILABLE, no H/binding persistence', async () => {
+    const root = await createTempRoot('mlb-capture-orchestrator-malformed-');
+    try {
+      const game = buildScheduleGame();
+      const clock = createConstantClock('2026-08-15T05:59:59.999Z');
+      const builder = createSnapshotBuilder();
+      resetBuilderCount();
+
+      const result = await runProspectiveHoldoutCaptureOrchestrator({
+        repositoryRoot: root,
+        scheduleGame: game,
+        clock,
+        snapshotBuilder: builder,
+        activation: { notAValidActivation: true } as unknown as MLBProspectiveHoldoutActivationPersisted,
+      });
+
+      expect(result.kind).toBe('ACTIVATION_UNAVAILABLE');
+      expect(builderCallCount).toBe(0);
+
+      const evidencePaths = resolveMLBProspectivePregameEvidenceStorePaths(root);
+      const bindingPaths = resolveMLBProspectiveHoldoutGameIdentityBindingStorePaths(root);
+      const evidenceCount = (
+        await fs.readdir(evidencePaths.evidenceDirectory).catch(() => [])
+      ).filter((entry) => entry.endsWith('.json')).length;
+      const bindingCount = (
+        await fs.readdir(bindingPaths.bindingDirectory).catch(() => [])
+      ).filter((entry) => entry.endsWith('.json')).length;
+      expect(evidenceCount).toBe(0);
+      expect(bindingCount).toBe(0);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('H. timing contract with injected activation: exactly T360 accepted, after T360 rejected', async () => {
+    // exactly T360 accepted
+    {
+      const root = await createTempRoot('mlb-capture-orchestrator-timing-exact-');
+      try {
+        const successorB = buildValidPersistedActivation({
+          activationId: 'activation-successor-B',
+        });
+        const game = buildScheduleGame();
+        const clock = createConstantClock(SCIENTIFIC_CUTOFF);
+        const builder = createSnapshotBuilder();
+        resetBuilderCount();
+
+        const result = await runProspectiveHoldoutCaptureOrchestrator({
+          repositoryRoot: root,
+          scheduleGame: game,
+          clock,
+          snapshotBuilder: builder,
+          activation: successorB,
+        });
+
+        expect(result.kind).toBe('CAPTURED_AND_BOUND');
+        expect(builderCallCount).toBe(1);
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }
+
+    // after T360 rejected
+    {
+      const root = await createTempRoot('mlb-capture-orchestrator-timing-after-');
+      try {
+        const successorB = buildValidPersistedActivation({
+          activationId: 'activation-successor-B',
+        });
+        const game = buildScheduleGame();
+        const clock = createConstantClock('2026-08-15T06:00:00.001Z');
+        const builder = createSnapshotBuilder();
+        resetBuilderCount();
+
+        const result = await runProspectiveHoldoutCaptureOrchestrator({
+          repositoryRoot: root,
+          scheduleGame: game,
+          clock,
+          snapshotBuilder: builder,
+          activation: successorB,
+        });
+
+        expect(result.kind).toBe('CAPTURE_REJECTED');
+        expect(builderCallCount).toBe(0);
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Stage Z-CROSS-SEAM: cross-seam identity proof                            */
+/* -------------------------------------------------------------------------- */
+
+describe('cross-seam identity proof: injected successor-B supersedes legacy-A', () => {
+  it('proves PLANNING_ORCHESTRATOR_EVIDENCE_BINDING identity = successor-B, legacy-A unused', async () => {
+    const root = await createTempRoot('mlb-capture-cross-seam-');
+    try {
+      // Setup: legacy activation (legacy-A) in store
+      const legacyActivation = buildValidActivation({
+        activationId: 'activation-legacy-A',
+      });
+      const persistedLegacy = await persistSyntheticActivation(
+        root,
+        legacyActivation,
+        () => '2026-08-15T05:00:00Z',
+      );
+
+      // Planning activation (successor-B) — simulates what scheduler/K2 forwards
+      const successorB = buildValidPersistedActivation({
+        activationId: 'activation-successor-B',
+      });
+
+      const game = buildScheduleGame();
+      const clock = createConstantClock('2026-08-15T05:59:59.999Z');
+      const builder = createSnapshotBuilder();
+      resetBuilderCount();
+
+      const result = await runProspectiveHoldoutCaptureOrchestrator({
+        repositoryRoot: root,
+        scheduleGame: game,
+        clock,
+        snapshotBuilder: builder,
+        activation: successorB,
+      });
+
+      // ORCHESTRATOR_ACTIVATION_ID = successor-B
+      expect(result.kind).toBe('CAPTURED_AND_BOUND');
+      if (result.kind !== 'CAPTURED_AND_BOUND') {
+        throw new Error('Expected CAPTURED_AND_BOUND');
+      }
+      expect(result.activationId).toBe('activation-successor-B');
+
+      // EVIDENCE_ACTIVATION_ID = successor-B
+      const evidenceRead = await readProspectivePregameEvidence(root, result.evidenceArtifactId);
+      expect(evidenceRead.ok).toBe(true);
+      if (evidenceRead.ok) {
+        expect(evidenceRead.value.activationId).toBe('activation-successor-B');
+      }
+
+      // BINDING_ACTIVATION_ID = successor-B
+      const bindingRead = await readProspectiveHoldoutGameIdentityBinding(root, result.bindingId);
+      expect(bindingRead.ok).toBe(true);
+      if (bindingRead.ok) {
+        expect(bindingRead.value.activationId).toBe('activation-successor-B');
+      }
+
+      // LEGACY_A_USED_FOR_INJECTED_CAPTURE = NO
+      expect(persistedLegacy.activationId).toBe('activation-legacy-A');
+      if (evidenceRead.ok) {
+        expect(evidenceRead.value.activationId).not.toBe(persistedLegacy.activationId);
+      }
+      if (bindingRead.ok) {
+        expect(bindingRead.value.activationId).not.toBe(persistedLegacy.activationId);
+      }
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+});
