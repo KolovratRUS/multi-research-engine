@@ -26,6 +26,7 @@ import {
 } from '@/prediction/mlb/mlb-prospective-holdout-activation-store';
 import {
   discoverMLBProspectiveHoldoutArtifacts,
+  type MLBProspectiveHoldoutCampaignContext,
 } from '@/prediction/mlb/mlb-prospective-holdout-artifact-discovery';
 import {
   buildMLBProspectiveHoldoutProgressReport,
@@ -410,9 +411,36 @@ async function loadScientificStateImpl(
     };
   }
   const activation = selection.activation;
+
+  // Build campaign-aware context from the validated activation inventory.
+  // Discovery uses this to classify foreign artifacts as KNOWN_FOREIGN
+  // (non-blocking) vs UNKNOWN_FOREIGN (fail-closed). The scheduler is the
+  // sole authority for which activations are valid; discovery does NOT
+  // re-read the activation directory.
+  const campaignContext: MLBProspectiveHoldoutCampaignContext = {
+    selectedActivationId: activation.activationId,
+    selectedProtocolId: activation.protocolId,
+    validatedActivations: inventoryResult.ok
+      ? [
+          ...(inventoryResult.inventory.legacy !== null
+            ? [inventoryResult.inventory.legacy.activation]
+            : []),
+          ...inventoryResult.inventory.byId.map((e) => e.activation),
+        ].map((a) => ({
+          activationId: a.activationId,
+          protocolId: a.protocolId,
+          evidenceArtifactContractVersion: a.evidenceArtifactContractVersion,
+          captureContractVersion: a.captureContractVersion,
+          compatibilityLayerId: a.compatibilityLayerId,
+          gameIdentityBindingContractVersion: a.gameIdentityBindingContractVersion,
+          evidenceStoreVersion: a.evidenceStoreVersion,
+        }))
+      : [],
+  };
   const discoveryResult = await discoverMLBProspectiveHoldoutArtifacts(
     repositoryRoot,
     activation,
+    campaignContext,
   );
   if (!discoveryResult.ok) {
     return {

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   discoverMLBProspectiveHoldoutArtifacts,
   type MLBProspectiveHoldoutArtifactDiscoveryResult,
+  type MLBProspectiveHoldoutCampaignContext,
 } from '@/prediction/mlb/mlb-prospective-holdout-artifact-discovery';
 
 import {
@@ -1306,6 +1307,508 @@ describe('mlb-prospective-holdout-artifact-discovery', () => {
         if (cohortResult.ok) {
           expect(cohortResult.validation.selected).toHaveLength(targetCount);
         }
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
+  });
+
+  describe('campaign-aware foreign artifact classification', () => {
+    type LineageOverrides = Readonly<
+      Record<
+        string,
+        Partial<{
+          protocolId: string;
+          evidenceArtifactContractVersion: string;
+          captureContractVersion: string;
+          compatibilityLayerId: string;
+          gameIdentityBindingContractVersion: string;
+          evidenceStoreVersion: string;
+        }>
+      >
+    >;
+
+    function buildCampaignContextEntry(
+      activation: MLBProspectiveHoldoutActivationPersisted,
+      overrides: LineageOverrides[string] = {},
+    ) {
+      return {
+        activationId: activation.activationId,
+        protocolId: overrides.protocolId ?? activation.protocolId,
+        evidenceArtifactContractVersion:
+          overrides.evidenceArtifactContractVersion ??
+          activation.evidenceArtifactContractVersion,
+        captureContractVersion:
+          overrides.captureContractVersion ?? activation.captureContractVersion,
+        compatibilityLayerId:
+          overrides.compatibilityLayerId ?? activation.compatibilityLayerId,
+        gameIdentityBindingContractVersion:
+          overrides.gameIdentityBindingContractVersion ??
+          activation.gameIdentityBindingContractVersion,
+        evidenceStoreVersion:
+          overrides.evidenceStoreVersion ?? activation.evidenceStoreVersion,
+      };
+    }
+
+    function buildCampaignContext(
+      selected: MLBProspectiveHoldoutActivationPersisted,
+      validated: readonly MLBProspectiveHoldoutActivationPersisted[],
+      lineageOverrides: LineageOverrides = {},
+    ): MLBProspectiveHoldoutCampaignContext {
+      return {
+        selectedActivationId: selected.activationId,
+        selectedProtocolId: selected.protocolId,
+        validatedActivations: validated.map((a) =>
+          buildCampaignContextEntry(a, lineageOverrides[a.activationId]),
+        ),
+      };
+    }
+
+    async function persistActivationArtifacts(
+      root: string,
+      activationId: string,
+      gamePk: number,
+      scheduledStartAt: string,
+    ): Promise<void> {
+      const evidencePrepared = buildValidPreparedEvidence({
+        activationId,
+        game: { gameId: String(gamePk) },
+        snapshotId: `snapshot-${activationId}`,
+        scheduledStartAt,
+      });
+      const evidenceReceipt = await persistSyntheticEvidence(
+        root,
+        evidencePrepared,
+        () => FROZEN_DATA_CUTOFF,
+      );
+
+      const scheduleGame = {
+        gamePk,
+        officialDate: scheduledStartAt.slice(0, 10),
+        startTimeUtc: new Date(scheduledStartAt),
+      };
+      const bindingPrepared = buildValidPreparedBinding(
+        root,
+        evidencePrepared,
+        evidenceReceipt,
+        scheduleGame,
+      );
+      await persistSyntheticBinding(root, bindingPrepared, () => '2026-07-15T06:30:00Z');
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Section 5 — Successor zero-state                                   */
+    /* ------------------------------------------------------------------ */
+    it('successor zero-state: legacy artifacts KNOWN_FOREIGN, zero captures, zero blocking', async () => {
+      const root = await createTempRoot('mlb-discovery-campaign-');
+      try {
+        await persistActivationArtifacts(
+          root,
+          'legacy-A',
+          900001,
+          '2026-07-15T12:00:00Z',
+        );
+
+        const legacy = buildFrozenActivation({ activationId: 'legacy-A' });
+        const successor = buildFrozenActivation({ activationId: 'successor-B' });
+        const ctx = buildCampaignContext(successor, [legacy, successor]);
+
+        const result = await discoverMLBProspectiveHoldoutArtifacts(
+          root,
+          successor,
+          ctx,
+        );
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+
+        // Successor has zero captures
+        expect(result.candidates).toHaveLength(0);
+        expect(result.orphanEvidence).toHaveLength(0);
+        // Zero blocking anomalies
+        expect(result.foreignArtifactSummary.foreignEvidenceCount).toBe(0);
+        expect(result.foreignArtifactSummary.foreignBindingCount).toBe(0);
+        // Legacy artifacts are KNOWN_FOREIGN
+        expect(result.foreignArtifactSummary.knownForeignEvidenceCount).toBe(1);
+        expect(result.foreignArtifactSummary.knownForeignBindingCount).toBe(1);
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
+
+    /* ------------------------------------------------------------------ */
+    /*  Section 6 — Selected legacy control                                */
+    /* ------------------------------------------------------------------ */
+    it('selected legacy control: legacy artifacts participate normally', async () => {
+      const root = await createTempRoot('mlb-discovery-campaign-');
+      try {
+        await persistActivationArtifacts(
+          root,
+          'legacy-A',
+          900001,
+          '2026-07-15T12:00:00Z',
+        );
+
+        const legacy = buildFrozenActivation({ activationId: 'legacy-A' });
+        const successor = buildFrozenActivation({ activationId: 'successor-B' });
+        const ctx = buildCampaignContext(legacy, [legacy, successor]);
+
+        const result = await discoverMLBProspectiveHoldoutArtifacts(
+          root,
+          legacy,
+          ctx,
+        );
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+
+        expect(result.candidates).toHaveLength(1);
+        expect(result.candidates[0]?.binding.gamePk).toBe(900001);
+        expect(result.foreignArtifactSummary.foreignEvidenceCount).toBe(0);
+        expect(result.foreignArtifactSummary.foreignBindingCount).toBe(0);
+        expect(result.foreignArtifactSummary.knownForeignEvidenceCount).toBe(0);
+        expect(result.foreignArtifactSummary.knownForeignBindingCount).toBe(0);
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
+
+    /* ------------------------------------------------------------------ */
+    /*  Section 7 — Known foreign successor artifact                       */
+    /* ------------------------------------------------------------------ */
+    it('known foreign successor: successor-B artifacts KNOWN_FOREIGN when legacy-A selected', async () => {
+      const root = await createTempRoot('mlb-discovery-campaign-');
+      try {
+        await persistActivationArtifacts(
+          root,
+          'legacy-A',
+          900001,
+          '2026-07-15T12:00:00Z',
+        );
+        await persistActivationArtifacts(
+          root,
+          'successor-B',
+          900002,
+          '2026-07-15T13:00:00Z',
+        );
+
+        const legacy = buildFrozenActivation({ activationId: 'legacy-A' });
+        const successor = buildFrozenActivation({ activationId: 'successor-B' });
+        const ctx = buildCampaignContext(legacy, [legacy, successor]);
+
+        const result = await discoverMLBProspectiveHoldoutArtifacts(
+          root,
+          legacy,
+          ctx,
+        );
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+
+        expect(result.candidates).toHaveLength(1);
+        expect(result.candidates[0]?.binding.gamePk).toBe(900001);
+        expect(result.foreignArtifactSummary.foreignEvidenceCount).toBe(0);
+        expect(result.foreignArtifactSummary.foreignBindingCount).toBe(0);
+        expect(result.foreignArtifactSummary.knownForeignEvidenceCount).toBe(1);
+        expect(result.foreignArtifactSummary.knownForeignBindingCount).toBe(1);
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
+
+    /* ------------------------------------------------------------------ */
+    /*  Section 8a — Unknown foreign evidence fail-closed                  */
+    /* ------------------------------------------------------------------ */
+    it('unknown foreign evidence: unvalidated activationId blocks discovery', async () => {
+      const root = await createTempRoot('mlb-discovery-campaign-');
+      try {
+        await persistActivationArtifacts(
+          root,
+          'legacy-A',
+          900001,
+          '2026-07-15T12:00:00Z',
+        );
+        await persistActivationArtifacts(
+          root,
+          'unknown-C',
+          900003,
+          '2026-07-15T14:00:00Z',
+        );
+
+        const legacy = buildFrozenActivation({ activationId: 'legacy-A' });
+        const successor = buildFrozenActivation({ activationId: 'successor-B' });
+        // unknown-C is NOT in the validated inventory
+        const ctx = buildCampaignContext(legacy, [legacy, successor]);
+
+        const result = await discoverMLBProspectiveHoldoutArtifacts(
+          root,
+          legacy,
+          ctx,
+        );
+        expect(result.ok).toBe(false);
+        if (result.ok) return;
+
+        const evidenceIssue = result.issues.find(
+          (i) => i.code === 'UNKNOWN_FOREIGN_EVIDENCE',
+        );
+        expect(evidenceIssue).toBeDefined();
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
+
+    /* ------------------------------------------------------------------ */
+    /*  Section 8b — Unknown foreign binding fail-closed                   */
+    /* ------------------------------------------------------------------ */
+    it('unknown foreign binding: unvalidated activationId on binding blocks discovery', async () => {
+      const root = await createTempRoot('mlb-discovery-campaign-');
+      try {
+        // Persist legacy-A evidence + binding (selected)
+        await persistActivationArtifacts(
+          root,
+          'legacy-A',
+          900001,
+          '2026-07-15T12:00:00Z',
+        );
+
+        // Create a genuinely valid persisted binding whose campaign identity
+        // is unknown (activationId 'unknown-C' absent from the validated
+        // inventory).
+        //
+        // A binding's activationId is derived from its evidence by contract
+        // invariant (see validateMLBProspectiveHoldoutGameIdentityBindingPrepared,
+        // binding-contract line: activationId: evidenceValidation.value.activationId).
+        // The prepared binding's own activationId field is overridden by the
+        // evidence during persist. Therefore the evidence MUST carry
+        // 'unknown-C' for the persisted binding to carry 'unknown-C'.
+        //
+        // We persist the evidence to obtain a valid receipt (sha256,
+        // byteLength, artifactId), then remove the evidence file from the
+        // store so evidence discovery does not find it and block before
+        // binding discovery runs. This proves the binding alone — valid in
+        // isolation, with a campaign identity absent from the validated
+        // inventory — fails closed with UNKNOWN_FOREIGN_BINDING.
+        const foreignEvidencePrepared = buildValidPreparedEvidence({
+          activationId: 'unknown-C',
+          game: { gameId: '900001' },
+          snapshotId: 'snapshot-unknown-C-foreign-binding',
+          scheduledStartAt: '2026-07-15T12:00:00Z',
+        });
+        const foreignEvidenceReceipt = await persistSyntheticEvidence(
+          root,
+          foreignEvidencePrepared,
+          () => FROZEN_DATA_CUTOFF,
+        );
+
+        // Remove the evidence file so evidence discovery does not find it.
+        // The binding's receipt still references this evidence's sha256 /
+        // artifactId, but binding discovery classifies the binding
+        // independently of the selected evidence map.
+        const foreignArtifactId = computeArtifactId(foreignEvidencePrepared);
+        const foreignEvidencePaths =
+          resolveMLBProspectivePregameEvidenceArtifactPaths(
+            root,
+            foreignArtifactId,
+          );
+        await fs.unlink(foreignEvidencePaths.artifactPath);
+
+        const scheduleGame = {
+          gamePk: 900001,
+          officialDate: '2026-07-15',
+          startTimeUtc: new Date('2026-07-15T12:00:00Z'),
+        };
+        // No activationId override: binding derives activationId
+        // from evidence (= 'unknown-C')
+        const foreignBindingPrepared = buildValidPreparedBinding(
+          root,
+          foreignEvidencePrepared,
+          foreignEvidenceReceipt,
+          scheduleGame,
+        );
+        await persistSyntheticBinding(
+          root,
+          foreignBindingPrepared,
+          () => '2026-07-15T06:30:00Z',
+        );
+
+        const legacy = buildFrozenActivation({ activationId: 'legacy-A' });
+        const successor = buildFrozenActivation({ activationId: 'successor-B' });
+        // unknown-C is NOT in the validated inventory
+        const ctx = buildCampaignContext(legacy, [legacy, successor]);
+
+        const result = await discoverMLBProspectiveHoldoutArtifacts(
+          root,
+          legacy,
+          ctx,
+        );
+        expect(result.ok).toBe(false);
+        if (result.ok) return;
+
+        const bindingIssue = result.issues.find(
+          (i) => i.code === 'UNKNOWN_FOREIGN_BINDING',
+        );
+        expect(bindingIssue).toBeDefined();
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
+
+    /* ------------------------------------------------------------------ */
+    /*  Section 9a — Evidence lineage mismatch fail-closed                 */
+    /* ------------------------------------------------------------------ */
+    it('lineage mismatch evidence: known activationId with mismatched protocolId blocks', async () => {
+      const root = await createTempRoot('mlb-discovery-campaign-');
+      try {
+        await persistActivationArtifacts(
+          root,
+          'legacy-A',
+          900001,
+          '2026-07-15T12:00:00Z',
+        );
+        await persistActivationArtifacts(
+          root,
+          'successor-B',
+          900002,
+          '2026-07-15T13:00:00Z',
+        );
+
+        const legacy = buildFrozenActivation({ activationId: 'legacy-A' });
+        const successor = buildFrozenActivation({ activationId: 'successor-B' });
+        // Inject a mismatched protocolId for successor-B in the inventory
+        const ctx = buildCampaignContext(legacy, [legacy, successor], {
+          'successor-B': {
+            protocolId: 'mlb-v1-candidate-003-prospective-holdout-V999',
+          },
+        });
+
+        const result = await discoverMLBProspectiveHoldoutArtifacts(
+          root,
+          legacy,
+          ctx,
+        );
+        expect(result.ok).toBe(false);
+        if (result.ok) return;
+
+        const evidenceIssue = result.issues.find(
+          (i) => i.code === 'FOREIGN_EVIDENCE_LINEAGE_MISMATCH',
+        );
+        expect(evidenceIssue).toBeDefined();
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
+
+    /* ------------------------------------------------------------------ */
+    /*  Section 9b — Binding lineage mismatch fail-closed                  */
+    /* ------------------------------------------------------------------ */
+    it('lineage mismatch binding: known activationId with mismatched contract version blocks', async () => {
+      const root = await createTempRoot('mlb-discovery-campaign-');
+      try {
+        await persistActivationArtifacts(
+          root,
+          'legacy-A',
+          900001,
+          '2026-07-15T12:00:00Z',
+        );
+        await persistActivationArtifacts(
+          root,
+          'successor-B',
+          900002,
+          '2026-07-15T13:00:00Z',
+        );
+
+        const legacy = buildFrozenActivation({ activationId: 'legacy-A' });
+        const successor = buildFrozenActivation({ activationId: 'successor-B' });
+        // Mismatch successor-B's binding contract version only — evidence-related
+        // fields remain correct so evidence is classified KNOWN_FOREIGN
+        const ctx = buildCampaignContext(legacy, [legacy, successor], {
+          'successor-B': {
+            gameIdentityBindingContractVersion: 'mlb-prospective-holdout-game-identity-binding-V999',
+          },
+        });
+
+        const result = await discoverMLBProspectiveHoldoutArtifacts(
+          root,
+          legacy,
+          ctx,
+        );
+        expect(result.ok).toBe(false);
+        if (result.ok) return;
+
+        const bindingIssue = result.issues.find(
+          (i) => i.code === 'FOREIGN_BINDING_LINEAGE_MISMATCH',
+        );
+        expect(bindingIssue).toBeDefined();
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
+
+    /* ------------------------------------------------------------------ */
+    /*  Section 10 — Cross-campaign gamePk isolation                       */
+    /* ------------------------------------------------------------------ */
+    it('cross-campaign gamePk isolation: known foreign gamePk absent from selected candidates', async () => {
+      const root = await createTempRoot('mlb-discovery-campaign-');
+      try {
+        await persistActivationArtifacts(
+          root,
+          'legacy-A',
+          900001,
+          '2026-07-15T12:00:00Z',
+        );
+        await persistActivationArtifacts(
+          root,
+          'successor-B',
+          900002,
+          '2026-07-15T13:00:00Z',
+        );
+
+        const legacy = buildFrozenActivation({ activationId: 'legacy-A' });
+        const successor = buildFrozenActivation({ activationId: 'successor-B' });
+        const ctx = buildCampaignContext(legacy, [legacy, successor]);
+
+        const result = await discoverMLBProspectiveHoldoutArtifacts(
+          root,
+          legacy,
+          ctx,
+        );
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+
+        const discoveredGamePks = result.candidates.map((c) => c.binding.gamePk);
+        expect(discoveredGamePks).toEqual([900001]);
+        expect(discoveredGamePks).not.toContain(900002);
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    }, 30000);
+
+    /* ------------------------------------------------------------------ */
+    /*  Backward-compat: no campaign context → all foreign are blocking    */
+    /* ------------------------------------------------------------------ */
+    it('no campaign context: non-selected artifacts remain blocking foreign (backward compatible)', async () => {
+      const root = await createTempRoot('mlb-discovery-campaign-');
+      try {
+        await persistActivationArtifacts(
+          root,
+          'legacy-A',
+          900001,
+          '2026-07-15T12:00:00Z',
+        );
+
+        const successor = buildFrozenActivation({
+          activationId: 'successor-B',
+        });
+        // No campaign context — legacy-A artifacts are blocking foreign
+        const result = await discoverMLBProspectiveHoldoutArtifacts(
+          root,
+          successor,
+        );
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+
+        expect(result.candidates).toHaveLength(0);
+        expect(result.foreignArtifactSummary.foreignEvidenceCount).toBe(1);
+        expect(result.foreignArtifactSummary.foreignBindingCount).toBe(1);
+        expect(result.foreignArtifactSummary.knownForeignEvidenceCount).toBe(0);
+        expect(result.foreignArtifactSummary.knownForeignBindingCount).toBe(0);
       } finally {
         await fs.rm(root, { recursive: true, force: true });
       }

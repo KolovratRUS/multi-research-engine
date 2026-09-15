@@ -352,7 +352,7 @@ function buildDiscoverySuccess(
     unknownFiles: overrides.unknownFiles ?? [],
     foreignArtifactSummary:
       overrides.foreignArtifactSummary ??
-      { foreignEvidenceCount: 0, foreignBindingCount: 0 },
+      { foreignEvidenceCount: 0, foreignBindingCount: 0, knownForeignEvidenceCount: 0, knownForeignBindingCount: 0 },
   };
 }
 
@@ -624,7 +624,7 @@ describe('mlb-prospective-holdout-progress-report', () => {
     const foreign = buildCandidate({ evidence: { activationId: 'other-activation' }, binding: { activationId: 'other-activation' } });
     const discovery = buildDiscoverySuccess({
       candidates: [foreign],
-      foreignArtifactSummary: { foreignEvidenceCount: 1, foreignBindingCount: 0 },
+      foreignArtifactSummary: { foreignEvidenceCount: 1, foreignBindingCount: 0, knownForeignEvidenceCount: 0, knownForeignBindingCount: 0 },
     });
     const result = buildMLBProspectiveHoldoutProgressReport({ activation, discovery });
     expect(isError(result)).toBe(false);
@@ -639,7 +639,7 @@ describe('mlb-prospective-holdout-progress-report', () => {
     const candidate = buildCandidate();
     const discovery = buildDiscoverySuccess({
       candidates: [candidate],
-      foreignArtifactSummary: { foreignEvidenceCount: 3, foreignBindingCount: 2 },
+      foreignArtifactSummary: { foreignEvidenceCount: 3, foreignBindingCount: 2, knownForeignEvidenceCount: 0, knownForeignBindingCount: 0 },
     });
     const result = buildMLBProspectiveHoldoutProgressReport({ activation, discovery });
     expect(isError(result)).toBe(false);
@@ -654,7 +654,7 @@ describe('mlb-prospective-holdout-progress-report', () => {
     const foreign = buildCandidate({ evidence: { activationId: 'other-activation' }, binding: { activationId: 'other-activation' } });
     const discovery = buildDiscoverySuccess({
       candidates: [foreign],
-      foreignArtifactSummary: { foreignEvidenceCount: 0, foreignBindingCount: 1 },
+      foreignArtifactSummary: { foreignEvidenceCount: 0, foreignBindingCount: 1, knownForeignEvidenceCount: 0, knownForeignBindingCount: 0 },
     });
     const result = buildMLBProspectiveHoldoutProgressReport({ activation, discovery });
     expect(isError(result)).toBe(false);
@@ -669,7 +669,7 @@ describe('mlb-prospective-holdout-progress-report', () => {
     const candidate = buildCandidate();
     const discovery = buildDiscoverySuccess({
       candidates: [candidate],
-      foreignArtifactSummary: { foreignEvidenceCount: 0, foreignBindingCount: 4 },
+      foreignArtifactSummary: { foreignEvidenceCount: 0, foreignBindingCount: 4, knownForeignEvidenceCount: 0, knownForeignBindingCount: 0 },
     });
     const result = buildMLBProspectiveHoldoutProgressReport({ activation, discovery });
     expect(isError(result)).toBe(false);
@@ -713,7 +713,7 @@ describe('mlb-prospective-holdout-progress-report', () => {
     const discovery = buildDiscoverySuccess({
       candidates: [candidate],
       orphanEvidence: [buildEvidenceRecord(orphan.evidence)],
-      foreignArtifactSummary: { foreignEvidenceCount: 1, foreignBindingCount: 1 },
+      foreignArtifactSummary: { foreignEvidenceCount: 1, foreignBindingCount: 1, knownForeignEvidenceCount: 0, knownForeignBindingCount: 0 },
       temporaryDebris: ['a.tmp'],
       unknownFiles: ['README.txt'],
     });

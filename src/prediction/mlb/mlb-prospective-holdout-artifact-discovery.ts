@@ -77,6 +77,8 @@ export type MLBProspectiveHoldoutArtifactDiscoverySuccess = Readonly<{
   foreignArtifactSummary: Readonly<{
     foreignEvidenceCount: number;
     foreignBindingCount: number;
+    knownForeignEvidenceCount: number;
+    knownForeignBindingCount: number;
   }>;
 }>;
 
@@ -88,6 +90,34 @@ export type MLBProspectiveHoldoutArtifactDiscoveryFailure = Readonly<{
 export type MLBProspectiveHoldoutArtifactDiscoveryResult =
   | MLBProspectiveHoldoutArtifactDiscoverySuccess
   | MLBProspectiveHoldoutArtifactDiscoveryFailure;
+
+/* -------------------------------------------------------------------------- */
+/*  Campaign context                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Derived from the validated activation inventory. Passed into artifact
+ * discovery so it can classify foreign artifacts relative to:
+ *   - the selected activation (for exact-match evidence/binding)
+ *   - the set of known-validated activations (for KNOWN_FOREIGN grounding)
+ *
+ * Discovery does NOT re-read the activation directory. The scheduler is the
+ * sole authority for which activations are valid; discovery is the sole
+ * authority for artifact classification.
+ */
+export type MLBProspectiveHoldoutCampaignContext = Readonly<{
+  readonly selectedActivationId: string;
+  readonly selectedProtocolId: string;
+  readonly validatedActivations: readonly Readonly<{
+    readonly activationId: string;
+    readonly protocolId: string;
+    readonly evidenceArtifactContractVersion: string;
+    readonly captureContractVersion: string;
+    readonly compatibilityLayerId: string;
+    readonly gameIdentityBindingContractVersion: string;
+    readonly evidenceStoreVersion: string;
+  }>[];
+}>;
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                   */
@@ -133,7 +163,79 @@ function pushIssue(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Directory enumeration                                                     */
+/*  Campaign-aware classification                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Classifies a valid (already schema-validated) evidence artifact relative to
+ * the campaign context.
+ *
+ *  - selected        : matches the selected activation's lineage fields
+ *  - knownForeign    : activationId is in the validated inventory AND all
+ *                      lineage fields match that activation
+ *  - unknownForeign  : activationId is NOT in the validated inventory
+ *  - lineageMismatch : activationId is known but lineage fields contradict it
+ *
+ * Classification uses ONLY fields that already exist in the evidence and
+ * activation contracts.
+ */
+function classifyEvidenceArtifact(
+  evidence: MLBProspectivePregameEvidence,
+  context: MLBProspectiveHoldoutCampaignContext,
+): 'selected' | 'knownForeign' | 'unknownForeign' | 'lineageMismatch' {
+  if (
+    evidence.activationId === context.selectedActivationId &&
+    evidence.protocolId === context.selectedProtocolId
+  ) {
+    return 'selected';
+  }
+  const knownActivation = context.validatedActivations.find(
+    (a) => a.activationId === evidence.activationId,
+  );
+  if (knownActivation === undefined) {
+    return 'unknownForeign';
+  }
+  if (
+    evidence.protocolId !== knownActivation.protocolId ||
+    evidence.contractVersion !== knownActivation.evidenceArtifactContractVersion ||
+    evidence.captureContractVersion !== knownActivation.captureContractVersion ||
+    evidence.compatibilityLayerId !== knownActivation.compatibilityLayerId
+  ) {
+    return 'lineageMismatch';
+  }
+  return 'knownForeign';
+}
+
+/**
+ * Same classification model as above but for binding artifacts.
+ */
+function classifyBindingArtifact(
+  binding: MLBProspectiveHoldoutGameIdentityBinding,
+  context: MLBProspectiveHoldoutCampaignContext,
+): 'selected' | 'knownForeign' | 'unknownForeign' | 'lineageMismatch' {
+  if (
+    binding.activationId === context.selectedActivationId &&
+    binding.protocolId === context.selectedProtocolId
+  ) {
+    return 'selected';
+  }
+  const knownActivation = context.validatedActivations.find(
+    (a) => a.activationId === binding.activationId,
+  );
+  if (knownActivation === undefined) {
+    return 'unknownForeign';
+  }
+  if (
+    binding.protocolId !== knownActivation.protocolId ||
+    binding.contractVersion !== knownActivation.gameIdentityBindingContractVersion ||
+    binding.evidenceArtifactContractVersion !== knownActivation.evidenceArtifactContractVersion ||
+    binding.evidenceStoreVersion !== knownActivation.evidenceStoreVersion
+  ) {
+    return 'lineageMismatch';
+  }
+  return 'knownForeign';
+}
+
 /* -------------------------------------------------------------------------- */
 
 async function listStoreDirectory(
@@ -201,18 +303,21 @@ async function discoverEvidenceDirectory(
   repositoryRoot: string,
   evidenceDir: string,
   activation: MLBProspectiveHoldoutActivationPersisted,
+  campaignContext?: MLBProspectiveHoldoutCampaignContext,
 ): Promise<{
   evidenceMap: Map<string, MLBProspectiveHoldoutArtifactEvidenceRecord>;
   temporaryDebris: string[];
   unknownFiles: string[];
   issues: MLBProspectiveHoldoutArtifactDiscoveryIssue[];
   foreignEvidenceCount: number;
+  knownForeignEvidenceCount: number;
 }> {
   const evidenceMap = new Map<string, MLBProspectiveHoldoutArtifactEvidenceRecord>();
   const temporaryDebris: string[] = [];
   const unknownFiles: string[] = [];
   const issues: MLBProspectiveHoldoutArtifactDiscoveryIssue[] = [];
   let foreignEvidenceCount = 0;
+  let knownForeignEvidenceCount = 0;
 
   let enumeration;
   try {
@@ -220,7 +325,7 @@ async function discoverEvidenceDirectory(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown IO error';
     pushIssue(issues, 'EVIDENCE_DIRECTORY_IO_ERROR', evidenceDir, message);
-    return { evidenceMap, temporaryDebris, unknownFiles, issues, foreignEvidenceCount };
+    return { evidenceMap, temporaryDebris, unknownFiles, issues, foreignEvidenceCount, knownForeignEvidenceCount };
   }
 
   if (enumeration.symlinks.length > 0) {
@@ -242,7 +347,7 @@ async function discoverEvidenceDirectory(
   }
 
   if (issues.length > 0) {
-    return { evidenceMap, temporaryDebris, unknownFiles, issues, foreignEvidenceCount };
+    return { evidenceMap, temporaryDebris, unknownFiles, issues, foreignEvidenceCount, knownForeignEvidenceCount };
   }
 
   for (const artifactPath of enumeration.regularFiles.sort()) {
@@ -320,8 +425,31 @@ async function discoverEvidenceDirectory(
       evidence.activationId !== activation.activationId ||
       evidence.protocolId !== activation.protocolId
     ) {
-      // Foreign activation artifact: still validated, but excluded from active candidates
-      foreignEvidenceCount += 1;
+      // Non-selected activation — classify relative to validated inventory
+      if (campaignContext !== undefined) {
+        const classification = classifyEvidenceArtifact(evidence, campaignContext);
+        if (classification === 'knownForeign') {
+          knownForeignEvidenceCount += 1;
+        } else if (classification === 'unknownForeign') {
+          pushIssue(
+            issues,
+            'UNKNOWN_FOREIGN_EVIDENCE',
+            artifactPath,
+            `Evidence artifact activationId '${evidence.activationId}' is not represented in the validated activation inventory`,
+          );
+        } else {
+          // lineageMismatch
+          pushIssue(
+            issues,
+            'FOREIGN_EVIDENCE_LINEAGE_MISMATCH',
+            artifactPath,
+            `Evidence artifact claims activationId '${evidence.activationId}' but lineage fields are inconsistent with the validated activation of that id`,
+          );
+        }
+      } else {
+        // No campaign context — all non-matching artifacts are blocking foreign
+        foreignEvidenceCount += 1;
+      }
       continue;
     }
 
@@ -331,7 +459,7 @@ async function discoverEvidenceDirectory(
     });
   }
 
-  return { evidenceMap, temporaryDebris, unknownFiles, issues, foreignEvidenceCount };
+  return { evidenceMap, temporaryDebris, unknownFiles, issues, foreignEvidenceCount, knownForeignEvidenceCount };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -343,18 +471,21 @@ async function discoverBindingDirectory(
   bindingDir: string,
   activation: MLBProspectiveHoldoutActivationPersisted,
   evidenceMap: Map<string, MLBProspectiveHoldoutArtifactEvidenceRecord>,
+  campaignContext?: MLBProspectiveHoldoutCampaignContext,
 ): Promise<{
   bindingMap: Map<string, MLBProspectiveHoldoutArtifactBindingRecord>;
   temporaryDebris: string[];
   unknownFiles: string[];
   issues: MLBProspectiveHoldoutArtifactDiscoveryIssue[];
   foreignBindingCount: number;
+  knownForeignBindingCount: number;
 }> {
   const bindingMap = new Map<string, MLBProspectiveHoldoutArtifactBindingRecord>();
   const temporaryDebris: string[] = [];
   const unknownFiles: string[] = [];
   const issues: MLBProspectiveHoldoutArtifactDiscoveryIssue[] = [];
   let foreignBindingCount = 0;
+  let knownForeignBindingCount = 0;
 
   let enumeration;
   try {
@@ -362,7 +493,7 @@ async function discoverBindingDirectory(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown IO error';
     pushIssue(issues, 'BINDING_DIRECTORY_IO_ERROR', bindingDir, message);
-    return { bindingMap, temporaryDebris, unknownFiles, issues, foreignBindingCount };
+    return { bindingMap, temporaryDebris, unknownFiles, issues, foreignBindingCount, knownForeignBindingCount };
   }
 
   if (enumeration.symlinks.length > 0) {
@@ -384,7 +515,7 @@ async function discoverBindingDirectory(
   }
 
   if (issues.length > 0) {
-    return { bindingMap, temporaryDebris, unknownFiles, issues, foreignBindingCount };
+    return { bindingMap, temporaryDebris, unknownFiles, issues, foreignBindingCount, knownForeignBindingCount };
   }
 
   for (const artifactPath of enumeration.regularFiles.sort()) {
@@ -467,8 +598,31 @@ async function discoverBindingDirectory(
       binding.activationId !== activation.activationId ||
       binding.protocolId !== activation.protocolId
     ) {
-      // Foreign activation binding: validated but excluded from active candidates
-      foreignBindingCount += 1;
+      // Non-selected activation — classify relative to validated inventory
+      if (campaignContext !== undefined) {
+        const classification = classifyBindingArtifact(binding, campaignContext);
+        if (classification === 'knownForeign') {
+          knownForeignBindingCount += 1;
+        } else if (classification === 'unknownForeign') {
+          pushIssue(
+            issues,
+            'UNKNOWN_FOREIGN_BINDING',
+            artifactPath,
+            `Binding artifact activationId '${binding.activationId}' is not represented in the validated activation inventory`,
+          );
+        } else {
+          // lineageMismatch
+          pushIssue(
+            issues,
+            'FOREIGN_BINDING_LINEAGE_MISMATCH',
+            artifactPath,
+            `Binding artifact claims activationId '${binding.activationId}' but lineage fields are inconsistent with the validated activation of that id`,
+          );
+        }
+      } else {
+        // No campaign context — all non-matching bindings are blocking foreign
+        foreignBindingCount += 1;
+      }
       continue;
     }
 
@@ -478,7 +632,7 @@ async function discoverBindingDirectory(
     });
   }
 
-  return { bindingMap, temporaryDebris, unknownFiles, issues, foreignBindingCount };
+  return { bindingMap, temporaryDebris, unknownFiles, issues, foreignBindingCount, knownForeignBindingCount };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -534,6 +688,7 @@ function buildRescheduleConflicts(
 export async function discoverMLBProspectiveHoldoutArtifacts(
   repositoryRoot: string,
   activation: unknown,
+  campaignContext?: MLBProspectiveHoldoutCampaignContext,
 ): Promise<MLBProspectiveHoldoutArtifactDiscoveryResult> {
   const issues: MLBProspectiveHoldoutArtifactDiscoveryIssue[] = [];
 
@@ -563,12 +718,12 @@ export async function discoverMLBProspectiveHoldoutArtifacts(
   const evidenceDir = path.join(root, MLB_PROSPECTIVE_PREGAME_EVIDENCE_STORE_DIRECTORY);
   const bindingDir = path.join(root, MLB_PROSPECTIVE_HOLDOUT_GAME_IDENTITY_BINDING_STORE_DIRECTORY);
 
-  const evidenceResult = await discoverEvidenceDirectory(root, evidenceDir, validActivation);
+  const evidenceResult = await discoverEvidenceDirectory(root, evidenceDir, validActivation, campaignContext);
   if (evidenceResult.issues.length > 0) {
     return { ok: false, issues: sortIssues([...issues, ...evidenceResult.issues]) };
   }
 
-  const bindingResult = await discoverBindingDirectory(root, bindingDir, validActivation, evidenceResult.evidenceMap);
+  const bindingResult = await discoverBindingDirectory(root, bindingDir, validActivation, evidenceResult.evidenceMap, campaignContext);
   if (bindingResult.issues.length > 0) {
     return { ok: false, issues: sortIssues([...issues, ...bindingResult.issues]) };
   }
@@ -680,6 +835,8 @@ export async function discoverMLBProspectiveHoldoutArtifacts(
     foreignArtifactSummary: Object.freeze({
       foreignEvidenceCount,
       foreignBindingCount,
+      knownForeignEvidenceCount: evidenceResult.knownForeignEvidenceCount,
+      knownForeignBindingCount: bindingResult.knownForeignBindingCount,
     }),
   };
 }

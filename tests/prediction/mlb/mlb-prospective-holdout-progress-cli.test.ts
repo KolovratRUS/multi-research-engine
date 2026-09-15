@@ -393,7 +393,7 @@ function buildDiscoverySuccess(
     unknownFiles: overrides.unknownFiles ?? [],
     foreignArtifactSummary:
       overrides.foreignArtifactSummary ??
-      { foreignEvidenceCount: 0, foreignBindingCount: 0 },
+      { foreignEvidenceCount: 0, foreignBindingCount: 0, knownForeignEvidenceCount: 0, knownForeignBindingCount: 0 },
   };
 }
 
@@ -433,7 +433,7 @@ function createMockDeps(overrides: {
       rescheduleConflicts: [],
       temporaryDebris: [],
       unknownFiles: [],
-      foreignArtifactSummary: { foreignEvidenceCount: 0, foreignBindingCount: 0 },
+      foreignArtifactSummary: { foreignEvidenceCount: 0, foreignBindingCount: 0, knownForeignEvidenceCount: 0, knownForeignBindingCount: 0 },
     }));
 
   return {
@@ -756,7 +756,7 @@ describe('mlb-prospective-holdout-progress-cli', () => {
       rescheduleConflicts: [],
       temporaryDebris: [],
       unknownFiles: [],
-      foreignArtifactSummary: { foreignEvidenceCount: 0, foreignBindingCount: 0 },
+      foreignArtifactSummary: { foreignEvidenceCount: 0, foreignBindingCount: 0, knownForeignEvidenceCount: 0, knownForeignBindingCount: 0 },
     }));
     const deps = createMockDeps({ discoverArtifacts });
     const result = await invokeCLI([], deps);
