@@ -13,6 +13,9 @@ import {
 } from '@/prediction/mlb/mlb-prospective-holdout-activation-contract';
 import {
   writeMLBProspectiveHoldoutActivation,
+  writeMLBProspectiveHoldoutActivationById,
+  inspectMLBProspectiveHoldoutActivationStore,
+  type MLBProspectiveHoldoutActivationStoreInventoryResult,
 } from '@/prediction/mlb/mlb-prospective-holdout-activation-store';
 import {
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_PLAN_CONTRACT_VERSION,
@@ -65,7 +68,8 @@ type HostErrorKind =
   | 'ACTIVATION_ID_MISMATCH'
   | 'PLAN_STALE'
   | 'ACTIVATION_ALREADY_EXISTS'
-  | 'STORE_FAILURE';
+  | 'STORE_FAILURE'
+  | 'ACTIVATION_STORE_INVALID';
 
 interface HostErrorIssue {
   readonly code: string;
@@ -193,6 +197,50 @@ function isSHA256(value: unknown): value is string {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Storage routing                                                           */
+/* -------------------------------------------------------------------------- */
+
+export type MLBProspectiveHoldoutActivationWriteRoute =
+  | 'LEGACY_CANONICAL'
+  | 'SUCCESSOR_BY_ID'
+  | 'INVALID_TOPOLOGY'
+  | 'STORE_INVALID';
+
+export function chooseMLBProspectiveHoldoutActivationWriteRoute(
+  inventoryResult: MLBProspectiveHoldoutActivationStoreInventoryResult,
+  requestedActivationId: string,
+): MLBProspectiveHoldoutActivationWriteRoute {
+  if (!inventoryResult.ok) {
+    return 'STORE_INVALID';
+  }
+
+  const { legacy, byId } = inventoryResult.inventory;
+  const hasLegacy = legacy !== null;
+  const hasById = byId.length > 0;
+
+  // CASE A: empty activation store — first campaign uses canonical legacy slot
+  if (!hasLegacy && !hasById) {
+    return 'LEGACY_CANONICAL';
+  }
+
+  // CASE B: legacy canonical exists, requested activationId matches — re-create
+  // will fail closed via the legacy write-once check (ACTIVATION_ALREADY_EXISTS)
+  if (hasLegacy && legacy.activationId === requestedActivationId) {
+    return 'LEGACY_CANONICAL';
+  }
+
+  // CASE E: legacy absent but by-id campaigns present — invalid topology
+  if (!hasLegacy && hasById) {
+    return 'INVALID_TOPOLOGY';
+  }
+
+  // CASE C, D, G: legacy exists with a different activationId.
+  // The by-id write enforces write-once (ALREADY_EXISTS) if the successor
+  // id already exists.
+  return 'SUCCESSOR_BY_ID';
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Core host logic                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -207,12 +255,30 @@ export async function runMLBProspectiveHoldoutActivationCreate(
       proposedActivation: unknown,
       clock: () => string,
     ) => Promise<unknown>;
+    readonly inspectStore: (
+      repositoryRoot: string,
+    ) => Promise<MLBProspectiveHoldoutActivationStoreInventoryResult>;
+    readonly writeActivationById: (
+      repositoryRoot: string,
+      activationId: string,
+      proposedActivation: unknown,
+      clock: () => string,
+    ) => Promise<unknown>;
     readonly repositoryRoot?: string;
   } = {
     readFile: (filePath) => fs.readFile(filePath),
     now: () => new Date(),
     writeActivation: (repositoryRoot, proposedActivation, clock) =>
       writeMLBProspectiveHoldoutActivation(repositoryRoot, proposedActivation, clock),
+    inspectStore: (repositoryRoot) =>
+      inspectMLBProspectiveHoldoutActivationStore(repositoryRoot),
+    writeActivationById: (repositoryRoot, activationId, proposedActivation, clock) =>
+      writeMLBProspectiveHoldoutActivationById(
+        repositoryRoot,
+        activationId,
+        proposedActivation,
+        clock,
+      ),
   },
 ): Promise<HostResult> {
   const issues: HostErrorIssue[] = [];
@@ -565,8 +631,48 @@ export async function runMLBProspectiveHoldoutActivationCreate(
   const repositoryRoot = deps.repositoryRoot ??
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-  // 22. Write-once authority
-  const rawWriteResult = await deps.writeActivation(repositoryRoot, persistedPayload, () => trustedActivationAt.toISOString());
+  // 22. Inspect validated activation-store inventory — AFTER all scientific
+  // gates. Storage routing is a deterministic consequence of validated store
+  // topology + the already-approved activationId. No new CLI authority.
+  const inventoryResult = await deps.inspectStore(repositoryRoot);
+  const route = chooseMLBProspectiveHoldoutActivationWriteRoute(
+    inventoryResult,
+    plan.activationId as string,
+  );
+
+  // 23. Route write by validated topology
+  let rawWriteResult: unknown;
+  if (route === 'LEGACY_CANONICAL') {
+    rawWriteResult = await deps.writeActivation(
+      repositoryRoot,
+      persistedPayload,
+      () => trustedActivationAt.toISOString(),
+    );
+  } else if (route === 'SUCCESSOR_BY_ID') {
+    rawWriteResult = await deps.writeActivationById(
+      repositoryRoot,
+      plan.activationId as string,
+      persistedPayload,
+      () => trustedActivationAt.toISOString(),
+    );
+  } else {
+    // STORE_INVALID (inventory inspection failed) or INVALID_TOPOLOGY
+    // (legacy absent + by-id campaigns present) — fail closed before persistence
+    const issues: HostErrorIssue[] = [];
+    if (!inventoryResult.ok) {
+      for (const issue of inventoryResult.issues) {
+        pushHostIssue(issues, issue.code, issue.path, issue.message);
+      }
+    } else {
+      pushHostIssue(
+        issues,
+        'INVALID_TOPOLOGY',
+        repositoryRoot,
+        'Invalid activation store topology: by-id campaigns exist without canonical legacy activation',
+      );
+    }
+    return { ok: false, error: { kind: 'ACTIVATION_STORE_INVALID', issues: sortHostIssues(issues) } };
+  }
 
   if (!isPlainObject(rawWriteResult)) {
     return { ok: false, error: { kind: 'STORE_FAILURE', issues: sortHostIssues([{ code: 'INVALID_STORE_RESULT', path: '$.writeActivation', message: 'Store returned non-object' }]) } };

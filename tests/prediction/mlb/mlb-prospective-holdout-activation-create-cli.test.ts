@@ -9,6 +9,7 @@ import type { Mock } from 'vitest';
 import {
   runMLBProspectiveHoldoutActivationCreate,
   runMLBProspectiveHoldoutActivationCreateCLI,
+  chooseMLBProspectiveHoldoutActivationWriteRoute,
 } from '../../../scripts/mlb-prospective-holdout-activation-create';
 
 type ActivationCreatedReceipt = {
@@ -22,12 +23,26 @@ type ActivationCreatedReceipt = {
 };
 import {
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_CONTRACT_VERSION,
+  MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STORE_VERSION,
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STABLE_ORDER_POLICY,
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_VALIDATION_SIDE_DATE_RULE,
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_SIDE_DATE_RULE,
   MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_TEST_AUTHORIZATION_RULE,
   type MLBProspectiveHoldoutActivation,
+  type MLBProspectiveHoldoutActivationPersisted,
+  type MLBProspectiveHoldoutActivationReceipt,
 } from '@/prediction/mlb/mlb-prospective-holdout-activation-contract';
+import {
+  inspectMLBProspectiveHoldoutActivationStore,
+  writeMLBProspectiveHoldoutActivation,
+  writeMLBProspectiveHoldoutActivationById,
+  resolveMLBProspectiveHoldoutActivationStorePaths,
+  resolveMLBProspectiveHoldoutActivationByIdPaths,
+  MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STORE_DIRECTORY,
+  type MLBProspectiveHoldoutActivationInventoryEntry,
+  type MLBProspectiveHoldoutActivationStoreInventoryIssue,
+  type MLBProspectiveHoldoutActivationStoreInventoryResult,
+} from '@/prediction/mlb/mlb-prospective-holdout-activation-store';
 import {
   MLB_PROSPECTIVE_HOLDOUT_PROTOCOL_ID,
 } from '@/prediction/mlb/mlb-prospective-holdout-protocol-contract';
@@ -191,6 +206,15 @@ function createMockDeps(overrides: {
     proposedActivation: unknown,
     clock: () => string,
   ) => Promise<unknown>;
+  inspectStore?: (
+    repositoryRoot: string,
+  ) => Promise<MLBProspectiveHoldoutActivationStoreInventoryResult>;
+  writeActivationById?: (
+    repositoryRoot: string,
+    activationId: string,
+    proposedActivation: unknown,
+    clock: () => string,
+  ) => Promise<unknown>;
   repositoryRoot?: string;
 } = {}) {
   const readFile = overrides.readFile ?? ((filePath: string) => fs.readFile(filePath));
@@ -207,11 +231,29 @@ function createMockDeps(overrides: {
       byteLength: 100,
     },
   }));
+  const inspectStore = overrides.inspectStore ?? (async () => ({
+    ok: true as const,
+    inventory: { legacy: null, byId: Object.freeze([]) },
+  }));
+  const writeActivationById = overrides.writeActivationById ?? (async () => ({
+    ok: true as const,
+    receipt: {
+      kind: 'ACTIVATION_CREATED',
+      activationId: 'activation-1',
+      approvedPlanSha256: 'a'.repeat(64),
+      planFingerprint: 'b'.repeat(64),
+      persistedAt: '2026-09-01T00:00:00.000Z',
+      sha256: 'd'.repeat(64),
+      byteLength: 100,
+    },
+  }));
 
   return {
     readFile,
     now,
     writeActivation,
+    inspectStore,
+    writeActivationById,
     repositoryRoot: overrides.repositoryRoot ?? '/tmp/mlb-test-root',
   };
 }
@@ -968,6 +1010,22 @@ describe('mlb-prospective-holdout-activation-create host', () => {
       readFile: (p: string) => fs.readFile(p),
       now: () => new Date('2026-09-01T00:00:00.000Z'),
       writeActivation,
+      inspectStore: async () => ({
+        ok: true as const,
+        inventory: { legacy: null, byId: Object.freeze([]) },
+      }),
+      writeActivationById: async () => ({
+        ok: true as const,
+        receipt: {
+          kind: 'ACTIVATION_CREATED',
+          activationId: 'activation-1',
+          approvedPlanSha256: 'a'.repeat(64),
+          planFingerprint: 'b'.repeat(64),
+          persistedAt: '2026-09-01T00:00:00.000Z',
+          sha256: 'd'.repeat(64),
+          byteLength: 100,
+        },
+      }),
     } as Parameters<typeof runMLBProspectiveHoldoutActivationCreate>[2];
     const result = await runMLBProspectiveHoldoutActivationCreate(filePath, sha256, deps);
     expect(result.ok).toBe(true);
@@ -1045,5 +1103,490 @@ describe('mlb-prospective-holdout-activation-create side-effect firewall', () =>
     expect(source).not.toContain('odds');
     expect(source).not.toContain('sportsbook');
     expect(source).not.toContain('market');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Storage routing test helpers                                              */
+/* -------------------------------------------------------------------------- */
+
+function buildTestInventoryEntry(
+  activationId: string,
+): MLBProspectiveHoldoutActivationInventoryEntry {
+  const activation = buildValidActivationPayload({ activationId });
+  return {
+    activationId,
+    activation: {
+      ...activation,
+      persistedAt: '2026-09-01T00:00:00.000Z',
+    } as MLBProspectiveHoldoutActivationPersisted,
+    receipt: {
+      storeVersion: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_STORE_VERSION,
+      contractVersion: MLB_PROSPECTIVE_HOLDOUT_ACTIVATION_CONTRACT_VERSION,
+      activationId,
+      relativePath: `${activationId}.json`,
+      sha256: crypto.createHash('sha256').update(activationId, 'utf-8').digest('hex'),
+      byteLength: 100,
+      persistedAt: '2026-09-01T00:00:00.000Z',
+    } as MLBProspectiveHoldoutActivationReceipt,
+    filePath: `/tmp/activations/${activationId}.json`,
+    fileName: `${activationId}.json`,
+  };
+}
+
+function okInventory(
+  legacy: MLBProspectiveHoldoutActivationInventoryEntry | null,
+  byId: readonly MLBProspectiveHoldoutActivationInventoryEntry[],
+): MLBProspectiveHoldoutActivationStoreInventoryResult {
+  return {
+    ok: true as const,
+    inventory: {
+      legacy,
+      byId: Object.freeze(byId),
+    },
+  };
+}
+
+function invalidInventory(): MLBProspectiveHoldoutActivationStoreInventoryResult {
+  return {
+    ok: false as const,
+    issues: Object.freeze([
+      {
+        code: 'STORE_MALFORMED_JSON' as const,
+        path: '/tmp/corrupt.json',
+        message: 'Malformed JSON in activation file',
+      },
+    ]),
+  };
+}
+
+function buildSuccessorPlan(activationId: string): Record<string, unknown> {
+  return buildValidPlan({
+    activationId,
+    activationPayload: buildValidPlanPayload({ activationId }),
+    activationDeadlineAt: '2026-09-01T00:00:01.000Z',
+  });
+}
+
+async function createTempRepo(): Promise<string> {
+  return fs.mkdtemp(path.join(os.tmpdir(), 'mlb-activation-create-routing-'));
+}
+
+async function fileSha256(filePath: string): Promise<string> {
+  const content = await fs.readFile(filePath);
+  return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+async function seedLegacyActivation(
+  repositoryRoot: string,
+  activationId: string,
+): Promise<void> {
+  const activation = buildValidActivationPayload({ activationId });
+  const result = await writeMLBProspectiveHoldoutActivation(
+    repositoryRoot,
+    activation,
+    () => '2026-09-01T00:00:00.000Z',
+  );
+  if (!result.ok) {
+    throw new Error(
+      `Failed to seed legacy activation ${activationId}: ${JSON.stringify(result.issues)}`,
+    );
+  }
+}
+
+async function seedByIdActivation(
+  repositoryRoot: string,
+  activationId: string,
+): Promise<void> {
+  const activation = buildValidActivationPayload({ activationId });
+  const result = await writeMLBProspectiveHoldoutActivationById(
+    repositoryRoot,
+    activationId,
+    activation,
+    () => '2026-09-01T00:00:00.000Z',
+  );
+  if (!result.ok) {
+    throw new Error(
+      `Failed to seed by-id activation ${activationId}: ${JSON.stringify(result.issues)}`,
+    );
+  }
+}
+
+function createIntegrationDeps(
+  repositoryRoot: string,
+  overrides: { now?: () => Date } = {},
+) {
+  return createMockDeps({
+    repositoryRoot,
+    now: overrides.now,
+    writeActivation: vi.fn(async (root: string, payload: unknown, clock: () => string) =>
+      writeMLBProspectiveHoldoutActivation(root, payload, clock)),
+    inspectStore: vi.fn(async (root: string) =>
+      inspectMLBProspectiveHoldoutActivationStore(root)),
+    writeActivationById: vi.fn(async (root: string, id: string, payload: unknown, clock: () => string) =>
+      writeMLBProspectiveHoldoutActivationById(root, id, payload, clock)),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Routing helper unit tests                                                 */
+/* -------------------------------------------------------------------------- */
+
+describe('chooseMLBProspectiveHoldoutActivationWriteRoute', () => {
+  // A. empty store + activation-A => LEGACY_CANONICAL
+  it('A. empty store + activation-A routes to LEGACY_CANONICAL', () => {
+    const inventory = okInventory(null, []);
+    expect(chooseMLBProspectiveHoldoutActivationWriteRoute(inventory, 'activation-A')).toBe('LEGACY_CANONICAL');
+  });
+
+  // B. legacy-A only + activation-A => LEGACY_CANONICAL
+  it('B. legacy-A only + activation-A routes to LEGACY_CANONICAL', () => {
+    const legacy = buildTestInventoryEntry('legacy-A');
+    const inventory = okInventory(legacy, []);
+    expect(chooseMLBProspectiveHoldoutActivationWriteRoute(inventory, 'legacy-A')).toBe('LEGACY_CANONICAL');
+  });
+
+  // C. legacy-A only + successor-B => SUCCESSOR_BY_ID
+  it('C. legacy-A only + successor-B routes to SUCCESSOR_BY_ID', () => {
+    const legacy = buildTestInventoryEntry('legacy-A');
+    const inventory = okInventory(legacy, []);
+    expect(chooseMLBProspectiveHoldoutActivationWriteRoute(inventory, 'successor-B')).toBe('SUCCESSOR_BY_ID');
+  });
+
+  // D. legacy-A + successor-B by-id + successor-C => SUCCESSOR_BY_ID
+  it('D. legacy-A + successor-B by-id + successor-C routes to SUCCESSOR_BY_ID', () => {
+    const legacy = buildTestInventoryEntry('legacy-A');
+    const byIdB = buildTestInventoryEntry('successor-B');
+    const inventory = okInventory(legacy, [byIdB]);
+    expect(chooseMLBProspectiveHoldoutActivationWriteRoute(inventory, 'successor-C')).toBe('SUCCESSOR_BY_ID');
+  });
+
+  // E. legacy absent + successor-B by-id => INVALID_TOPOLOGY
+  it('E. legacy absent + successor-B by-id routes to INVALID_TOPOLOGY', () => {
+    const byIdB = buildTestInventoryEntry('successor-B');
+    const inventory = okInventory(null, [byIdB]);
+    expect(chooseMLBProspectiveHoldoutActivationWriteRoute(inventory, 'successor-C')).toBe('INVALID_TOPOLOGY');
+  });
+
+  // F. invalid inventory => STORE_INVALID
+  it('F. invalid inventory routes to STORE_INVALID', () => {
+    expect(chooseMLBProspectiveHoldoutActivationWriteRoute(invalidInventory(), 'anything')).toBe('STORE_INVALID');
+  });
+
+  // G. legacy-A + requested successor-B where successor-B already exists by-id => SUCCESSOR_BY_ID
+  it('G. legacy-A + existing successor-B by-id routes to SUCCESSOR_BY_ID (write fails already-exists)', () => {
+    const legacy = buildTestInventoryEntry('legacy-A');
+    const byIdB = buildTestInventoryEntry('successor-B');
+    const inventory = okInventory(legacy, [byIdB]);
+    expect(chooseMLBProspectiveHoldoutActivationWriteRoute(inventory, 'successor-B')).toBe('SUCCESSOR_BY_ID');
+  });
+
+  // H. duplicate identity inventory => STORE_INVALID
+  it('H. duplicate identity inventory routes to STORE_INVALID', () => {
+    const dup: MLBProspectiveHoldoutActivationStoreInventoryResult = {
+      ok: false as const,
+      issues: Object.freeze([
+        {
+          code: 'STORE_DUPLICATE_ACTIVATION_IDENTITY' as const,
+          path: '/tmp/dup.json',
+          message: 'Duplicate activation identity detected',
+        },
+      ]),
+    };
+    expect(chooseMLBProspectiveHoldoutActivationWriteRoute(dup, 'anything')).toBe('STORE_INVALID');
+  });
+
+  // I. legacy-A + requested legacy-A where by-id also carries legacy-A => STORE_INVALID
+  it('I. legacy-A duplicated in by-id routes to STORE_INVALID', () => {
+    const dup: MLBProspectiveHoldoutActivationStoreInventoryResult = {
+      ok: false as const,
+      issues: Object.freeze([
+        {
+          code: 'STORE_DUPLICATE_ACTIVATION_IDENTITY' as const,
+          path: '/tmp/dup.json',
+          message: 'Duplicate activation identity: legacy-A appears in both legacy and by-id',
+        },
+      ]),
+    };
+    expect(chooseMLBProspectiveHoldoutActivationWriteRoute(dup, 'legacy-A')).toBe('STORE_INVALID');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Pre-storage scientific gate protection                                    */
+/* -------------------------------------------------------------------------- */
+
+describe('pre-storage scientific gate protection', () => {
+  it('pre-storage failure does not call inspectStore or write deps', async () => {
+    const inspectStore = vi.fn(async () => ({ ok: true as const, inventory: { legacy: null, byId: Object.freeze([]) } }));
+    const writeActivation = vi.fn(async () => ({ ok: true as const, receipt: { kind: 'ACTIVATION_CREATED', activationId: 'x', approvedPlanSha256: 'a'.repeat(64), planFingerprint: 'b'.repeat(64), persistedAt: 'x', sha256: 'c'.repeat(64), byteLength: 1 } }));
+    const writeActivationById = vi.fn(async () => ({ ok: true as const, receipt: { kind: 'ACTIVATION_CREATED', activationId: 'x', approvedPlanSha256: 'a'.repeat(64), planFingerprint: 'b'.repeat(64), persistedAt: 'x', sha256: 'd'.repeat(64), byteLength: 1 } }));
+    const deps = createMockDeps({
+      readFile: async () => { throw new Error('ENOENT'); },
+      inspectStore,
+      writeActivation,
+      writeActivationById,
+    });
+    const result = await runMLBProspectiveHoldoutActivationCreate('missing.json', 'a'.repeat(64), deps);
+    expect(result.ok).toBe(false);
+    expect(inspectStore).not.toHaveBeenCalled();
+    expect(writeActivation).not.toHaveBeenCalled();
+    expect(writeActivationById).not.toHaveBeenCalled();
+  });
+
+  it('inspectStore called exactly once on success path', async () => {
+    const plan = buildValidPlan({ activationDeadlineAt: '2026-09-01T00:00:01.000Z' });
+    const { filePath, sha256 } = await writePlanFile(plan);
+    const inspectStore = vi.fn(async () => ({ ok: true as const, inventory: { legacy: null, byId: Object.freeze([]) } }));
+    const writeActivation = vi.fn(async () => ({
+      ok: true as const,
+      receipt: {
+        kind: 'ACTIVATION_CREATED' as const,
+        activationId: 'activation-1',
+        approvedPlanSha256: sha256,
+        planFingerprint: plan.planFingerprint as string,
+        persistedAt: '2026-09-01T00:00:00.000Z',
+        sha256: 'c'.repeat(64),
+        byteLength: 100,
+      },
+    }));
+    const deps = createMockDeps({ inspectStore, writeActivation });
+    const result = await runMLBProspectiveHoldoutActivationCreate(filePath, sha256, deps);
+    expect(result.ok).toBe(true);
+    expect(inspectStore).toHaveBeenCalledTimes(1);
+    expect(writeActivation).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Storage routing integration tests                                          */
+/* -------------------------------------------------------------------------- */
+
+describe('storage routing integration', () => {
+  // 7. empty store legacy regression
+  it('7. empty store legacy regression — canonical created, by-id count = 0', async () => {
+    const tempRepo = await createTempRepo();
+    const plan = buildValidPlan({ activationDeadlineAt: '2026-09-01T00:00:01.000Z' });
+    const { filePath, sha256 } = await writePlanFile(plan);
+    const deps = createIntegrationDeps(tempRepo);
+    const result = await runMLBProspectiveHoldoutActivationCreate(filePath, sha256, deps);
+    expect(result.ok).toBe(true);
+    expect(deps.writeActivation).toHaveBeenCalledTimes(1);
+    expect(deps.writeActivationById).not.toHaveBeenCalled();
+
+    const legacyPaths = resolveMLBProspectiveHoldoutActivationStorePaths(tempRepo);
+    expect(await fs.readFile(legacyPaths.activationPath, 'utf-8')).toBeDefined();
+
+    const files = await fs.readdir(legacyPaths.activationDirectory);
+    const jsonFiles = files.filter((f) => f.endsWith('.json') && !f.includes('.tmp-'));
+    expect(jsonFiles).toHaveLength(1);
+    expect(jsonFiles).toContain('mlb-prospective-holdout-activation-v1.json');
+  });
+
+  // 8+9. successor by-id create + path binding
+  it('8/9. successor by-id create writes to by-id path, legacy byte-identical', async () => {
+    const tempRepo = await createTempRepo();
+    await seedLegacyActivation(tempRepo, 'legacy-A');
+
+    const legacyPaths = resolveMLBProspectiveHoldoutActivationStorePaths(tempRepo);
+    const legacyHashBefore = await fileSha256(legacyPaths.activationPath);
+
+    const plan = buildSuccessorPlan('successor-B');
+    const { filePath, sha256 } = await writePlanFile(plan);
+    const deps = createIntegrationDeps(tempRepo);
+    const result = await runMLBProspectiveHoldoutActivationCreate(filePath, sha256, deps);
+    expect(result.ok).toBe(true);
+    expect(deps.writeActivation).not.toHaveBeenCalled();
+    expect(deps.writeActivationById).toHaveBeenCalledTimes(1);
+
+    // Canonical legacy byte-identical
+    const legacyHashAfter = await fileSha256(legacyPaths.activationPath);
+    expect(legacyHashAfter).toBe(legacyHashBefore);
+
+    // Successor file at deterministic by-id path: SHA256(activationId) + ".json"
+    const expectedHash = crypto.createHash('sha256').update('successor-B', 'utf-8').digest('hex');
+    const successorPaths = resolveMLBProspectiveHoldoutActivationByIdPaths(tempRepo, 'successor-B');
+    expect(successorPaths.activationPath).toBe(path.join(successorPaths.activationDirectory, `${expectedHash}.json`));
+    expect(successorPaths.activationPath).not.toBe(path.join(successorPaths.activationDirectory, 'mlb-prospective-holdout-activation-v1.json'));
+
+    const successorContent = await fs.readFile(successorPaths.activationPath, 'utf-8');
+    const successorObj = JSON.parse(successorContent) as Record<string, unknown>;
+    expect(successorObj.activationId).toBe('successor-B');
+
+    // Only two activation files: canonical legacy + by-id successor
+    const files = await fs.readdir(legacyPaths.activationDirectory);
+    const jsonFiles = files.filter((f) => f.endsWith('.json') && !f.includes('.tmp-'));
+    expect(jsonFiles).toHaveLength(2);
+    expect(jsonFiles).toContain('mlb-prospective-holdout-activation-v1.json');
+    expect(jsonFiles).toContain(`${expectedHash}.json`);
+
+    // No H, no binding, no scheduler — only var/ directory present
+    const topLevel = await fs.readdir(tempRepo);
+    expect(topLevel).toEqual(['var']);
+  });
+
+  // 10. second successor
+  it('10. second successor writes own by-id path, legacy and successor-B unchanged', async () => {
+    const tempRepo = await createTempRepo();
+    await seedLegacyActivation(tempRepo, 'legacy-A');
+    await seedByIdActivation(tempRepo, 'successor-B');
+
+    const legacyPaths = resolveMLBProspectiveHoldoutActivationStorePaths(tempRepo);
+    const legacyHashBefore = await fileSha256(legacyPaths.activationPath);
+
+    const byIdBPaths = resolveMLBProspectiveHoldoutActivationByIdPaths(tempRepo, 'successor-B');
+    const byIdBHashBefore = await fileSha256(byIdBPaths.activationPath);
+
+    // Create successor-C
+    const plan = buildSuccessorPlan('successor-C');
+    const { filePath, sha256 } = await writePlanFile(plan);
+    const deps = createIntegrationDeps(tempRepo);
+    const result = await runMLBProspectiveHoldoutActivationCreate(filePath, sha256, deps);
+    expect(result.ok).toBe(true);
+
+    // Legacy unchanged
+    expect(await fileSha256(legacyPaths.activationPath)).toBe(legacyHashBefore);
+
+    // Successor-B unchanged
+    expect(await fileSha256(byIdBPaths.activationPath)).toBe(byIdBHashBefore);
+
+    // Successor-C file at its own deterministic path
+    const expectedHashC = crypto.createHash('sha256').update('successor-C', 'utf-8').digest('hex');
+    const byIdCPaths = resolveMLBProspectiveHoldoutActivationByIdPaths(tempRepo, 'successor-C');
+    expect(path.basename(byIdCPaths.activationPath)).toBe(`${expectedHashC}.json`);
+    expect(await fs.readFile(byIdCPaths.activationPath, 'utf-8')).toBeDefined();
+
+    // Three files total
+    const files = await fs.readdir(legacyPaths.activationDirectory);
+    const jsonFiles = files.filter((f) => f.endsWith('.json') && !f.includes('.tmp-'));
+    expect(jsonFiles).toHaveLength(3);
+  });
+
+  // 11. duplicate successor write-once
+  it('11. duplicate successor write fails closed — ACTIVATION_ALREADY_EXISTS', async () => {
+    const tempRepo = await createTempRepo();
+    await seedLegacyActivation(tempRepo, 'legacy-A');
+    await seedByIdActivation(tempRepo, 'successor-B');
+
+    const legacyPaths = resolveMLBProspectiveHoldoutActivationStorePaths(tempRepo);
+    const legacyHashBefore = await fileSha256(legacyPaths.activationPath);
+
+    const byIdBPaths = resolveMLBProspectiveHoldoutActivationByIdPaths(tempRepo, 'successor-B');
+    const byIdBHashBefore = await fileSha256(byIdBPaths.activationPath);
+
+    const plan = buildSuccessorPlan('successor-B');
+    const { filePath, sha256 } = await writePlanFile(plan);
+    const deps = createIntegrationDeps(tempRepo);
+    const result = await runMLBProspectiveHoldoutActivationCreate(filePath, sha256, deps);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe('ACTIVATION_ALREADY_EXISTS');
+    }
+
+    // Bytes unchanged
+    expect(await fileSha256(legacyPaths.activationPath)).toBe(legacyHashBefore);
+    expect(await fileSha256(byIdBPaths.activationPath)).toBe(byIdBHashBefore);
+
+    // Only two files: legacy + by-id successor-B
+    const files = await fs.readdir(legacyPaths.activationDirectory);
+    const jsonFiles = files.filter((f) => f.endsWith('.json') && !f.includes('.tmp-'));
+    expect(jsonFiles).toHaveLength(2);
+  });
+
+  // 12. legacy recreate
+  it('12. legacy recreate fails closed — ACTIVATION_ALREADY_EXISTS, no by-id duplicate', async () => {
+    const tempRepo = await createTempRepo();
+    await seedLegacyActivation(tempRepo, 'legacy-A');
+
+    const legacyPaths = resolveMLBProspectiveHoldoutActivationStorePaths(tempRepo);
+    const legacyHashBefore = await fileSha256(legacyPaths.activationPath);
+
+    // Build plan for same activationId (legacy-A)
+    const plan = buildSuccessorPlan('legacy-A');
+    const { filePath, sha256 } = await writePlanFile(plan);
+    const deps = createIntegrationDeps(tempRepo);
+    const result = await runMLBProspectiveHoldoutActivationCreate(filePath, sha256, deps);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe('ACTIVATION_ALREADY_EXISTS');
+    }
+
+    // Legacy bytes unchanged
+    expect(await fileSha256(legacyPaths.activationPath)).toBe(legacyHashBefore);
+
+    // No by-id duplicate created — only canonical file exists
+    const files = await fs.readdir(legacyPaths.activationDirectory);
+    const jsonFiles = files.filter((f) => f.endsWith('.json') && !f.includes('.tmp-'));
+    expect(jsonFiles).toHaveLength(1);
+    expect(jsonFiles).toContain('mlb-prospective-holdout-activation-v1.json');
+  });
+
+  // 13. invalid topology — by-id without legacy
+  it('13. invalid topology fails closed before persistence — ACTIVATION_STORE_INVALID', async () => {
+    const tempRepo = await createTempRepo();
+    await seedByIdActivation(tempRepo, 'successor-B');
+
+    const byIdBPaths = resolveMLBProspectiveHoldoutActivationByIdPaths(tempRepo, 'successor-B');
+    const byIdBHashBefore = await fileSha256(byIdBPaths.activationPath);
+
+    const plan = buildSuccessorPlan('successor-C');
+    const { filePath, sha256 } = await writePlanFile(plan);
+    const deps = createIntegrationDeps(tempRepo);
+    const result = await runMLBProspectiveHoldoutActivationCreate(filePath, sha256, deps);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe('ACTIVATION_STORE_INVALID');
+    }
+
+    // No new successor-C created
+    const successorCHash = crypto.createHash('sha256').update('successor-C', 'utf-8').digest('hex');
+    const successorCPath = path.join(byIdBPaths.activationDirectory, `${successorCHash}.json`);
+    await expect(fs.readFile(successorCPath)).rejects.toThrow();
+
+    // No canonical created
+    const legacyPath = path.join(byIdBPaths.activationDirectory, 'mlb-prospective-holdout-activation-v1.json');
+    await expect(fs.readFile(legacyPath)).rejects.toThrow();
+
+    // Successor-B unchanged
+    expect(await fileSha256(byIdBPaths.activationPath)).toBe(byIdBHashBefore);
+
+    // No write attempts
+    expect(deps.writeActivation).not.toHaveBeenCalled();
+    expect(deps.writeActivationById).not.toHaveBeenCalled();
+  });
+
+  // 14. corrupt inventory
+  it('14. corrupt inventory fails closed — ACTIVATION_STORE_INVALID, no successor written', async () => {
+    const tempRepo = await createTempRepo();
+    await seedLegacyActivation(tempRepo, 'legacy-A');
+
+    const legacyPaths = resolveMLBProspectiveHoldoutActivationStorePaths(tempRepo);
+    const legacyHashBefore = await fileSha256(legacyPaths.activationPath);
+
+    // Add a corrupt by-id file (valid filename pattern, invalid JSON content)
+    const corruptHash = crypto.createHash('sha256').update('corrupt-entry', 'utf-8').digest('hex');
+    const corruptPath = path.join(legacyPaths.activationDirectory, `${corruptHash}.json`);
+    await fs.writeFile(corruptPath, 'not valid json');
+
+    const plan = buildSuccessorPlan('successor-B');
+    const { filePath, sha256 } = await writePlanFile(plan);
+    const deps = createIntegrationDeps(tempRepo);
+    const result = await runMLBProspectiveHoldoutActivationCreate(filePath, sha256, deps);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe('ACTIVATION_STORE_INVALID');
+    }
+
+    // Canonical unchanged
+    expect(await fileSha256(legacyPaths.activationPath)).toBe(legacyHashBefore);
+
+    // No successor written
+    const successorHash = crypto.createHash('sha256').update('successor-B', 'utf-8').digest('hex');
+    const successorPath = path.join(legacyPaths.activationDirectory, `${successorHash}.json`);
+    await expect(fs.readFile(successorPath)).rejects.toThrow();
+
+    // No write attempts
+    expect(deps.writeActivation).not.toHaveBeenCalled();
+    expect(deps.writeActivationById).not.toHaveBeenCalled();
   });
 });
