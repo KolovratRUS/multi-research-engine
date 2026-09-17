@@ -1018,17 +1018,95 @@ describe('F. dry-run matrix', () => {
     expect(snapshotCalls).toBe(0);
   });
 
-  it('42. dry-run releases lock via finally', async () => {
-    let released = false;
+  it('42. dry-run makes zero acquireLock/releaseLock/captureApplication calls', async () => {
+    let acquireCalls = 0;
+    let releaseCalls = 0;
+    let captureCalls = 0;
+    const scheduleGame = buildScheduleGame();
     const deps = buildDeps({
+      now: buildClock(new Date('2026-09-06T00:00:00.000Z')),
       loadScientificState: async () => buildStateLoaderResult(),
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]),
+      acquireLock: async () => {
+        acquireCalls++;
+        return { acquired: true };
+      },
       releaseLock: async () => {
-        released = true;
+        releaseCalls++;
+        return { released: true };
+      },
+      captureApplication: async () => {
+        captureCalls++;
+        return CAPTURED_RESULT;
+      },
+    });
+    const result = await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
+    expect(result.kind).toBe('DRY_RUN_COMPLETE');
+    expect(acquireCalls).toBe(0);
+    expect(releaseCalls).toBe(0);
+    expect(captureCalls).toBe(0);
+  });
+
+  it('42a. dry-run does not inspect/recover/delete existing live lock', async () => {
+    // Seed a real live lock on disk using the real acquireLockImpl.
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlb-dryrun-lock-'));
+    const lp = path.join(tempDir, 'active.lock');
+    const lockResult = await acquireLockImpl(lp, 'OWNER_A', 1111, 'host-a', '2026-09-06T00:00:00.000Z');
+    expect(lockResult.acquired).toBe(true);
+
+    // Snapshot lock directory state before dry-run.
+    const ownerBefore = await fs.readFile(path.join(lp, 'owner.json'), 'utf-8');
+    const treeBefore = await fs.readdir(lp);
+
+    let acquireCalls = 0;
+    let releaseCalls = 0;
+    const scheduleGame = buildScheduleGame();
+    const deps = buildDeps({
+      lockPath: lp,
+      now: buildClock(new Date('2026-09-06T00:00:00.000Z')),
+      loadScientificState: async () => buildStateLoaderResult(),
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]),
+      acquireLock: async () => {
+        acquireCalls++;
+        return { acquired: true };
+      },
+      releaseLock: async () => {
+        releaseCalls++;
         return { released: true };
       },
     });
-    await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
-    expect(released).toBe(true);
+    const result = await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
+    expect(result.kind).toBe('DRY_RUN_COMPLETE');
+    expect(acquireCalls).toBe(0);
+    expect(releaseCalls).toBe(0);
+
+    // Lock bytes/tree unchanged after dry-run.
+    const ownerAfter = await fs.readFile(path.join(lp, 'owner.json'), 'utf-8');
+    const treeAfter = await fs.readdir(lp);
+    expect(ownerAfter).toBe(ownerBefore);
+    expect(treeAfter).toEqual(treeBefore);
+  });
+
+  it('42b. normal mode acquires and releases lock exactly once on clean exit', async () => {
+    let acquireCalls = 0;
+    let releaseCalls = 0;
+    const deps = buildDeps({
+      loadScientificState: async () => buildStateLoaderResult({}, { validationCapturedCount: 67 }),
+      acquireLock: async () => {
+        acquireCalls++;
+        return { acquired: true };
+      },
+      releaseLock: async () => {
+        releaseCalls++;
+        return { released: true };
+      },
+    });
+    const result = await runMLBProspectiveHoldoutScheduler({ dryRun: false }, deps);
+    expect(result.kind).toBe('STOPPED_CLEAN');
+    expect(acquireCalls).toBe(1);
+    expect(releaseCalls).toBe(1);
   });
 });
 
@@ -2379,24 +2457,62 @@ describe('W. signal handler lifecycle', () => {
     expect(sigtermUnregister).toBeUndefined();
   });
 
-  it('78. handlers removed on dry-run return', async () => {
+  it('78. dry-run registers zero signal handlers', async () => {
+    let sigintRegistrations = 0;
+    let sigtermRegistrations = 0;
     let sigintUnregister: (() => void) | undefined;
     let sigtermUnregister: (() => void) | undefined;
     const deps = buildDeps({
+      now: buildClock(new Date('2026-09-06T00:00:00.000Z')),
       loadScientificState: async () => buildStateLoaderResult(),
-      registerSignalHandler: (signal, handler) => {
-        const unregister = () => {
-          if (signal === 'SIGINT') sigintUnregister = undefined;
-          if (signal === 'SIGTERM') sigtermUnregister = undefined;
-        };
-        if (signal === 'SIGINT') sigintUnregister = unregister;
-        if (signal === 'SIGTERM') sigtermUnregister = unregister;
-        return unregister;
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([buildScheduleGame()]) : buildScheduleResult([]),
+      registerSignalHandler: (signal, _handler) => {
+        if (signal === 'SIGINT') {
+          sigintRegistrations++;
+          const unregister = () => {
+            sigintUnregister = undefined;
+          };
+          sigintUnregister = unregister;
+          return unregister;
+        }
+        if (signal === 'SIGTERM') {
+          sigtermRegistrations++;
+          const unregister = () => {
+            sigtermUnregister = undefined;
+          };
+          sigtermUnregister = unregister;
+          return unregister;
+        }
+        return () => {};
       },
     });
     await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
+    expect(sigintRegistrations).toBe(0);
+    expect(sigtermRegistrations).toBe(0);
     expect(sigintUnregister).toBeUndefined();
     expect(sigtermUnregister).toBeUndefined();
+  });
+
+  it('78b. repeated dry-run invocations do not grow handler registrations', async () => {
+    let sigintRegistrations = 0;
+    let sigtermRegistrations = 0;
+    const deps = buildDeps({
+      now: buildClock(new Date('2026-09-06T00:00:00.000Z')),
+      loadScientificState: async () => buildStateLoaderResult(),
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([buildScheduleGame()]) : buildScheduleResult([]),
+      registerSignalHandler: (signal, _handler) => {
+        if (signal === 'SIGINT') sigintRegistrations++;
+        if (signal === 'SIGTERM') sigtermRegistrations++;
+        return () => {};
+      },
+    });
+    for (let i = 0; i < 3; i++) {
+      await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
+    }
+    expect(sigintRegistrations).toBe(0);
+    expect(sigtermRegistrations).toBe(0);
   });
 });
 

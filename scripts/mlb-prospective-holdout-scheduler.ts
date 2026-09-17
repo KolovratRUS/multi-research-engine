@@ -876,6 +876,75 @@ export async function runMLBProspectiveHoldoutScheduler(
   const pid = deps.pid();
   const startedAt = new Date().toISOString();
 
+  // Dry-run: single planning cycle only — executed before singleton lock
+  // acquisition so dry-run never touches the runtime lock or capture state.
+  // Dry-run registers zero scheduler signal handlers; the only observable
+  // start event emitted on this path is SCHEDULER_STARTED, mirroring the
+  // pre-repair contract, without acquiring the runtime lock.
+  if (options.dryRun) {
+    emitEvent(deps.createEvent, 'SCHEDULER_STARTED', { startedAt, ownerToken, pid, hostname }, deps.now);
+    const state = await deps.loadScientificState(repositoryRoot, options.activationId);
+    if (!isValidState(state)) {
+      emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: state.reason ?? 'invalid startup state' }, deps.now);
+      return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: state.reason ?? 'invalid startup state' };
+    }
+
+    const startup = checkStartup(state);
+    if (!startup.ok) {
+      emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: startup.reason ?? 'unknown startup failure' }, deps.now);
+      return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: startup.reason ?? 'unknown startup failure' };
+    }
+
+    if (state.validationCapturedCount === 67) {
+      emitEvent(deps.createEvent, 'VALIDATION_TARGET_COMPLETE', {}, deps.now);
+      emitEvent(deps.createEvent, 'SCHEDULER_STOPPED', { reason: 'dry-run complete' }, deps.now);
+      return { kind: 'DRY_RUN_COMPLETE', exitCode: 0 };
+    }
+
+    emitEvent(deps.createEvent, 'STATE_REFRESHED', {
+      validationCapturedCount: state.validationCapturedCount,
+      testCapturedCount: state.testCapturedCount,
+      anomalyCount: state.anomalyCount,
+    }, deps.now);
+
+    const schedule = await fetchScheduleWindow(repositoryRoot, deps, state.activation);
+    const plan = planProspectiveHoldoutValidationDispatch({
+      activation: {
+        validationBoundaryOfficialDate: state.activation.validationBoundaryOfficialDate,
+        validationTargetCount: state.activation.validationTargetCount,
+      },
+      validationCapturedCount: state.validationCapturedCount,
+      testCapturedCount: state.testCapturedCount,
+      completedGamePks: state.completedGamePks,
+      scheduleCandidates: schedule,
+      trustedNow: deps.now(),
+    });
+
+    if (plan.kind === 'DISPATCH_NOW') {
+      emitEvent(deps.createEvent, 'DRY_RUN_CAPTURE_PREVIEW', {
+        gamePk: plan.game.gamePk,
+        officialDate: plan.game.officialDate,
+        startTimeUtc: plan.game.startTimeUtc.toISOString(),
+      }, deps.now);
+    } else if (plan.kind === 'WAIT_UNTIL_TARGET') {
+      emitEvent(deps.createEvent, 'NEXT_CAPTURE_PLANNED', {
+        waitUntil: plan.waitUntil,
+        classification: 'WAIT_UNTIL_TARGET',
+      }, deps.now);
+    } else if (plan.kind === 'VALIDATION_TARGET_UNREACHABLE') {
+      emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: 'dry-run plan: no remaining candidates' }, deps.now);
+      return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: 'dry-run plan: no remaining candidates' };
+    } else if (plan.kind === 'HUMAN_REVIEW_REQUIRED') {
+      emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: `dry-run plan: ${plan.reason}` }, deps.now);
+      return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: `dry-run plan: ${plan.reason}` };
+    } else if (plan.kind === 'VALIDATION_TARGET_COMPLETE') {
+      emitEvent(deps.createEvent, 'VALIDATION_TARGET_COMPLETE', {}, deps.now);
+    }
+
+    emitEvent(deps.createEvent, 'SCHEDULER_STOPPED', { reason: 'dry-run complete' }, deps.now);
+    return { kind: 'DRY_RUN_COMPLETE', exitCode: 0 };
+  }
+
   let shuttingDown = false;
   let captureActive = false;
   const abortController = new AbortController();
@@ -903,70 +972,6 @@ export async function runMLBProspectiveHoldoutScheduler(
 
   try {
     emitEvent(deps.createEvent, 'SCHEDULER_STARTED', { startedAt, ownerToken, pid, hostname }, deps.now);
-
-    // Dry-run: single planning cycle only
-    if (options.dryRun) {
-      const state = await deps.loadScientificState(repositoryRoot, options.activationId);
-      if (!isValidState(state)) {
-        emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: state.reason ?? 'invalid startup state' }, deps.now);
-        return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: state.reason ?? 'invalid startup state' };
-      }
-
-      const startup = checkStartup(state);
-      if (!startup.ok) {
-        emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: startup.reason ?? 'unknown startup failure' }, deps.now);
-        return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: startup.reason ?? 'unknown startup failure' };
-      }
-
-      if (state.validationCapturedCount === 67) {
-        emitEvent(deps.createEvent, 'VALIDATION_TARGET_COMPLETE', {}, deps.now);
-        emitEvent(deps.createEvent, 'SCHEDULER_STOPPED', { reason: 'dry-run complete' }, deps.now);
-        return { kind: 'DRY_RUN_COMPLETE', exitCode: 0 };
-      }
-
-      emitEvent(deps.createEvent, 'STATE_REFRESHED', {
-        validationCapturedCount: state.validationCapturedCount,
-        testCapturedCount: state.testCapturedCount,
-        anomalyCount: state.anomalyCount,
-      }, deps.now);
-
-      const schedule = await fetchScheduleWindow(repositoryRoot, deps, state.activation);
-      const plan = planProspectiveHoldoutValidationDispatch({
-        activation: {
-          validationBoundaryOfficialDate: state.activation.validationBoundaryOfficialDate,
-          validationTargetCount: state.activation.validationTargetCount,
-        },
-        validationCapturedCount: state.validationCapturedCount,
-        testCapturedCount: state.testCapturedCount,
-        completedGamePks: state.completedGamePks,
-        scheduleCandidates: schedule,
-        trustedNow: deps.now(),
-      });
-
-      if (plan.kind === 'DISPATCH_NOW') {
-        emitEvent(deps.createEvent, 'DRY_RUN_CAPTURE_PREVIEW', {
-          gamePk: plan.game.gamePk,
-          officialDate: plan.game.officialDate,
-          startTimeUtc: plan.game.startTimeUtc.toISOString(),
-        }, deps.now);
-      } else if (plan.kind === 'WAIT_UNTIL_TARGET') {
-        emitEvent(deps.createEvent, 'NEXT_CAPTURE_PLANNED', {
-          waitUntil: plan.waitUntil,
-          classification: 'WAIT_UNTIL_TARGET',
-        }, deps.now);
-      } else if (plan.kind === 'VALIDATION_TARGET_UNREACHABLE') {
-        emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: 'dry-run plan: no remaining candidates' }, deps.now);
-        return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: 'dry-run plan: no remaining candidates' };
-      } else if (plan.kind === 'HUMAN_REVIEW_REQUIRED') {
-        emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: `dry-run plan: ${plan.reason}` }, deps.now);
-        return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: `dry-run plan: ${plan.reason}` };
-      } else if (plan.kind === 'VALIDATION_TARGET_COMPLETE') {
-        emitEvent(deps.createEvent, 'VALIDATION_TARGET_COMPLETE', {}, deps.now);
-      }
-
-      emitEvent(deps.createEvent, 'SCHEDULER_STOPPED', { reason: 'dry-run complete' }, deps.now);
-      return { kind: 'DRY_RUN_COMPLETE', exitCode: 0 };
-    }
 
     // Run-scoped duplicate dispatch guard: protects the lifetime of ONE
     // scheduler process against selecting a gamePk already dispatched this run.
