@@ -475,6 +475,20 @@ describe('mlb-prospective-holdout-scheduler-core fail-closed', () => {
       expect(decision.reason).toContain('empty officialDate');
     }
   });
+
+  it('27. UNKNOWN status game cannot produce DISPATCH_NOW', () => {
+    // At exact T-375 with a regular-season candidate, an UPCOMING game would
+    // dispatch. An UNKNOWN-status game must be classified INELIGIBLE_SCHEDULE_STATE
+    // and therefore never reach DISPATCH_NOW.
+    const unknownGame = buildScheduleGame({ status: 'UNKNOWN' });
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      trustedNow: new Date('2026-09-06T18:45:00.000Z'),
+      validationCapturedCount: 1,
+      scheduleCandidates: [unknownGame],
+    }));
+    expect(decision.kind).not.toBe('DISPATCH_NOW');
+    expect(decision.kind).toBe('VALIDATION_TARGET_UNREACHABLE');
+  });
 });
 
 /* -------------------------------------------------------------------------- */

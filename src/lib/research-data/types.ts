@@ -190,7 +190,7 @@ export interface MLBScheduleGame {
   officialDate: string;
   gameDate: string;
   startTimeUtc: Date;
-  status: 'UPCOMING' | 'LIVE' | 'FINAL' | 'POSTPONED' | 'CANCELLED';
+  status: 'UPCOMING' | 'LIVE' | 'FINAL' | 'POSTPONED' | 'CANCELLED' | 'UNKNOWN';
   homeTeamId: number;
   homeTeamName: string;
   awayTeamId: number;

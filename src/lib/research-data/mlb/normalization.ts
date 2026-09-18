@@ -16,7 +16,6 @@ import type {
   PitcherRecentStart,
 } from '../types';
 import { DEFAULT_FRESHNESS_CONFIG } from '../types';
-import { ResearchDataError, ResearchDataValidationError } from '../errors';
 import type { MLBResearchDataProvider } from '../types';
 
 export const STADIUM_REGISTRY: Record<number, MLBVenue> = {
@@ -317,10 +316,11 @@ function mapGameStatus(coded: string): MLBScheduleGame['status'] {
     case 'C':
       return 'CANCELLED';
     default:
-      throw new ResearchDataValidationError({
-        message: `Unsupported MLB schedule status: ${coded}`,
-        source: 'normalizeSchedule',
-      });
+      // Fail-closed isolation: an unsupported codedGameState must not abort
+      // normalization of otherwise-valid sibling games. The game is preserved
+      // with an explicit UNKNOWN status that all capture/planning code treats
+      // as non-capturable (never DISPATCH_NOW).
+      return 'UNKNOWN';
   }
 }
 

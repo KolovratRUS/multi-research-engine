@@ -138,7 +138,10 @@ describe('normalizeSchedule', () => {
     expect(games[0].gameNumber).not.toBe(games[0].seriesGameNumber);
   });
 
-  it('throws for unsupported codedGameState instead of defaulting to UPCOMING', () => {
+  it('does not throw for unsupported codedGameState "M"; returns UNKNOWN status', () => {
+    // Fail-closed isolation: an unsupported codedGameState must not abort
+    // normalization. The game is preserved with an explicit UNKNOWN status
+    // that all capture/planning code treats as non-capturable.
     const raw = {
       totalItems: 1,
       dates: [
@@ -146,55 +149,12 @@ describe('normalizeSchedule', () => {
           date: '2026-06-26',
           games: [
             {
-              gamePk: 824255,
+              gamePk: 824256,
               gameType: 'R',
               gameNumber: 1,
               gameDate: '2026-06-26T10:00:00.000Z',
               officialDate: '2026-06-26',
-              status: { abstractGameState: 'Preview', codedGameState: 'Z', detailedState: 'Pre-Game', startTimeTBD: false },
-              teams: {
-                away: {
-                  team: { id: 10, name: 'Yankees' },
-                  probablePitcher: { id: 650556, fullName: 'Aaron Judge' },
-                  leagueRecord: { wins: 50, losses: 40, pct: '.556' },
-                },
-                home: {
-                  team: { id: 20, name: 'Red Sox' },
-                  probablePitcher: undefined,
-                  leagueRecord: { wins: 45, losses: 45, pct: '.500' },
-                },
-              },
-              venue: { id: 2394, name: 'Comerica Park' },
-              dayNight: 'day',
-              scheduledInnings: 9,
-              doubleHeader: 'N',
-              seriesGameNumber: 1,
-              gamesInSeries: 3,
-              seriesDescription: 'Regular',
-            },
-          ],
-        },
-      ],
-    };
-
-    expect(() => normalizeSchedule(raw)).toThrow();
-    expect(() => normalizeSchedule(raw)).toThrow('Unsupported MLB schedule status');
-  });
-
-  it('throws for another unsupported codedGameState instead of defaulting to UPCOMING', () => {
-    const raw = {
-      totalItems: 1,
-      dates: [
-        {
-          date: '2026-06-26',
-          games: [
-            {
-              gamePk: 824255,
-              gameType: 'R',
-              gameNumber: 1,
-              gameDate: '2026-06-26T10:00:00.000Z',
-              officialDate: '2026-06-26',
-              status: { abstractGameState: 'Preview', codedGameState: 'X', detailedState: 'Pre-Game', startTimeTBD: false },
+              status: { abstractGameState: 'Unknown', codedGameState: 'M', detailedState: 'Unknown', startTimeTBD: false },
               teams: {
                 away: { team: { id: 10, name: 'Yankees' }, leagueRecord: { wins: 50, losses: 40, pct: '.556' } },
                 home: { team: { id: 20, name: 'Red Sox' }, leagueRecord: { wins: 45, losses: 45, pct: '.500' } },
@@ -212,7 +172,74 @@ describe('normalizeSchedule', () => {
       ],
     };
 
-    expect(() => normalizeSchedule(raw)).toThrow();
+    const games = normalizeSchedule(raw);
+    expect(games).toHaveLength(1);
+    expect(games[0].status).toBe('UNKNOWN');
+  });
+
+  it('survives unsupported "M" sibling alongside valid "S" game in same date payload', () => {
+    // One unsupported game must not destroy normalization of valid siblings.
+    const raw = {
+      totalItems: 2,
+      dates: [
+        {
+          date: '2026-06-26',
+          games: [
+            {
+              gamePk: 824255,
+              gameType: 'R',
+              gameNumber: 1,
+              gameDate: '2026-06-26T10:00:00.000Z',
+              officialDate: '2026-06-26',
+              status: { abstractGameState: 'Preview', codedGameState: 'S', detailedState: 'Pre-Game', startTimeTBD: false },
+              teams: {
+                away: { team: { id: 10, name: 'Yankees' }, leagueRecord: { wins: 50, losses: 40, pct: '.556' } },
+                home: { team: { id: 20, name: 'Red Sox' }, leagueRecord: { wins: 45, losses: 45, pct: '.500' } },
+              },
+              venue: { id: 2394, name: 'Comerica Park' },
+              dayNight: 'day',
+              scheduledInnings: 9,
+              doubleHeader: 'N',
+              seriesGameNumber: 1,
+              gamesInSeries: 3,
+              seriesDescription: 'Regular',
+            },
+            {
+              gamePk: 824256,
+              gameType: 'R',
+              gameNumber: 1,
+              gameDate: '2026-06-26T12:00:00.000Z',
+              officialDate: '2026-06-26',
+              status: { abstractGameState: 'Unknown', codedGameState: 'M', detailedState: 'Unknown', startTimeTBD: false },
+              teams: {
+                away: { team: { id: 30, name: 'Rays' }, leagueRecord: { wins: 40, losses: 50, pct: '.444' } },
+                home: { team: { id: 40, name: 'Orioles' }, leagueRecord: { wins: 45, losses: 45, pct: '.500' } },
+              },
+              venue: { id: 2, name: 'Oriole Park at Camden Yards' },
+              dayNight: 'day',
+              scheduledInnings: 9,
+              doubleHeader: 'N',
+              seriesGameNumber: 1,
+              gamesInSeries: 3,
+              seriesDescription: 'Regular',
+            },
+          ],
+        },
+      ],
+    };
+
+    const games = normalizeSchedule(raw);
+    expect(games).toHaveLength(2);
+    const scheduledGame = games.find(g => g.gamePk === 824255);
+    const unsupportedGame = games.find(g => g.gamePk === 824256);
+    expect(scheduledGame).toBeDefined();
+    expect(unsupportedGame).toBeDefined();
+    if (scheduledGame) {
+      expect(scheduledGame.status).toBe('UPCOMING');
+    }
+    if (unsupportedGame) {
+      expect(unsupportedGame.status).toBe('UNKNOWN');
+    }
   });
 
   it('maps every recognized codedGameState to the correct normalized status', () => {
