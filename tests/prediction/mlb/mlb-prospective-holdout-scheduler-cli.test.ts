@@ -209,7 +209,7 @@ function buildStateLoaderResult(
   return {
     ok: true,
     activation: buildFrozenActivation(activationOverrides),
-    validationCapturedCount: stateOverrides.validationCapturedCount ?? 1,
+    validationCapturedCount: stateOverrides.validationCapturedCount ?? 66,
     testCapturedCount: stateOverrides.testCapturedCount ?? 0,
     anomalyCount: stateOverrides.anomalyCount ?? 0,
     completedGamePks: stateOverrides.completedGamePks ?? [],
@@ -269,14 +269,44 @@ describe('A. import / startup', () => {
   });
 
   it('2. 1/67 startup accepted', async () => {
+    // The startup state is 1/67 — within the valid range (0–67) for
+    // checkStartup. With only 1 eligible game and 66 remaining required,
+    // the count-feasibility guard fires. This proves the 1/67 startup
+    // state was ACCEPTED by checkStartup (STATE_REFRESHED is emitted only
+    // after startup validation passes) rather than rejected at the startup
+    // check, and that the guard correctly detects insufficient schedule
+    // candidates before dispatch/wait decisions.
     const scheduleGame = buildScheduleGame();
+    let captureCalls = 0;
+    const events: Array<{ readonly event: string; readonly reason?: unknown }> = [];
     const deps = buildDeps({
-      loadScientificState: async () => buildStateLoaderResult(),
+      loadScientificState: async () =>
+        buildStateLoaderResult({}, { validationCapturedCount: 1 }),
       fetchSchedule: async (date: string) =>
         date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]),
+      captureApplication: async () => {
+        captureCalls++;
+        return CAPTURED_RESULT;
+      },
+      createEvent: (event) => {
+        events.push({ event: event.event, reason: event.reason });
+      },
     });
     const result = await runMLBProspectiveHoldoutScheduler({ dryRun: true }, deps);
-    expect(result.kind).toBe('DRY_RUN_COMPLETE');
+    expect(events.some(e => e.event === 'SCHEDULER_STARTED')).toBe(true);
+    expect(events).toContainEqual({ event: 'STATE_REFRESHED' });
+    expect(events.some(e => e.event === 'HUMAN_REVIEW_REQUIRED')).toBe(true);
+    expect(captureCalls).toBe(0);
+    expect(result.kind).toBe('STOPPED_FAIL_CLOSED');
+    expect(result.exitCode).toBe(2);
+    if (result.kind === 'STOPPED_FAIL_CLOSED') {
+      expect(result.reason).toContain('validation target unreachable under remaining schedule');
+    }
+    const humanReview = events.find(e => e.event === 'HUMAN_REVIEW_REQUIRED');
+    expect(humanReview).toBeDefined();
+    if (humanReview) {
+      expect(humanReview.reason).toContain('validation target unreachable under remaining schedule');
+    }
   });
 
   it('3. testCapturedCount >0 blocked', async () => {
@@ -1484,7 +1514,7 @@ describe('J. pre-dispatch fresh lookup', () => {
         stateLoads++;
         return buildStateLoaderResult(
           { validationBoundaryOfficialDate: boundaryDate },
-          { validationCapturedCount: stateLoads === 1 ? 1 : 67 },
+          { validationCapturedCount: stateLoads === 1 ? 66 : 67 },
         );
       },
       fetchSchedule: async (date: string) => {
@@ -1549,7 +1579,7 @@ describe('K. adjacent UTC refresh', () => {
         stateLoads++;
         return buildStateLoaderResult(
           { validationBoundaryOfficialDate: '2026-09-07' },
-          { validationCapturedCount: stateLoads === 1 ? 1 : 67 },
+          { validationCapturedCount: stateLoads === 1 ? 66 : 67 },
         );
       },
       fetchSchedule: async (date: string) => {
@@ -1601,7 +1631,7 @@ describe('L. fresh timing authority', () => {
         stateLoads++;
         return buildStateLoaderResult(
           {},
-          { validationCapturedCount: stateLoads === 1 ? 1 : 67 },
+          { validationCapturedCount: stateLoads === 1 ? 66 : 67 },
         );
       },
       fetchSchedule: async (date: string) =>
@@ -2105,7 +2135,7 @@ describe('O. success readback', () => {
       now: buildClock(new Date('2026-09-07T01:50:00.000Z')),
       loadScientificState: async () => {
         stateLoads++;
-        return buildStateLoaderResult({}, { validationCapturedCount: stateLoads === 1 ? 1 : 2 });
+        return buildStateLoaderResult({}, { validationCapturedCount: stateLoads === 1 ? 66 : 67 });
       },
       fetchSchedule: async (date: string) =>
         date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]),
@@ -2572,7 +2602,7 @@ describe('Y. structured events', () => {
         stateLoads++;
         return buildStateLoaderResult(
           {},
-          { validationCapturedCount: stateLoads === 1 ? 1 : 67 },
+          { validationCapturedCount: stateLoads === 1 ? 66 : 67 },
         );
       },
       fetchSchedule: async (date: string) =>
@@ -2766,6 +2796,48 @@ describe('AA. CLI', () => {
     });
     expect(await runMLBProspectiveHoldoutSchedulerCLI(['node', 'script'], io, depsFail)).toBe(2);
   });
+
+  it('89. CLI insufficient-count reachability -> fail-closed with zero captures', async () => {
+    // validationTargetCount=67, validationCapturedCount=0, 1 eligible game
+    // => 1 < 67 remaining required => guard fires before dispatch.
+    let captureCalls = 0;
+    const scheduleGame = buildScheduleGame({
+      startTimeUtc: new Date('2026-09-07T08:00:00.000Z'),
+    });
+    const events: Array<{ readonly event: string; readonly reason?: unknown }> = [];
+    const deps = buildDeps({
+      now: buildClock(new Date('2026-09-07T01:50:00.000Z')),
+      loadScientificState: async () =>
+        buildStateLoaderResult({}, { validationCapturedCount: 0 }),
+      fetchSchedule: async (date: string) =>
+        date === '2026-09-07' ? buildScheduleResult([scheduleGame]) : buildScheduleResult([]),
+      captureApplication: async () => {
+        captureCalls++;
+        return CAPTURED_RESULT;
+      },
+      createEvent: (event) => {
+        events.push({ event: event.event, reason: event.reason });
+      },
+    });
+    const io: SchedulerCLIIO = {
+      stdout: (message: string) => {},
+      stderr: (message: string) => {},
+    };
+    const exitCode = await runMLBProspectiveHoldoutSchedulerCLI(
+      ['node', 'script'], io, deps,
+    );
+    // Guard fires: 1 eligible game < 67 remaining required.
+    expect(exitCode).toBe(2);
+    expect(captureCalls).toBe(0);
+    expect(events.some(e => e.event === 'SCHEDULER_STARTED')).toBe(true);
+    expect(events.some(e => e.event === 'STATE_REFRESHED')).toBe(true);
+    expect(events.some(e => e.event === 'HUMAN_REVIEW_REQUIRED')).toBe(true);
+    const humanReview = events.find(e => e.event === 'HUMAN_REVIEW_REQUIRED');
+    expect(humanReview).toBeDefined();
+    if (humanReview) {
+      expect(humanReview.reason).toContain('validation target unreachable under remaining schedule');
+    }
+  });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -2838,7 +2910,7 @@ describe('AC. activation forwarding seam', () => {
       loadScientificState: async () => ({
         ok: true,
         activation: planningActivation,
-        validationCapturedCount: 1,
+        validationCapturedCount: 66,
         testCapturedCount: 0,
         anomalyCount: 0,
         completedGamePks: [],
@@ -2874,7 +2946,7 @@ describe('AC. activation forwarding seam', () => {
       loadScientificState: async () => ({
         ok: true,
         activation: planningActivation,
-        validationCapturedCount: 1,
+        validationCapturedCount: 66,
         testCapturedCount: 0,
         anomalyCount: 0,
         completedGamePks: [],
@@ -3071,7 +3143,7 @@ describe('AF. selector persistence', () => {
         if (stateLoads === 1) {
           return buildStateLoaderResult(
             { activationId: 'activation-successor-B' },
-            { validationCapturedCount: 1 },
+            { validationCapturedCount: 66 },
           );
         }
         return buildStateLoaderResult(
@@ -3114,7 +3186,7 @@ describe('AG. selected-activation runtime', () => {
       loadScientificState: async () => ({
         ok: true,
         activation: planningActivation,
-        validationCapturedCount: 1,
+        validationCapturedCount: 66,
         testCapturedCount: 0,
         anomalyCount: 0,
         completedGamePks: [],

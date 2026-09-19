@@ -274,6 +274,27 @@ export function planProspectiveHoldoutValidationDispatch(
     return a.game.gamePk - b.game.gamePk;
   });
 
+  // 5b. Count-feasibility guard: the number of distinct eligible gamePk
+  // values must be at least remainingRequired. This check is performed AFTER
+  // target-complete (short-circuit at step 1) and AFTER classification, but
+  // BEFORE dispatch/wait decisions, so that a mathematically unreachable
+  // campaign is reported as VALIDATION_TARGET_UNREACHABLE rather than
+  // WAIT_UNTIL_TARGET or DISPATCH_NOW when insufficient candidates exist.
+  const remainingRequired = activation.validationTargetCount - validationCapturedCount;
+  const eligibleGamePks = new Set<number>();
+  for (const entry of processed) {
+    if (
+      entry.classification.kind === 'ELIGIBLE_DISPATCH' ||
+      entry.classification.kind === 'ELIGIBLE_WAIT'
+    ) {
+      eligibleGamePks.add(entry.game.gamePk);
+    }
+  }
+  const uniqueRemainingEligibleGameCount = eligibleGamePks.size;
+  if (uniqueRemainingEligibleGameCount < remainingRequired) {
+    return { kind: 'VALIDATION_TARGET_UNREACHABLE' };
+  }
+
   // 6. Find best dispatch candidate
   for (const entry of processed) {
     if (entry.classification.kind === 'ELIGIBLE_DISPATCH') {
@@ -295,6 +316,6 @@ export function planProspectiveHoldoutValidationDispatch(
     }
   }
 
-  // 8. No remaining candidates
+  // 8. Fallback: unreachable (no eligible dispatch/wait candidates remain)
   return { kind: 'VALIDATION_TARGET_UNREACHABLE' };
 }

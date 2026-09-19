@@ -932,8 +932,8 @@ export async function runMLBProspectiveHoldoutScheduler(
         classification: 'WAIT_UNTIL_TARGET',
       }, deps.now);
     } else if (plan.kind === 'VALIDATION_TARGET_UNREACHABLE') {
-      emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: 'dry-run plan: no remaining candidates' }, deps.now);
-      return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: 'dry-run plan: no remaining candidates' };
+      emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: 'dry-run plan: validation target unreachable under remaining schedule' }, deps.now);
+      return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: 'dry-run plan: validation target unreachable under remaining schedule' };
     } else if (plan.kind === 'HUMAN_REVIEW_REQUIRED') {
       emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: `dry-run plan: ${plan.reason}` }, deps.now);
       return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: `dry-run plan: ${plan.reason}` };
@@ -1027,8 +1027,8 @@ export async function runMLBProspectiveHoldoutScheduler(
       }
 
       if (plan.kind === 'VALIDATION_TARGET_UNREACHABLE') {
-        emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: 'no remaining candidates' }, deps.now);
-        return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: 'no remaining candidates' };
+        emitEvent(deps.createEvent, 'HUMAN_REVIEW_REQUIRED', { reason: 'validation target unreachable under remaining schedule' }, deps.now);
+        return { kind: 'STOPPED_FAIL_CLOSED', exitCode: 2, reason: 'validation target unreachable under remaining schedule' };
       }
 
       if (plan.kind === 'HUMAN_REVIEW_REQUIRED') {

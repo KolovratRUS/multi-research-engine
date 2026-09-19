@@ -106,6 +106,7 @@ describe('mlb-prospective-holdout-scheduler-core timing boundaries', () => {
 
   it('7. WAIT one millisecond before T-375', () => {
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T18:44:59.999Z'),
       scheduleCandidates: [game],
     }));
@@ -117,6 +118,7 @@ describe('mlb-prospective-holdout-scheduler-core timing boundaries', () => {
 
   it('8. DISPATCH exact T-375', () => {
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T18:45:00.000Z'),
       scheduleCandidates: [game],
     }));
@@ -128,6 +130,7 @@ describe('mlb-prospective-holdout-scheduler-core timing boundaries', () => {
 
   it('9. DISPATCH between T-375 and T-360', () => {
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T18:50:00.000Z'),
       scheduleCandidates: [game],
     }));
@@ -139,6 +142,7 @@ describe('mlb-prospective-holdout-scheduler-core timing boundaries', () => {
 
   it('10. DISPATCH one millisecond before T-360', () => {
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T18:59:59.999Z'),
       scheduleCandidates: [game],
     }));
@@ -232,7 +236,7 @@ describe('mlb-prospective-holdout-scheduler-core candidate filtering', () => {
       startTimeUtc: new Date('2026-09-07T01:00:00.000Z'),
     });
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
-      validationCapturedCount: 1,
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T18:45:00.000Z'),
       scheduleCandidates: [scheduleGame],
     }));
@@ -279,7 +283,7 @@ describe('mlb-prospective-holdout-scheduler-core candidate filtering', () => {
       startTimeUtc: new Date('2026-09-07T01:00:00.000Z'),
     });
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
-      validationCapturedCount: 1,
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T18:45:00.000Z'),
       scheduleCandidates: [fGame, rGame],
     }));
@@ -300,6 +304,7 @@ describe('mlb-prospective-holdout-scheduler-core stable order', () => {
     const game1 = buildScheduleGame({ gamePk: 100, startTimeUtc: new Date('2026-09-07T01:00:00.000Z') });
     const game2 = buildScheduleGame({ gamePk: 200, startTimeUtc: new Date('2026-09-07T03:00:00.000Z') });
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T12:00:00.000Z'),
       scheduleCandidates: [game2, game1],
     }));
@@ -313,6 +318,7 @@ describe('mlb-prospective-holdout-scheduler-core stable order', () => {
     const game1 = buildScheduleGame({ gamePk: 100, startTimeUtc: new Date('2026-09-07T01:00:00.000Z') });
     const game2 = buildScheduleGame({ gamePk: 200, startTimeUtc: new Date('2026-09-07T01:00:00.000Z') });
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T18:45:00.000Z'),
       scheduleCandidates: [game2, game1],
     }));
@@ -329,6 +335,7 @@ describe('mlb-prospective-holdout-scheduler-core stable order', () => {
       buildScheduleGame({ gamePk: 300, startTimeUtc: new Date('2026-09-07T03:00:00.000Z') }),
     ];
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T18:45:00.000Z'),
       scheduleCandidates: games,
     }));
@@ -339,6 +346,7 @@ describe('mlb-prospective-holdout-scheduler-core stable order', () => {
 
     const shuffled = [games[2], games[0], games[1]];
     const decision2 = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 66,
       trustedNow: new Date('2026-09-06T18:45:00.000Z'),
       scheduleCandidates: shuffled,
     }));
@@ -367,7 +375,7 @@ describe('mlb-prospective-holdout-scheduler-core replacement policy', () => {
     });
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
       trustedNow: new Date('2026-09-06T18:59:59.999Z'),
-      validationCapturedCount: 1,
+      validationCapturedCount: 66,
       completedGamePks: [999],
       scheduleCandidates: [gameA, gameB],
     }));
@@ -390,7 +398,7 @@ describe('mlb-prospective-holdout-scheduler-core replacement policy', () => {
     });
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
       trustedNow: new Date('2026-09-06T19:00:00.000Z'),
-      validationCapturedCount: 1,
+      validationCapturedCount: 66,
       completedGamePks: [999],
       scheduleCandidates: [gameA, gameB],
     }));
@@ -415,7 +423,7 @@ describe('mlb-prospective-holdout-scheduler-core replacement policy', () => {
     });
     const decision = planProspectiveHoldoutValidationDispatch(buildInput({
       trustedNow: new Date('2026-09-06T19:00:00.000Z'),
-      validationCapturedCount: 1,
+      validationCapturedCount: 66,
       completedGamePks: [999],
       scheduleCandidates: [gameA, gameB, gameC],
     }));
@@ -618,5 +626,114 @@ describe('mlb-prospective-holdout-scheduler-core static architecture', () => {
     expect(scriptContent).not.toContain('console.log');
     expect(scriptContent).not.toContain('TODO');
     expect(scriptContent).not.toContain('FIXME');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Count-feasibility guard regression                                         */
+/* -------------------------------------------------------------------------- */
+
+function buildDispatchGamePk(pk: number): MLBScheduleGame {
+  return buildScheduleGame({
+    gamePk: pk,
+    officialDate: '2026-09-07',
+    startTimeUtc: new Date('2026-09-07T01:00:00.000Z'),
+  });
+}
+
+function buildDispatchGames(count: number, startPk = 1000): MLBScheduleGame[] {
+  return Array.from({ length: count }, (_, i) => buildDispatchGamePk(startPk + i));
+}
+
+const DISPATCH_NOW_TRUSTED = new Date('2026-09-06T18:45:00.000Z');
+
+describe('mlb-prospective-holdout-scheduler-core reachability guard', () => {
+  it('A. 64 of 67 eligible -> VALIDATION_TARGET_UNREACHABLE', () => {
+    const games = buildDispatchGames(64);
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 0,
+      trustedNow: DISPATCH_NOW_TRUSTED,
+      scheduleCandidates: games,
+    }));
+    expect(decision.kind).toBe('VALIDATION_TARGET_UNREACHABLE');
+  });
+
+  it('B. 66 of 67 eligible -> VALIDATION_TARGET_UNREACHABLE', () => {
+    const games = buildDispatchGames(66);
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 0,
+      trustedNow: DISPATCH_NOW_TRUSTED,
+      scheduleCandidates: games,
+    }));
+    expect(decision.kind).toBe('VALIDATION_TARGET_UNREACHABLE');
+  });
+
+  it('C. exact 67 of 67 eligible -> NOT unreachable (DISPATCH_NOW)', () => {
+    const games = buildDispatchGames(67);
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 0,
+      trustedNow: DISPATCH_NOW_TRUSTED,
+      scheduleCandidates: games,
+    }));
+    expect(decision.kind).not.toBe('VALIDATION_TARGET_UNREACHABLE');
+    expect(decision.kind).toBe('DISPATCH_NOW');
+  });
+
+  it('D. captured=3, 64 eligible, required=64 -> NOT unreachable (DISPATCH_NOW)', () => {
+    const games = buildDispatchGames(64);
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 3,
+      trustedNow: DISPATCH_NOW_TRUSTED,
+      scheduleCandidates: games,
+    }));
+    expect(decision.kind).not.toBe('VALIDATION_TARGET_UNREACHABLE');
+    expect(decision.kind).toBe('DISPATCH_NOW');
+  });
+
+  it('E. captured=3, 63 eligible, required=64 -> VALIDATION_TARGET_UNREACHABLE', () => {
+    const games = buildDispatchGames(63);
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 3,
+      trustedNow: DISPATCH_NOW_TRUSTED,
+      scheduleCandidates: games,
+    }));
+    expect(decision.kind).toBe('VALIDATION_TARGET_UNREACHABLE');
+  });
+
+  it('F. duplicate gamePk in schedule -> HUMAN_REVIEW_REQUIRED (structurally impossible to reach guard)', () => {
+    const game = buildDispatchGamePk(1000);
+    const decision = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 0,
+      trustedNow: DISPATCH_NOW_TRUSTED,
+      scheduleCandidates: [game, game],
+    }));
+    expect(decision.kind).toBe('HUMAN_REVIEW_REQUIRED');
+    if (decision.kind === 'HUMAN_REVIEW_REQUIRED') {
+      expect(decision.reason).toContain('duplicate gamePk');
+    }
+  });
+
+  it('G. completed game does not inflate remaining eligible count', () => {
+    // 2 games, 1 already complete: only 1 eligible. captured=0, required=67
+    // => unreachable. With captured=66, required=1, 1 eligible => DISPATCH_NOW,
+    // proving the completed game is excluded from the eligible set.
+    const liveGame = buildDispatchGamePk(1000);
+    const completedGame = buildDispatchGamePk(1001);
+    const decisionUnreachable = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 0,
+      trustedNow: DISPATCH_NOW_TRUSTED,
+      completedGamePks: [completedGame.gamePk],
+      scheduleCandidates: [liveGame, completedGame],
+    }));
+    expect(decisionUnreachable.kind).toBe('VALIDATION_TARGET_UNREACHABLE');
+
+    const decisionDispatch = planProspectiveHoldoutValidationDispatch(buildInput({
+      validationCapturedCount: 66,
+      trustedNow: DISPATCH_NOW_TRUSTED,
+      completedGamePks: [completedGame.gamePk],
+      scheduleCandidates: [liveGame, completedGame],
+    }));
+    expect(decisionDispatch.kind).not.toBe('VALIDATION_TARGET_UNREACHABLE');
+    expect(decisionDispatch.kind).toBe('DISPATCH_NOW');
   });
 });
