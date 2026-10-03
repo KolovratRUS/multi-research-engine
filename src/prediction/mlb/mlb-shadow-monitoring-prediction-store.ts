@@ -77,6 +77,18 @@ export type MLBShadowPredictionPersistenceResult =
       issues: readonly MLBShadowQuarantineValidationIssue[];
     }>
   | Readonly<{
+      ok: true;
+      status: 'IDEMPOTENT_IDENTICAL_SUCCESS';
+      storeVersion: string;
+      artifactCreated: false;
+      tempCleanupFailed: boolean;
+      shadowRecordId: string;
+      gamePk: number;
+      relativePath: string;
+      verificationOk: true;
+      issues: readonly MLBShadowQuarantineValidationIssue[];
+    }>
+  | Readonly<{
       ok: false;
       status: MLBShadowPredictionFailureStatus;
       storeVersion: string;
@@ -187,6 +199,58 @@ async function classifyPath(filePath: string): Promise<PathKind> {
     }
     throw error;
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Private byte-comparison helper                                            */
+/* -------------------------------------------------------------------------- */
+
+type ByteComparison = 'identical' | 'different' | 'unreadable';
+
+/**
+ * Compares existing final artifact bytes against expected canonical bytes.
+ * Internal-only — never exports artifact content, prediction values, or
+ * payload hashes. Returns only an internal classification discriminant.
+ */
+async function compareExistingFinalBytes(
+  finalPath: string,
+  canonicalBytes: string,
+): Promise<ByteComparison> {
+  let existingBytes: string;
+  try {
+    existingBytes = await fs.readFile(finalPath, 'utf-8');
+  } catch {
+    return 'unreadable';
+  }
+  if (existingBytes === canonicalBytes) {
+    return 'identical';
+  }
+  return 'different';
+}
+
+/**
+ * Constructs an IDEMPOTENT_IDENTICAL_SUCCESS result without exposing
+ * any prediction values, payloadHash, or absolute path beyond the
+ * pre-existing relativePath.
+ */
+function makeIdempotentSuccess(
+  shadowRecordId: string,
+  gamePk: number,
+  relativePath: string,
+  tempCleanupFailed: boolean,
+): MLBShadowPredictionPersistenceResult {
+  return {
+    ok: true as const,
+    status: 'IDEMPOTENT_IDENTICAL_SUCCESS' as const,
+    storeVersion: MLB_SHADOW_MONITORING_PREDICTION_STORE_VERSION,
+    artifactCreated: false as const,
+    tempCleanupFailed,
+    shadowRecordId,
+    gamePk,
+    relativePath,
+    verificationOk: true as const,
+    issues: Object.freeze([]),
+  };
 }
 
 function makeGenericIssue(message: string): MLBShadowQuarantineValidationIssue {
@@ -439,7 +503,20 @@ export async function persistMLBShadowQuarantinedPrediction(
     );
   }
 
-  /* -- Step 7: check existing final target (write-once policy) ----------- */
+  /* -- Step 7: construct canonical bytes (needed before existing-file check) */
+  const canonicalBytes = JSON.stringify({
+    shadowRecordId: validated.shadowRecordId,
+    gamePk: validated.gamePk,
+    predictedWinner: validated.predictedWinner,
+    predictedSide: validated.predictedSide,
+    homeWinProbability: validated.homeWinProbability,
+    awayWinProbability: validated.awayWinProbability,
+    decisionPolicy: validated.decisionPolicy,
+    predictionGeneratedAt: validated.predictionGeneratedAt,
+    payloadHash: validated.payloadHash,
+  });
+
+  /* -- Step 8: classify existing final target (write-once policy) ----------- */
   const finalKind = await classifyPath(finalPath);
   if (finalKind === 'symlink') {
     return makeNotPersisted(
@@ -458,6 +535,25 @@ export async function persistMLBShadowQuarantinedPrediction(
     );
   }
   if (finalKind === 'file') {
+    /*
+     * Compare exact existing bytes against expected canonical bytes.
+     *   identical   -> IDEMPOTENT_IDENTICAL_SUCCESS (no temp file created)
+     *   different   -> ALREADY_EXISTS (fail closed, no overwrite)
+     *   unreadable  -> ALREADY_EXISTS (fail closed, no overwrite)
+     */
+    const comparison = await compareExistingFinalBytes(
+      finalPath,
+      canonicalBytes,
+    );
+    if (comparison === 'identical') {
+      return makeIdempotentSuccess(
+        validated.shadowRecordId,
+        validated.gamePk,
+        relativePath,
+        false,
+      );
+    }
+    /* different or unreadable -> ALREADY_EXISTS, fail closed, no overwrite */
     return makeNotPersisted(
       'ALREADY_EXISTS',
       validated.shadowRecordId,
@@ -466,7 +562,7 @@ export async function persistMLBShadowQuarantinedPrediction(
     );
   }
 
-  /* -- Step 7b: repeat ancestor safety check immediately before finalization */
+  /* -- Step 8b: repeat ancestor safety check immediately before finalization */
   const preFinalizeAudit = await auditAncestors(ancestors);
   if (!preFinalizeAudit.ok) {
     return makeNotPersisted(
@@ -476,19 +572,6 @@ export async function persistMLBShadowQuarantinedPrediction(
       preFinalizeAudit.issues,
     );
   }
-
-  /* -- Step 8: canonical persisted bytes (exact 9-field order via JSON) --- */
-  const canonicalBytes = JSON.stringify({
-    shadowRecordId: validated.shadowRecordId,
-    gamePk: validated.gamePk,
-    predictedWinner: validated.predictedWinner,
-    predictedSide: validated.predictedSide,
-    homeWinProbability: validated.homeWinProbability,
-    awayWinProbability: validated.awayWinProbability,
-    decisionPolicy: validated.decisionPolicy,
-    predictionGeneratedAt: validated.predictionGeneratedAt,
-    payloadHash: validated.payloadHash,
-  });
 
   /* -- Step 9: atomic temp write (O_EXCL via 'wx', restrictive mode 0600) - */
   const tempName = artifactFilename + '.tmp-' + randomUUID();
@@ -538,6 +621,52 @@ export async function persistMLBShadowQuarantinedPrediction(
   if (!artifactCreated) {
     const code = extractErrorCode(linkError);
     if (code === 'EEXIST') {
+      /*
+       * Race: another concurrent writer won the hard-link race.
+       * Classify the final target and perform identity comparison.
+       */
+      const existingKind = await classifyPath(finalPath);
+      if (existingKind === 'symlink') {
+        return makeNotPersisted(
+          'SYMLINK_DETECTED',
+          validated.shadowRecordId,
+          validated.gamePk,
+          [makeGenericIssue('symlink detected at final artifact target')],
+        );
+      }
+      if (existingKind === 'directory') {
+        return makeNotPersisted(
+          'NON_DIRECTORY_TARGET',
+          validated.shadowRecordId,
+          validated.gamePk,
+          [makeGenericIssue('directory exists at final artifact target')],
+        );
+      }
+      if (existingKind === 'file') {
+        const comparison = await compareExistingFinalBytes(
+          finalPath,
+          canonicalBytes,
+        );
+        if (comparison === 'identical') {
+          /* Concurrent winner wrote identical bytes — idempotent success */
+          return makeIdempotentSuccess(
+            validated.shadowRecordId,
+            validated.gamePk,
+            relativePath,
+            tempCleanupFailed,
+          );
+        }
+        /* different or unreadable → ALREADY_EXISTS, fail closed */
+        return makeNotPersisted(
+          'ALREADY_EXISTS',
+          validated.shadowRecordId,
+          validated.gamePk,
+          [makeGenericIssue('artifact already exists at target path')],
+        );
+      }
+      /*
+       * Target disappeared before classification/comparison — fail closed.
+       */
       return makeNotPersisted(
         'ALREADY_EXISTS',
         validated.shadowRecordId,

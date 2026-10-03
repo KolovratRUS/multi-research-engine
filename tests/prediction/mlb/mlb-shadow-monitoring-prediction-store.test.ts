@@ -10,6 +10,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return {
     ...actual,
     readFile: vi.fn(actual.readFile),
+    link: vi.fn(actual.link),
+    unlink: vi.fn(actual.unlink),
   };
 });
 
@@ -78,6 +80,24 @@ function buildValidPayload(
   return { ...merged, payloadHash };
 }
 
+/**
+ * Recomputes the exact canonical 9-field serialized artifact bytes that
+ * the store writes. Used in tests that pre-create or pre-corrupt final artifacts.
+ */
+function canonicalBytesFor(payload: Record<string, unknown>): string {
+  return JSON.stringify({
+    shadowRecordId: payload.shadowRecordId,
+    gamePk: payload.gamePk,
+    predictedWinner: payload.predictedWinner,
+    predictedSide: payload.predictedSide,
+    homeWinProbability: payload.homeWinProbability,
+    awayWinProbability: payload.awayWinProbability,
+    decisionPolicy: payload.decisionPolicy,
+    predictionGeneratedAt: payload.predictionGeneratedAt,
+    payloadHash: payload.payloadHash,
+  });
+}
+
 async function createTempRepo(): Promise<string> {
   return fs.mkdtemp(join(tmpdir(), 'mlb-shadow-store-test-'));
 }
@@ -90,10 +110,14 @@ function artifactPathFor(repoRoot: string, shadowRecordId: string): string {
 const cleanupDirs: string[] = [];
 
 afterEach(async () => {
-  // Reset readFile mock to prevent one-time values from carrying over
+  // Reset mocks to prevent one-time values from carrying over
   const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
   vi.mocked(fs.readFile).mockReset();
   vi.mocked(fs.readFile).mockImplementation(actualFs.readFile);
+  vi.mocked(fs.link).mockReset();
+  vi.mocked(fs.link).mockImplementation(actualFs.link);
+  vi.mocked(fs.unlink).mockReset();
+  vi.mocked(fs.unlink).mockImplementation(actualFs.unlink);
 
   while (cleanupDirs.length > 0) {
     const dir = cleanupDirs.pop()!;
@@ -317,21 +341,27 @@ describe('mlb-shadow-monitoring-prediction-store', () => {
     ).rejects.toThrow();
   });
 
-  /* 8. second identical write -> already exists */
-  it('second identical write yields ALREADY_EXISTS', async () => {
+  /* 8. second identical write -> IDEMPOTENT_IDENTICAL_SUCCESS */
+  it('second identical write yields IDEMPOTENT_IDENTICAL_SUCCESS', async () => {
     const repoRoot = await trackedTempDir('store-test-8-');
     const payload = buildValidPayload();
 
     const first = await persistMLBShadowQuarantinedPrediction(repoRoot, payload);
     expect(first.ok).toBe(true);
+    if (first.ok) {
+      expect(first.status).toBe('PERSISTED');
+    }
 
     const second = await persistMLBShadowQuarantinedPrediction(
       repoRoot,
       payload,
     );
-    expect(second.ok).toBe(false);
-    if (!second.ok) {
-      expect(second.status).toBe('ALREADY_EXISTS');
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.status).toBe('IDEMPOTENT_IDENTICAL_SUCCESS');
+      expect(second.artifactCreated).toBe(false);
+      expect(second.verificationOk).toBe(true);
+      expect(second.tempCleanupFailed).toBe(false);
     }
   });
 
@@ -374,9 +404,12 @@ describe('mlb-shadow-monitoring-prediction-store', () => {
 
     const originalBytes = await fs.readFile(artifactPath, 'utf-8');
 
-    // Attempt second write (should fail with ALREADY_EXISTS)
+    // Attempt second identical write — should succeed idempotently
     const second = await persistMLBShadowQuarantinedPrediction(repoRoot, payload);
-    expect(second.ok).toBe(false);
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.status).toBe('IDEMPOTENT_IDENTICAL_SUCCESS');
+    }
 
     // File must be byte-for-byte identical
     const unchangedBytes = await fs.readFile(artifactPath, 'utf-8');
@@ -775,8 +808,8 @@ describe('mlb-shadow-monitoring-prediction-store', () => {
     }
   });
 
-  /* 26. two concurrent writers -> exactly one persisted, one already-exists */
-  it('two concurrent writers — exactly one persisted, one ALREADY_EXISTS', async () => {
+  /* 26. two concurrent identical writers — one PERSISTED, one IDEMPOTENT */
+  it('two concurrent writers — one PERSISTED, one IDEMPOTENT_IDENTICAL_SUCCESS', async () => {
     const repoRoot = await trackedTempDir('store-test-26-');
     const payload = buildValidPayload();
 
@@ -786,24 +819,36 @@ describe('mlb-shadow-monitoring-prediction-store', () => {
     ]);
 
     const results = [r1, r2];
-    const successes = results.filter((r) => r.ok);
+    // Both must be ok=true
     const failures = results.filter((r) => !r.ok);
+    expect(failures).toHaveLength(0);
 
-    expect(successes).toHaveLength(1);
-    expect(failures).toHaveLength(1);
+    // Exactly one PERSISTED, one IDEMPOTENT_IDENTICAL_SUCCESS
+    const statuses = results.map((r) => (r.ok ? r.status : 'failure'));
+    expect(statuses).toContain('PERSISTED');
+    expect(statuses).toContain('IDEMPOTENT_IDENTICAL_SUCCESS');
 
-    const failure = failures[0]!;
-    if (!failure.ok) {
-      expect(failure.status).toBe('ALREADY_EXISTS');
+    // The IDEMPOTENT result must have artifactCreated=false
+    const idempotent = results.find(
+      (r): r is Extract<
+        typeof r,
+        { ok: true; status: 'IDEMPOTENT_IDENTICAL_SUCCESS' }
+      > => r.ok && r.status === 'IDEMPOTENT_IDENTICAL_SUCCESS',
+    );
+    expect(idempotent).toBeDefined();
+    if (idempotent) {
+      expect(idempotent.artifactCreated).toBe(false);
+      expect(idempotent.verificationOk).toBe(true);
     }
 
-    // Verify the persisted file is valid
-    const success = successes[0]!;
-    if (success.ok) {
-      const artifactPath = join(repoRoot, success.relativePath);
-      const raw = await fs.readFile(artifactPath, 'utf-8');
-      expect(raw).toContain('synthetic-shadow-001');
-    }
+    // Verify the persisted file is valid — only one physical artifact
+    const predictionsDir = join(repoRoot, PREDICTIONS_REL);
+    const allFiles = await fs.readdir(predictionsDir);
+    expect(allFiles).toHaveLength(1);
+
+    const artifactPath = join(predictionsDir, allFiles[0]!);
+    const raw = await fs.readFile(artifactPath, 'utf-8');
+    expect(raw).toContain('synthetic-shadow-001');
   });
 
   /* 27. no public reader */
@@ -966,5 +1011,310 @@ describe('mlb-shadow-monitoring-prediction-store', () => {
     const resultJson = JSON.stringify(result);
     expect(resultJson).not.toContain('HOME');
     expect(resultJson).not.toContain('MAX_PROBABILITY');
+  });
+
+  /* ---------------------------------------------------------------------- */
+  /*  Extended idempotency coverage (A–L)                                   */
+  /* ---------------------------------------------------------------------- */
+
+  /* B. different second write — original final bytes unchanged */
+  it('B. different second write leaves original final bytes unchanged', async () => {
+    const repoRoot = await trackedTempDir('store-test-33-');
+    const firstPayload = buildValidPayload({ predictedWinner: 'HOME' });
+    const secondPayload = buildValidPayload({ predictedWinner: 'AWAY' });
+
+    const first = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      firstPayload,
+    );
+    expect(first.ok).toBe(true);
+
+    const artifactPath = artifactPathFor(repoRoot, SYNTHETIC_SHADOW_RECORD_ID);
+    const originalBytes = readFileSync(artifactPath, 'utf-8');
+    const expectedCanonical = canonicalBytesFor(firstPayload);
+
+    expect(originalBytes).toBe(expectedCanonical);
+
+    // Second write with different payload must fail closed
+    const second = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      secondPayload,
+    );
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.status).toBe('ALREADY_EXISTS');
+    }
+
+    // Original artifact must be byte-for-byte unchanged
+    const afterBytes = readFileSync(artifactPath, 'utf-8');
+    expect(afterBytes).toBe(originalBytes);
+    expect(afterBytes).toBe(expectedCanonical);
+  });
+
+  /* C. concurrent different-payload writers — one winner, one ALREADY_EXISTS */
+  it('C. concurrent different-payload writers — one winner, one ALREADY_EXISTS', async () => {
+    const repoRoot = await trackedTempDir('store-test-34-');
+    const firstPayload = buildValidPayload({ predictedWinner: 'HOME' });
+    const secondPayload = buildValidPayload({ predictedWinner: 'AWAY' });
+
+    const [r1, r2] = await Promise.all([
+      persistMLBShadowQuarantinedPrediction(repoRoot, firstPayload),
+      persistMLBShadowQuarantinedPrediction(repoRoot, secondPayload),
+    ]);
+
+    const results = [r1, r2];
+    const successes = results.filter((r) => r.ok);
+    const failures = results.filter((r) => !r.ok);
+
+    // Exactly one wins, one fails
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+
+    const failure = failures[0]!;
+    if (!failure.ok) {
+      expect(failure.status).toBe('ALREADY_EXISTS');
+    }
+
+    // Only one physical artifact exists
+    const predictionsDir = join(repoRoot, PREDICTIONS_REL);
+    const allFiles = await fs.readdir(predictionsDir);
+    expect(allFiles).toHaveLength(1);
+
+    // The artifact must contain the winner's bytes (either HOME or AWAY)
+    const artifactPath = join(predictionsDir, allFiles[0]!);
+    const raw = readFileSync(artifactPath, 'utf-8');
+    const parsed = JSON.parse(raw) as { predictedWinner: string };
+    expect(['HOME', 'AWAY']).toContain(parsed.predictedWinner);
+  });
+
+  /* D. existing regular file unreadable -> ALREADY_EXISTS (fail closed) */
+  it('D. existing regular file read failure yields ALREADY_EXISTS', async () => {
+    const repoRoot = await trackedTempDir('store-test-35-');
+    const payload = buildValidPayload();
+
+    // First write persists the artifact
+    const first = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      payload,
+    );
+    expect(first.ok).toBe(true);
+
+    // Mock readFile to fail on the existing-file byte comparison
+    vi.mocked(fs.readFile).mockRejectedValueOnce(
+      new Error('mocked read failure on existing final'),
+    );
+
+    // Second write with same payload — should fail closed because file unreadable
+    const second = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      payload,
+    );
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.status).toBe('ALREADY_EXISTS');
+    }
+
+    // Original artifact must still exist and be intact
+    const artifactPath = artifactPathFor(repoRoot, SYNTHETIC_SHADOW_RECORD_ID);
+    await expect(fs.access(artifactPath)).resolves.toBeUndefined();
+    const preservedBytes = canonicalBytesFor(payload);
+    const raw = readFileSync(artifactPath, 'utf-8');
+    expect(raw).toBe(preservedBytes);
+  });
+
+  /* E. pre-existing identical file -> IDEMPOTENT_IDENTICAL_SUCCESS */
+  it('E. pre-existing identical file yields IDEMPOTENT_IDENTICAL_SUCCESS', async () => {
+    const repoRoot = await trackedTempDir('store-test-36-');
+    const payload = buildValidPayload();
+
+    // Pre-create the final artifact with exact canonical bytes — no store call
+    const artifactPath = artifactPathFor(repoRoot, SYNTHETIC_SHADOW_RECORD_ID);
+    const predictionsDir = join(repoRoot, PREDICTIONS_REL);
+    await fs.mkdir(predictionsDir, { recursive: true });
+    const canonicalBytes = canonicalBytesFor(payload);
+    await fs.writeFile(artifactPath, canonicalBytes, 'utf-8');
+
+    // Store should find the identical file and return idempotent success
+    const result = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      payload,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.status).toBe('IDEMPOTENT_IDENTICAL_SUCCESS');
+      expect(result.artifactCreated).toBe(false);
+      expect(result.verificationOk).toBe(true);
+      expect(result.tempCleanupFailed).toBe(false);
+    }
+
+    // No temp file should have been created on this path
+    const remainingFiles = await fs.readdir(predictionsDir);
+    expect(remainingFiles).toHaveLength(1);
+  });
+
+  /* F. EEXIST-race identical -> IDEMPOTENT_IDENTICAL_SUCCESS (mocked link) */
+  it('F. EEXIST-race identical bytes yields IDEMPOTENT_IDENTICAL_SUCCESS', async () => {
+    const repoRoot = await trackedTempDir('store-test-37-');
+    const payload = buildValidPayload();
+    const canonicalBytes = canonicalBytesFor(payload);
+
+    // Mock fs.link to simulate a concurrent winner: write identical bytes
+    // to the final path and then throw EEXIST
+    vi.mocked(fs.link).mockImplementationOnce(async (_src, finalPath) => {
+      await fs.writeFile(finalPath, canonicalBytes, 'utf-8');
+      const err = new Error('EEXIST') as NodeJS.ErrnoException;
+      err.code = 'EEXIST';
+      throw err;
+    });
+
+    const result = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      payload,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.status).toBe('IDEMPOTENT_IDENTICAL_SUCCESS');
+      expect(result.artifactCreated).toBe(false);
+      expect(result.verificationOk).toBe(true);
+      expect(result.tempCleanupFailed).toBe(false);
+    }
+
+    // The final artifact must contain the canonical bytes
+    const artifactPath = artifactPathFor(repoRoot, SYNTHETIC_SHADOW_RECORD_ID);
+    const raw = readFileSync(artifactPath, 'utf-8');
+    expect(raw).toBe(canonicalBytes);
+  });
+
+  /* G. EEXIST-race different -> ALREADY_EXISTS (mocked link) */
+  it('G. EEXIST-race different bytes yields ALREADY_EXISTS', async () => {
+    const repoRoot = await trackedTempDir('store-test-38-');
+    const payload = buildValidPayload();
+    const canonicalBytes = canonicalBytesFor(payload);
+    // Winner wrote DIFFERENT bytes (different predictedWinner)
+    const winnerBytes = JSON.stringify({
+      shadowRecordId: SYNTHETIC_SHADOW_RECORD_ID,
+      gamePk: SYNTHETIC_GAME_PK,
+      predictedWinner: 'AWAY',
+      predictedSide: 'AWAY',
+      homeWinProbability: 0.4,
+      awayWinProbability: 0.6,
+      decisionPolicy: 'MAX_PROBABILITY',
+      predictionGeneratedAt: VALID_TIMESTAMP,
+      payloadHash: createHash('sha256')
+        .update(
+          JSON.stringify({
+            shadowRecordId: SYNTHETIC_SHADOW_RECORD_ID,
+            gamePk: SYNTHETIC_GAME_PK,
+            predictedWinner: 'AWAY',
+            predictedSide: 'AWAY',
+            homeWinProbability: 0.4,
+            awayWinProbability: 0.6,
+            decisionPolicy: 'MAX_PROBABILITY',
+            predictionGeneratedAt: VALID_TIMESTAMP,
+          }),
+          'utf-8',
+        )
+        .digest('hex'),
+    });
+
+    // Mock fs.link to simulate concurrent winner writing DIFFERENT bytes
+    vi.mocked(fs.link).mockImplementationOnce(async (_src, finalPath) => {
+      await fs.writeFile(finalPath, winnerBytes, 'utf-8');
+      const err = new Error('EEXIST') as NodeJS.ErrnoException;
+      err.code = 'EEXIST';
+      throw err;
+    });
+
+    const result = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      payload,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe('ALREADY_EXISTS');
+    }
+
+    // The winner's bytes must be preserved — no overwrite
+    const artifactPath = artifactPathFor(repoRoot, SYNTHETIC_SHADOW_RECORD_ID);
+    const raw = readFileSync(artifactPath, 'utf-8');
+    expect(raw).toBe(winnerBytes);
+    expect(raw).not.toBe(canonicalBytes);
+  });
+
+  /* H. EEXIST-race: temp cleanup failure truthfully propagated */
+  it('H. EEXIST-race temp cleanup failure is truthfully propagated', async () => {
+    const repoRoot = await trackedTempDir('store-test-39-');
+    const payload = buildValidPayload();
+    const canonicalBytes = canonicalBytesFor(payload);
+
+    // Mock fs.link: simulate concurrent winner with identical bytes
+    vi.mocked(fs.link).mockImplementationOnce(async (_src, finalPath) => {
+      await fs.writeFile(finalPath, canonicalBytes, 'utf-8');
+      const err = new Error('EEXIST') as NodeJS.ErrnoException;
+      err.code = 'EEXIST';
+      throw err;
+    });
+
+    // Mock fs.unlink to fail — temp cleanup should report tempCleanupFailed=true
+    vi.mocked(fs.unlink).mockRejectedValueOnce(
+      new Error('mocked unlink failure'),
+    );
+
+    const result = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      payload,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.status).toBe('IDEMPOTENT_IDENTICAL_SUCCESS');
+      expect(result.artifactCreated).toBe(false);
+      expect(result.verificationOk).toBe(true);
+      // tempCleanupFailed must truthfully reflect the failure
+      expect(result.tempCleanupFailed).toBe(true);
+    }
+
+    // The final artifact must still contain the canonical bytes
+    const artifactPath = artifactPathFor(repoRoot, SYNTHETIC_SHADOW_RECORD_ID);
+    const raw = readFileSync(artifactPath, 'utf-8');
+    expect(raw).toBe(canonicalBytes);
+  });
+
+  /* L. idempotent success result does not expose prediction values or bytes */
+  it('L. IDEMPOTENT_IDENTICAL_SUCCESS result contains no prediction values or payloadHash', async () => {
+    const repoRoot = await trackedTempDir('store-test-40-');
+    const payload = buildValidPayload();
+    const hash = (payload as { payloadHash: string }).payloadHash;
+
+    // First write persists
+    const first = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      payload,
+    );
+    expect(first.ok).toBe(true);
+
+    // Second identical write — idempotent success
+    const second = await persistMLBShadowQuarantinedPrediction(
+      repoRoot,
+      payload,
+    );
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.status).toBe('IDEMPOTENT_IDENTICAL_SUCCESS');
+    }
+
+    const resultJson = JSON.stringify(second);
+    // Must not contain prediction values
+    expect(resultJson).not.toContain('HOME');
+    expect(resultJson).not.toContain('AWAY');
+    expect(resultJson).not.toContain('MAX_PROBABILITY');
+    // Must not contain probabilities
+    expect(resultJson).not.toContain('0.6');
+    expect(resultJson).not.toContain('0.4');
+    // Must not contain payloadHash
+    expect(resultJson).not.toContain(hash);
+    // Must not contain predictedSide
+    expect(resultJson).not.toContain('predictedSide');
+    // Must not contain predictedWinner
+    expect(resultJson).not.toContain('predictedWinner');
   });
 });

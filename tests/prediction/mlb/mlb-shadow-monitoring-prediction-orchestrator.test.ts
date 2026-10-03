@@ -824,8 +824,8 @@ describe('mlb-shadow-monitoring-prediction-orchestrator (L5E2S)', () => {
       }
     });
 
-    /* 21. ALREADY_EXISTS maps to safe duplicate status */
-    it('21. ALREADY_EXISTS maps to QUARANTINE_ALREADY_EXISTS_DUPLICATE', async () => {
+    /* 21. identical retry returns IDEMPOTENT_IDENTICAL_SUCCESS -> QUARANTINE_PERSISTED */
+    it('21. identical retry maps to QUARANTINE_PERSISTED (idempotent no-op)', async () => {
       const repoRoot = await trackedTempDir('orch-test-21-');
       const released = buildValidReleaseResult();
       const manifest = buildValidManifest();
@@ -843,15 +843,13 @@ describe('mlb-shadow-monitoring-prediction-orchestrator (L5E2S)', () => {
         expect(first.value.pipelineStatus).toBe('QUARANTINE_PERSISTED');
       }
 
-      // Second call — store returns ALREADY_EXISTS.
+      // Second call — identical retry: store returns IDEMPOTENT_IDENTICAL_SUCCESS.
       vi.mocked(verifyMLBShadowCandidate003AuthoritativeModel).mockReturnValueOnce(true);
       const second = await orchestrateMLBShadowQuarantinePrediction(input);
       expect(second.ok).toBe(true);
       if (second.ok) {
-        expect(second.value.pipelineStatus).toBe(
-          'QUARANTINE_ALREADY_EXISTS_DUPLICATE',
-        );
-        expect(second.value.failureCode).toBe('ALREADY_EXISTS');
+        expect(second.value.pipelineStatus).toBe('QUARANTINE_PERSISTED');
+        expect(second.value.failureCode ?? null).toBeNull();
         expect(second.value.predictionPayloadGenerated).toBe(true);
         expect(second.value.predictionPayloadSchemaValid).toBe(true);
       }
@@ -918,6 +916,106 @@ describe('mlb-shadow-monitoring-prediction-orchestrator (L5E2S)', () => {
         expect(second.value).not.toHaveProperty('predictedSide');
         expect(second.value).not.toHaveProperty('homeWinProbability');
         expect(second.value).not.toHaveProperty('awayWinProbability');
+      }
+    });
+
+    /* DIFFERENT-PAYLOAD SAME-ID returns QUARANTINE_ALREADY_EXISTS_DUPLICATE (safe record) */
+    it('DIFFERENT-PAYLOAD SAME-ID returns QUARANTINE_ALREADY_EXISTS_DUPLICATE with safe record', async () => {
+      const repoRoot = await trackedTempDir('orch-test-different-payload-');
+      const released = buildValidReleaseResult();
+      const manifest = buildValidManifest();
+      const snapshot = buildValidSnapshot();
+      expectValidLockedInputs(released, manifest, snapshot);
+
+      // Same repoRoot, same shadowRecordId, same gamePk — first call persists.
+      vi.mocked(verifyMLBShadowCandidate003AuthoritativeModel).mockReturnValueOnce(true);
+      const input1 = buildOrchestratorInput(released, repoRoot);
+      const first = await orchestrateMLBShadowQuarantinePrediction(input1);
+      expect(first.ok).toBe(true);
+      if (first.ok) {
+        expect(first.value.pipelineStatus).toBe('QUARANTINE_PERSISTED');
+      }
+
+      // Same id + same gamePk, but a DIFFERENT predictionGeneratedAt. The
+      // artifact path is keyed on shadowRecordId, so the second call targets
+      // the same file; canonical bytes differ -> store fails closed with
+      // ALREADY_EXISTS (no overwrite, no retry).
+      vi.mocked(verifyMLBShadowCandidate003AuthoritativeModel).mockReturnValueOnce(true);
+      const input2 = buildOrchestratorInput(released, repoRoot, {
+        predictionGeneratedAt: '2026-07-15T19:00:00Z',
+      });
+      const second = await orchestrateMLBShadowQuarantinePrediction(input2);
+      expect(second.ok).toBe(true);
+      if (second.ok) {
+        expect(second.value.pipelineStatus).toBe(
+          'QUARANTINE_ALREADY_EXISTS_DUPLICATE',
+        );
+        expect(second.value.failureCode).toBe('ALREADY_EXISTS');
+        expect(second.value.predictionPayloadGenerated).toBe(true);
+        expect(second.value.predictionPayloadSchemaValid).toBe(true);
+
+        // Safe public result must not leak any sensitive/persistence fields.
+        const FORBIDDEN_FIELDS = [
+          'predictedWinner',
+          'predictedSide',
+          'homeWinProbability',
+          'awayWinProbability',
+          'payloadHash',
+          'relativePath',
+        ];
+        const recordKeys = Object.keys(second.value);
+        for (const field of FORBIDDEN_FIELDS) {
+          expect(recordKeys).not.toContain(field);
+        }
+        expect(second.value).not.toHaveProperty('predictedWinner');
+        expect(second.value).not.toHaveProperty('predictedSide');
+        expect(second.value).not.toHaveProperty('homeWinProbability');
+        expect(second.value).not.toHaveProperty('awayWinProbability');
+        expect(second.value).not.toHaveProperty('payloadHash');
+        expect(second.value).not.toHaveProperty('relativePath');
+        const json = JSON.stringify(second.value);
+        expect(json).not.toContain('predictedWinner');
+        expect(json).not.toContain('predictedSide');
+        expect(json).not.toContain('homeWinProbability');
+        expect(json).not.toContain('awayWinProbability');
+        expect(json).not.toContain('payloadHash');
+        expect(json).not.toContain('relativePath');
+      }
+    });
+
+    /* STABLE-RETRY IDENTICAL-INPUT returns deep-equal operational records */
+    it('STABLE-RETRY IDENTICAL-INPUT returns deep-equal operational records', async () => {
+      const repoRoot = await trackedTempDir('orch-test-stable-retry-');
+      const released = buildValidReleaseResult();
+      const manifest = buildValidManifest();
+      const snapshot = buildValidSnapshot();
+      expectValidLockedInputs(released, manifest, snapshot);
+
+      // Stable logical request / stable integration input — identical both calls.
+      vi.mocked(verifyMLBShadowCandidate003AuthoritativeModel).mockReturnValueOnce(true);
+      const input = buildOrchestratorInput(released, repoRoot);
+
+      // First call — persists successfully (writes canonical artifact bytes).
+      const first = await orchestrateMLBShadowQuarantinePrediction(input);
+      expect(first.ok).toBe(true);
+
+      // Second call — identical retry: store returns IDEMPOTENT_IDENTICAL_SUCCESS.
+      vi.mocked(verifyMLBShadowCandidate003AuthoritativeModel).mockReturnValueOnce(true);
+      const second = await orchestrateMLBShadowQuarantinePrediction(input);
+      expect(second.ok).toBe(true);
+
+      if (first.ok && second.ok) {
+        expect(first.value.pipelineStatus).toBe('QUARANTINE_PERSISTED');
+        expect(second.value.pipelineStatus).toBe('QUARANTINE_PERSISTED');
+        expect(first.value.failureCode ?? null).toBeNull();
+        expect(second.value.failureCode ?? null).toBeNull();
+
+        // The safe operational read must be byte-for-byte identical across the
+        // stable retry — no store-derived variance leaks into the public record.
+        const STABLE_RETRY_OPERATIONAL_RECORDS_IDENTICAL =
+          JSON.stringify(first.value) === JSON.stringify(second.value);
+        expect(STABLE_RETRY_OPERATIONAL_RECORDS_IDENTICAL).toBe(true);
+        expect(first.value).toEqual(second.value);
       }
     });
 
