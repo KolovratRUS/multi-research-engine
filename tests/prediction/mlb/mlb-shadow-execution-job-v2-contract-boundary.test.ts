@@ -229,22 +229,28 @@ describe('mlb-shadow-execution-job-v2-contract boundary (phase sealing)', () => 
   });
 
   /* ------------------------------------------------------------------ */
-  /*  E. No existing production runtime imports V2                      */
+  /*  E. Only the authorized V2 computation seam may import V2            */
   /* ------------------------------------------------------------------ */
 
-  it('E1. no src/ production file imports the V2 module', () => {
+  it('E1. only the authorized V2 computation seam imports the V2 job contract', () => {
     const allSourceFiles = walk(SRC_ROOT);
-    const importers: string[] = [];
+    const actualImporters: string[] = [];
     for (const file of allSourceFiles) {
       const content = readFileSync(file, 'utf8');
       const imports = extractImportSources(content);
-      if (
-        imports.some((s) => s.includes(V2_MODULE_FILENAME))
-      ) {
-        importers.push(file);
+      if (imports.some((s) => s.includes(V2_MODULE_FILENAME))) {
+        actualImporters.push(file);
       }
     }
-    expect(importers).toEqual([]);
+    // The only production source permitted to import the V2 job contract at
+    // this phase is the dormant V2 computation seam. Any other importer would
+    // represent a prohibited adapter / orchestrator / persistence integration.
+    const authorizedImporter = join(
+      SRC_ROOT,
+      'prediction/mlb/mlb-shadow-monitoring-prediction-computation-v2.ts',
+    );
+    const expectedImporters: string[] = [authorizedImporter];
+    expect(actualImporters.sort()).toEqual(expectedImporters.sort());
   });
 
   /* ------------------------------------------------------------------ */
