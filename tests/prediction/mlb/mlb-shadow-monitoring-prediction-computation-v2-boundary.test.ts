@@ -60,13 +60,13 @@ function walk(dir: string, files: string[] = []): string[] {
 function extractImportSources(content: string): string[] {
   const sources: string[] = [];
   // Matches: import ... from '...'  (including `import type`, named, default, namespace)
-  const re = /import\s+(?:type\s+)?(?:[^'"]+?)\\s+from\\s+['"]([^'"]+)['"]/g;
+  const re = /import\s+(?:type\s+)?(?:[^'"]+?)\s+from\s+['"]([^'"]+)['"]/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(content)) !== null) {
     sources.push(match[1]);
   }
   // Matches side-effect-only imports: import '...'
-  const se = /import\\s+['"]([^'"]+)['"]/g;
+  const se = /import\s+['"]([^'"]+)['"]/g;
   while ((match = se.exec(content)) !== null) {
     sources.push(match[1]);
   }
@@ -295,17 +295,33 @@ describe('mlb-shadow-monitoring-prediction-computation-v2 boundary', () => {
   /* ------------------------------------------------------------------ */
   /*  E. No existing production runtime imports V2 computation            */
   /* ------------------------------------------------------------------ */
-  it('E1. no src/ production file imports the V2 computation module', () => {
+  it('E1. only the V2 prediction orchestrator imports the V2 computation module', () => {
     const allSourceFiles = walk(SRC_ROOT);
     const importers: string[] = [];
     for (const file of allSourceFiles) {
       const content = readFileSync(file, 'utf8');
-      const imports = extractImportSources(content);
-      if (imports.some((s) => s.includes(V2_COMPUTATION_MODULE))) {
+      const sources = extractImportSources(content);
+      if (sources.some((s) => s.includes(V2_COMPUTATION_MODULE))) {
         importers.push(file);
       }
     }
-    expect(importers).toEqual([]);
+    expect(importers).toEqual([
+      join(V2_DIR, 'mlb-shadow-monitoring-prediction-orchestrator-v2.ts'),
+    ]);
+  });
+
+  /* ------------------------------------------------------------------ */
+  /*  F. PARSER NON-VACUITY GUARD                                         */
+  /* ------------------------------------------------------------------ */
+  it('S1. extractImportSources detects real V2 computation imports (non-vacuity)', () => {
+    const source = readFileSync(V2_COMPUTATION_SOURCE, 'utf8');
+    const imports = extractImportSources(source);
+    expect(imports).toEqual(expect.arrayContaining([
+      'node:crypto',
+      '@/prediction/mlb/mlb-shadow-execution-job-v2-contract',
+      '@/prediction/mlb/mlb-feature-vector-contract',
+      '@/prediction/mlb/mlb-shadow-monitoring-quarantine-contract',
+    ]));
   });
 
   /* ------------------------------------------------------------------ */
