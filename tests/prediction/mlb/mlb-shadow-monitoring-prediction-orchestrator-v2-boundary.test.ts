@@ -332,16 +332,16 @@ describe('mlb-shadow-monitoring-prediction-orchestrator-v2 boundary', () => {
     }
     expect(offenders).toEqual([V2_PERSISTENCE_ORCHESTRATOR]);
   });
+  /* ------------------------------------------------------------------ */
+  /*  G. V2 persistence/adapter source existence                        */
+  /* ------------------------------------------------------------------ */
 
-  /* ------------------------------------------------------------------ */
-  /*  G. No V2 persistence/adapter sources exist yet in this phase       */
-  /* ------------------------------------------------------------------ */
   it('G1. V2 persistence orchestrator source now exists (authorized by P5E-C2)', () => {
     expect(existsSync(V2_PERSISTENCE_ORCHESTRATOR)).toBe(true);
   });
 
-  it('G2. V2 execution adapter source does NOT exist', () => {
-    expect(existsSync(V2_EXECUTION_ADAPTER)).toBe(false);
+  it('G2. V2 execution adapter source now exists (authorized by P5E-C3)', () => {
+    expect(existsSync(V2_EXECUTION_ADAPTER)).toBe(true);
   });
 
   /* ------------------------------------------------------------------ */

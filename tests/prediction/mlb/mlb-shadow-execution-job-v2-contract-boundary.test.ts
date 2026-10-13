@@ -242,14 +242,23 @@ describe('mlb-shadow-execution-job-v2-contract boundary (phase sealing)', () => 
         actualImporters.push(file);
       }
     }
-    // The only production source permitted to import the V2 job contract at
-    // this phase is the dormant V2 computation seam. Any other importer would
-    // represent a prohibited adapter / orchestrator / persistence integration.
-    const authorizedImporter = join(
+    // After P5E-C3, the exact authorized production importer set for the
+    // V2 execution-job contract must be exactly:
+    //   1. V2 computation seam
+    //   2. V2 execution adapter
+    // No third production importer.
+    const authorizedComputationImporter = join(
       SRC_ROOT,
       'prediction/mlb/mlb-shadow-monitoring-prediction-computation-v2.ts',
     );
-    const expectedImporters: string[] = [authorizedImporter];
+    const authorizedAdapterImporter = join(
+      SRC_ROOT,
+      'prediction/mlb/mlb-shadow-execution-adapter-v2.ts',
+    );
+    const expectedImporters: string[] = [
+      authorizedComputationImporter,
+      authorizedAdapterImporter,
+    ];
     expect(actualImporters.sort()).toEqual(expectedImporters.sort());
   });
 
