@@ -302,7 +302,7 @@ describe('mlb-shadow-monitoring-prediction-orchestrator-v2 boundary', () => {
   /* ------------------------------------------------------------------ */
   /*  F. V1 production sources do NOT import the new V2 orchestrator     */
   /* ------------------------------------------------------------------ */
-  it('F1. no existing V1 production source imports the V2 orchestrator', () => {
+  it('F1. only the V2 persistence orchestrator imports the V2 prediction orchestrator', () => {
     const allSourceFiles = walk(SRC_ROOT);
     const importers: string[] = [];
     for (const file of allSourceFiles) {
@@ -315,10 +315,10 @@ describe('mlb-shadow-monitoring-prediction-orchestrator-v2 boundary', () => {
         importers.push(file);
       }
     }
-    expect(importers).toEqual([]);
+    expect(importers).toEqual([V2_PERSISTENCE_ORCHESTRATOR]);
   });
 
-  it('F2. no V1 production source mentions the V2 orchestrator module name', () => {
+  it('F2. only the V2 persistence orchestrator mentions the V2 prediction orchestrator module name', () => {
     const allSourceFiles = walk(SRC_ROOT);
     const offenders: string[] = [];
     for (const file of allSourceFiles) {
@@ -330,14 +330,14 @@ describe('mlb-shadow-monitoring-prediction-orchestrator-v2 boundary', () => {
         offenders.push(file);
       }
     }
-    expect(offenders).toEqual([]);
+    expect(offenders).toEqual([V2_PERSISTENCE_ORCHESTRATOR]);
   });
 
   /* ------------------------------------------------------------------ */
   /*  G. No V2 persistence/adapter sources exist yet in this phase       */
   /* ------------------------------------------------------------------ */
-  it('G1. V2 persistence orchestrator source does NOT exist', () => {
-    expect(existsSync(V2_PERSISTENCE_ORCHESTRATOR)).toBe(false);
+  it('G1. V2 persistence orchestrator source now exists (authorized by P5E-C2)', () => {
+    expect(existsSync(V2_PERSISTENCE_ORCHESTRATOR)).toBe(true);
   });
 
   it('G2. V2 execution adapter source does NOT exist', () => {
