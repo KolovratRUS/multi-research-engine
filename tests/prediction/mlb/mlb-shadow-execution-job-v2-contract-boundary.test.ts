@@ -242,11 +242,12 @@ describe('mlb-shadow-execution-job-v2-contract boundary (phase sealing)', () => 
         actualImporters.push(file);
       }
     }
-    // After P5E-C3, the exact authorized production importer set for the
+    // After P5F-A1-R1, the exact authorized production importer set for the
     // V2 execution-job contract must be exactly:
     //   1. V2 computation seam
     //   2. V2 execution adapter
-    // No third production importer.
+    //   3. Prepared job contract (P5F-A1-R1)
+    // No fourth production importer.
     const authorizedComputationImporter = join(
       SRC_ROOT,
       'prediction/mlb/mlb-shadow-monitoring-prediction-computation-v2.ts',
@@ -255,9 +256,14 @@ describe('mlb-shadow-execution-job-v2-contract boundary (phase sealing)', () => 
       SRC_ROOT,
       'prediction/mlb/mlb-shadow-execution-adapter-v2.ts',
     );
+    const authorizedPreparedImporter = join(
+      SRC_ROOT,
+      'prediction/mlb/mlb-shadow-prepared-execution-job-v2-contract.ts',
+    );
     const expectedImporters: string[] = [
       authorizedComputationImporter,
       authorizedAdapterImporter,
+      authorizedPreparedImporter,
     ];
     expect(actualImporters.sort()).toEqual(expectedImporters.sort());
   });
