@@ -253,17 +253,26 @@ describe('mlb-shadow-prepared-execution-job-v2-contract boundary', () => {
     ).toBe(true);
   });
 
-  it('D2. no prepared-job store/reader/factory/CLI exists under src/', () => {
+  it('D2. prepared store EXISTS; prepared reader/factory/CLI DO NOT exist under src/', () => {
     const files = walk(SRC_ROOT).map(
       (f) => f.replace(/.*\//, ''),
     );
+    // Prepared store now EXISTS
+    expect(
+      files.some((f) =>
+        f.includes('mlb-shadow-prepared-execution-job-v2-store'),
+      ),
+    ).toBe(true);
+    // Reader, factory, CLI must NOT exist
     const prohibitedPatterns = [
-      'mlb-shadow-prepared-execution-job-store',
-      'mlb-shadow-monitoring-prepared-job-store',
-      'mlb-shadow-monitoring-preparation-store',
       'mlb-shadow-prepared-execution-job-reader',
       'mlb-shadow-prepared-execution-job-factory',
       'mlb-shadow-prepared-execution-job-cli',
+      'mlb-shadow-prepared-execution-job-v2-reader',
+      'mlb-shadow-prepared-execution-job-v2-factory',
+      'mlb-shadow-prepared-execution-job-v2-cli',
+      'mlb-shadow-monitoring-prepared-job-store',
+      'mlb-shadow-monitoring-preparation-store',
     ];
     for (const pattern of prohibitedPatterns) {
       expect(files.some((f) => f.includes(pattern))).toBe(false);
