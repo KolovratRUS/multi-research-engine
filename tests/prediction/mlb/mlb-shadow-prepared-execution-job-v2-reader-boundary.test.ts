@@ -408,7 +408,11 @@ describe('mlb-shadow-prepared-execution-job-v2-reader boundary', () => {
   /*  I. No production module imports the reader                            */
   /* ---------------------------------------------------------------------- */
 
-  it('I1. zero production importers of the reader under src/', () => {
+  it('I1. exactly one authorized production importer of the reader under src/', () => {
+    const readerAuthorizedImporter = join(
+      ML_DIR,
+      'mlb-shadow-prepared-execution-job-v2-handoff.ts',
+    );
     const allFiles = walk(SRC_ROOT);
     const readerImporters: string[] = [];
     for (const file of allFiles) {
@@ -421,7 +425,7 @@ describe('mlb-shadow-prepared-execution-job-v2-reader boundary', () => {
         readerImporters.push(file);
       }
     }
-    expect(readerImporters).toEqual([]);
+    expect(readerImporters).toEqual([readerAuthorizedImporter]);
   });
 
   it('I2. no CLI / scheduler / orchestrator / adapter imports the reader', () => {

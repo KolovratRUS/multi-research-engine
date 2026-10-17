@@ -1,6 +1,6 @@
 /* -------------------------------------------------------------------------- */
 /*  Functional tests for the prepared-execution-job V2 reader (P5F-C2A-R1)     */
-/*  Reader-only: no production importer, no execution handoff.                   */
+/*  Reader-only: exactly one authorized handoff importer (P5F-C2B-R1).          */
 /* -------------------------------------------------------------------------- */
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
@@ -830,9 +830,13 @@ describe('mlb-shadow-prepared-execution-job-v2-reader', () => {
     expect(source).not.toMatch(/fitMLBShadow\s*\(/);
   });
 
-  it('32. zero production importers of the reader under src/', async () => {
+  it('32. exactly one authorized production importer of the reader under src/', async () => {
     const srcRoot = join(process.cwd(), 'src');
     const files = await walkTsFiles(srcRoot);
+    const readerAuthorizedImporter = join(
+      srcRoot,
+      'prediction/mlb/mlb-shadow-prepared-execution-job-v2-handoff.ts',
+    );
     const importers: string[] = [];
     for (const file of files) {
       const content = await fs.readFile(file, 'utf8');
@@ -845,7 +849,7 @@ describe('mlb-shadow-prepared-execution-job-v2-reader', () => {
         importers.push(file);
       }
     }
-    expect(importers).toEqual([]);
+    expect(importers).toEqual([readerAuthorizedImporter]);
   });
 
   it('33. reader does not expose a prediction result (no execution fields)', async () => {

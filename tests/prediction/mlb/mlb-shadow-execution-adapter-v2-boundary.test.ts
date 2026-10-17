@@ -49,6 +49,10 @@ const V2_DIR = join(
 const SRC_ROOT = join(__dirname, '../../../src');
 
 const ADAPTER_PATH = join(V2_DIR, 'mlb-shadow-execution-adapter-v2.ts');
+const HANDOFF_SOURCE = join(
+  V2_DIR,
+  'mlb-shadow-prepared-execution-job-v2-handoff.ts',
+);
 
 let sourceText: string;
 try {
@@ -380,7 +384,7 @@ describe('V2 version + export boundary', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('V2 adapter dormant / non-interference boundary', () => {
-  it('no production source imports the V2 adapter (V2_ADAPTER_PRODUCTION_IMPORTERS = [])', () => {
+  it('exactly one production source imports the V2 adapter (V2_ADAPTER_PRODUCTION_IMPORTERS = HANDOFF)', () => {
     const adapterBasename = basenameOf(ADAPTER_PATH);
     const allSourceFiles = walk(SRC_ROOT);
     const importers: string[] = [];
@@ -398,14 +402,14 @@ describe('V2 adapter dormant / non-interference boundary', () => {
         importers.push(file);
       }
     }
-    expect(importers).toEqual([]);
+    expect(importers).toEqual([HANDOFF_SOURCE]);
   });
 
   it('V2 adapter source exists (authorized by P5E-C3)', () => {
     expect(existsSync(ADAPTER_PATH)).toBe(true);
   });
 
-  it('no production source calls executeMLBShadowExecutionJobV2', () => {
+  it('exactly one production source calls executeMLBShadowExecutionJobV2 (HANDOFF)', () => {
     const allSourceFiles = walk(SRC_ROOT);
     const callers: string[] = [];
     for (const file of allSourceFiles) {
@@ -423,10 +427,10 @@ describe('V2 adapter dormant / non-interference boundary', () => {
         callers.push(file);
       }
     }
-    expect(callers).toEqual([]);
+    expect(callers).toEqual([HANDOFF_SOURCE]);
   });
 
-  it('adapter source is the only production file that mentions the V2 adapter module name', () => {
+  it('exactly one production file (HANDOFF) mentions the V2 adapter module name', () => {
     const allSourceFiles = walk(SRC_ROOT);
     const offenders: string[] = [];
     for (const file of allSourceFiles) {
@@ -438,6 +442,6 @@ describe('V2 adapter dormant / non-interference boundary', () => {
         offenders.push(file);
       }
     }
-    expect(offenders).toEqual([]);
+    expect(offenders).toEqual([HANDOFF_SOURCE]);
   });
 });
