@@ -241,7 +241,7 @@ describe('mlb-shadow-prepared-execution-job-v2-store boundary', () => {
   /*  E. No production source imports the prepared store (dormancy)           */
   /* ---------------------------------------------------------------------- */
 
-  it('E1. no production source (other than the store itself) imports the prepared store', () => {
+  it('E1. exactly one production source imports the prepared store — the preparation producer', () => {
     const allFiles = walk(SRC_ROOT);
     const importers: string[] = [];
 
@@ -261,8 +261,14 @@ describe('mlb-shadow-prepared-execution-job-v2-store boundary', () => {
       }
     }
 
-    // No production importer of the prepared store
-    expect(importers).toEqual([]);
+    // EXACTLY ONE production importer of the prepared store:
+    // the dormant preparation producer.
+    expect(importers).toEqual([
+      join(
+        ML_DIR,
+        'mlb-shadow-prepared-execution-job-v2-preparation.ts',
+      ),
+    ]);
   });
 
   it('E2. no CLI file imports the prepared store', () => {
@@ -332,8 +338,12 @@ describe('mlb-shadow-prepared-execution-job-v2-store boundary', () => {
     }
   });
 
-  it('E6. no factory/preparation file imports the prepared store', () => {
+  it('E6. no factory/preparation file imports the prepared store (except authorized producer)', () => {
     const allFiles = walk(SRC_ROOT);
+    const preparedProducerSource = join(
+      ML_DIR,
+      'mlb-shadow-prepared-execution-job-v2-preparation.ts',
+    );
     for (const file of allFiles) {
       if (file === STORE_SOURCE) continue;
       const relativePath = file.replace(/.*\//, '');
@@ -341,6 +351,10 @@ describe('mlb-shadow-prepared-execution-job-v2-store boundary', () => {
         relativePath.toLowerCase().includes('factory') ||
         relativePath.toLowerCase().includes('preparation')
       ) {
+        // Authorized exception: the preparation producer is the one sanctioned
+        // importer of the prepared store. All other factory/preparation files
+        // remain prohibited.
+        if (file === preparedProducerSource) continue;
         const content = readFileSync(file, 'utf8');
         expect(content).not.toContain(
           'mlb-shadow-prepared-execution-job-v2-store',
