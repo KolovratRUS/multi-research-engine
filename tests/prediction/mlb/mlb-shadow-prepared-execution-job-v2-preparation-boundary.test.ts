@@ -106,6 +106,10 @@ const ADAPTER_SOURCE = join(
   ML_DIR,
   'mlb-shadow-execution-adapter-v2.ts',
 );
+const ORCHESTRATOR_SOURCE = join(
+  ML_DIR,
+  'mlb-shadow-preparation-request-orchestrator.ts',
+);
 
 /* -------------------------------------------------------------------------- */
 /*  Exact 12-field raw-shape names (Section 8)                                  */
@@ -607,12 +611,12 @@ describe('mlb-shadow-prepared-execution-job-v2-preparation boundary', () => {
   /*  G. Production importer dormancy (Section 31)                               */
   /* ========================================================================== */
 
-  /* G1. preparation producer production importers = 0 */
-  it('G1. preparation producer has zero production importers', () => {
+  /* G1. preparation producer has exactly one authorized importer: C5 */
+  it('G1. preparation producer has exactly one authorized importer: C5', () => {
     const importers = findImporters(
       'mlb-shadow-prepared-execution-job-v2-preparation',
     );
-    expect(importers).toEqual([]);
+    expect(importers).toEqual([ORCHESTRATOR_SOURCE]);
   });
 
   /* G2. handoff production importers = 0 */
