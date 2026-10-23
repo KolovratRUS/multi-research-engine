@@ -102,6 +102,10 @@ const HANDOFF_SOURCE = join(
   ML_DIR,
   'mlb-shadow-prepared-execution-job-v2-handoff.ts',
 );
+const ELIGIBILITY_SOURCE = join(
+  ML_DIR,
+  'mlb-shadow-prepared-job-dispatch-eligibility.ts',
+);
 const ADAPTER_SOURCE = join(
   ML_DIR,
   'mlb-shadow-execution-adapter-v2.ts',
@@ -641,13 +645,13 @@ describe('mlb-shadow-prepared-execution-job-v2-preparation boundary', () => {
     ]);
   });
 
-  /* G4. prepared reader production importer = handoff only */
-  it('G4. prepared reader has exactly one production importer: the handoff', () => {
+  /* G4. prepared reader production importers = handoff + C6 eligibility (P5F-C6) */
+  it('G4. prepared reader has exactly two production importers: handoff + C6', () => {
     const importers = findImporters(
       'mlb-shadow-prepared-execution-job-v2-reader',
       READER_SOURCE,
     );
-    expect(importers).toEqual([HANDOFF_SOURCE]);
+    expect(importers).toEqual([HANDOFF_SOURCE, ELIGIBILITY_SOURCE]);
   });
 
   /* G5. V2 adapter production importers = handoff only */

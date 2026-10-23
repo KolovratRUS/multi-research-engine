@@ -830,12 +830,16 @@ describe('mlb-shadow-prepared-execution-job-v2-reader', () => {
     expect(source).not.toMatch(/fitMLBShadow\s*\(/);
   });
 
-  it('32. exactly one authorized production importer of the reader under src/', async () => {
+  it('32. exactly two authorized production importers of the reader under src/', async () => {
     const srcRoot = join(process.cwd(), 'src');
     const files = await walkTsFiles(srcRoot);
     const readerAuthorizedImporter = join(
       srcRoot,
       'prediction/mlb/mlb-shadow-prepared-execution-job-v2-handoff.ts',
+    );
+    const eligibilityImporter = join(
+      srcRoot,
+      'prediction/mlb/mlb-shadow-prepared-job-dispatch-eligibility.ts',
     );
     const importers: string[] = [];
     for (const file of files) {
@@ -849,7 +853,9 @@ describe('mlb-shadow-prepared-execution-job-v2-reader', () => {
         importers.push(file);
       }
     }
-    expect(importers).toEqual([readerAuthorizedImporter]);
+    expect(importers.sort()).toEqual(
+      [readerAuthorizedImporter, eligibilityImporter].sort(),
+    );
   });
 
   it('33. reader does not expose a prediction result (no execution fields)', async () => {
